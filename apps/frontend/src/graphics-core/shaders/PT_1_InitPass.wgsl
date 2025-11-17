@@ -1344,11 +1344,47 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
 
     if ( !bIsLight_Xk ) { OutCompactPath.RcVertex = GetRcVertex( CSurface[OutCompactPath.k] ); }
 
-    // TODO : Compute Jacobian Determinant
+    // Compute Jacobian Determinant
     {
+        // k는 재연결 위치
+        let k : u32 = OutCompactPath.k;
 
+        let bIsLight_Xk : bool = (k == InPath.length);
+        if (bIsLight_Xk) {
+            OutCompactPath.J = 1.0;
+        } else {
+            // (X_{k-1} -> X_k) segment
+            let Xkm1   : Surface = InPath.Surface[k - 1u];  // scattering vertex
+            let Xkm2   : Surface = InPath.Surface[k - 2u];  // 이전 vertex
+            let Xk     : Surface = InPath.Surface[k];       // hit vertex to reconnect
+
+            // 베이스 경로의 segment 방향: X_{k-1} -> X_k
+            let L_x : vec3<f32> =
+                normalize(Xk.Position - Xkm1.Position);
+
+            // X_{k-1}에서의 'in' 방향 V_x (이전 점 쪽)
+            let V_x : vec3<f32> =
+                normalize(Xkm2.Position - Xkm1.Position);
+
+            // 베이스에서 이 segment를 만들 때 사용된 BSDF PDF 근사
+            let pdf_x : f32 = PDF_BSDF(Xkm1, V_x, L_x);
+
+            // X_k에서 보는 입사 코사인: 이전 점 쪽에서 들어오는 방향은 -L_x
+            let cos_x : f32 =
+                max(dot(Xk.Normal, -L_x), 0.0);
+
+            // 거리^2
+            let d      : vec3<f32> = Xk.Position - Xkm1.Position;
+            let dist2_x: f32       = dot(d, d);
+
+            // 베이스 쪽 Jacobian 조각:
+            //   J_base = r_x^2 / (p_x * cos_x)
+            let denom : f32 = max( cos_x, EPS);
+            let J_base: f32 = dist2_x / denom;
+
+            OutCompactPath.J = J_base;
+        }
     }
-
     return OutCompactPath;
 }
 
