@@ -582,7 +582,8 @@ export class Renderer
                 layout  : this.RenderPipeline.getBindGroupLayout(0),
                 entries : 
                 [
-                    { binding : 0, resource : this.GPUTextures[ETextureIndex.Scene].createView() }
+                    { binding : 0 , resource : this.GPUBuffers[EBufferIndex.Uniform] },
+                    { binding : 10, resource : this.GPUTextures[ETextureIndex.Scene].createView() }
                 ],
             };
 
