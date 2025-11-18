@@ -27,12 +27,11 @@ export class Instance
         const TranslationMatrix : Mat4 = mat4.translation(Translation);
         const RotationMatrix    : Mat4 = mat4.fromQuat(Rotation);
         const ScaleMatrix       : Mat4 = mat4.scaling(Scale);
-
         let ModelMatrix : Mat4 = mat4.identity();
 
-        ModelMatrix = mat4.mul(ModelMatrix, ScaleMatrix);
-        ModelMatrix = mat4.mul(ModelMatrix, RotationMatrix);
         ModelMatrix = mat4.mul(ModelMatrix, TranslationMatrix);
+        ModelMatrix = mat4.mul(ModelMatrix, RotationMatrix);
+        ModelMatrix = mat4.mul(ModelMatrix, ScaleMatrix);
 
         this.ModelMatrix            = ModelMatrix;
         this.ModelMatrix_Inverse    = mat4.invert(ModelMatrix);
