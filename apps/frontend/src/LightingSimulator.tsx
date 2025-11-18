@@ -156,7 +156,6 @@ export default function LightingSimulator() {
         <RightPanel
           activeTab={activeTab}
           onTabChange={setActiveTab}
-          cameraPosition={cameraPosition}
         >
           {activeTab === 'lighting' && (
             <LightingControls

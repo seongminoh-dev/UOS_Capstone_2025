@@ -25,6 +25,8 @@ export default function WebGPURenderer({
   const [frameTime, setFrameTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width, height });
+  const [cameraPosition, setCameraPosition] = useState<{ x: number; y: number; z: number } | null>(null);
+  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true);
 
   // 반응형 크기 처리 (ResizeObserver)
   useEffect(() => {
@@ -36,16 +38,18 @@ export default function WebGPURenderer({
 
         // WebGPU 내부 해상도 제한 (성능 최적화)
         // CSS로는 크게 표시되지만, 실제 렌더링은 낮은 해상도로
-        const MAX_WIDTH = 640;   // 최대 내부 렌더 너비
-        const MAX_HEIGHT = 688;  // 최대 내부 렌더 높이 (953:1024 비율 유지)
+        const MAX_WIDTH = 512;   // 최대 내부 렌더 너비
+        const MAX_HEIGHT = 384;  // 최대 내부 렌더 높이 (4:3 비율 유지)
 
-        // 최소 크기 보장
-        const minWidth = Math.max(containerWidth, 400);
-        const minHeight = Math.max(containerHeight, 300);
+        // 4:3 비율 유지하면서 크기 계산
+        let newWidth = Math.min(containerWidth, MAX_WIDTH);
+        let newHeight = newWidth * 3 / 4;
 
-        // 최대 크기 제한
-        const newWidth = Math.min(minWidth, MAX_WIDTH);
-        const newHeight = Math.min(minHeight, MAX_HEIGHT);
+        // 높이가 MAX_HEIGHT를 초과하면 높이 기준으로 재계산
+        if (newHeight > MAX_HEIGHT) {
+          newHeight = MAX_HEIGHT;
+          newWidth = newHeight * 4 / 3;
+        }
 
         setCanvasSize({ width: newWidth, height: newHeight });
       }
@@ -74,8 +78,11 @@ export default function WebGPURenderer({
         };
 
         engine.onCameraUpdate = (pos) => {
-          if (isMounted && onCameraUpdate) {
-            onCameraUpdate(pos);
+          if (isMounted) {
+            setCameraPosition(pos);
+            if (onCameraUpdate) {
+              onCameraUpdate(pos);
+            }
           }
         };
 
@@ -140,6 +147,22 @@ export default function WebGPURenderer({
     switchScene();
   }, [sceneId]);
 
+  // 키보드 단축키로 디버그 정보 토글 (백틱 키 또는 Ctrl+Shift+H)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // 백틱(`) 키 또는 Ctrl+Shift+H로 디버그 정보 토글
+      if (e.key === '`' || (e.ctrlKey && e.shiftKey && e.key === 'H')) {
+        e.preventDefault();
+        setShowDebugInfo(prev => !prev);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, []);
+
   // 에러 화면
   if (error) {
     return (
@@ -174,29 +197,40 @@ export default function WebGPURenderer({
     >
       <canvas
         ref={canvasRef}
+        width={canvasSize.width}
+        height={canvasSize.height}
         style={{ display: 'block', width: '100%', height: '100%', cursor: 'pointer' }}
       />
 
-      {/* Frame Time Display */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '10px',
-          right: '10px',
-          backgroundColor: 'rgba(0, 0, 0, 0.7)',
-          color: '#0f0',
-          padding: '8px 12px',
-          borderRadius: '4px',
-          fontFamily: 'monospace',
-          fontSize: '14px',
-          pointerEvents: 'none',
-          userSelect: 'none',
-        }}
-      >
-        Frame Time: {frameTime.toFixed(2)} ms
-        <br />
-        FPS: {frameTime > 0 ? (1000 / frameTime).toFixed(0) : '0'}
-      </div>
+      {/* Debug Info - FPS & Camera (우측 상단) */}
+      {showDebugInfo && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '10px',
+            right: '10px',
+            backgroundColor: 'rgba(0, 0, 0, 0.7)',
+            color: '#0f0',
+            padding: '6px 10px',
+            borderRadius: '4px',
+            fontFamily: 'monospace',
+            fontSize: '12px',
+            pointerEvents: 'none',
+            userSelect: 'none',
+            lineHeight: '1.4',
+          }}
+        >
+          FPS: {frameTime > 0 ? (1000 / frameTime).toFixed(0) : '0'} ({frameTime.toFixed(2)}ms)
+          <br />
+          Resolution: {canvasSize.width}x{canvasSize.height}
+          {cameraPosition && (
+            <>
+              <br />
+              X: {cameraPosition.x.toFixed(2)} Y: {cameraPosition.y.toFixed(2)} Z: {cameraPosition.z.toFixed(2)}
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 }
