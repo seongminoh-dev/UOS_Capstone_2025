@@ -137,7 +137,7 @@ export default function WebGPURenderer({
 
     async function switchScene() {
       try {
-        await engineRef.current!.switchScene(sceneId);
+        await engineRef.current!.switchScene(sceneId!);
       } catch (err) {
         console.error('Error switching scene:', err);
         setError(err instanceof Error ? err.message : 'Failed to switch scene');
