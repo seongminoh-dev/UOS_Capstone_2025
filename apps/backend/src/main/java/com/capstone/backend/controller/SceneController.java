@@ -18,7 +18,16 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
-@Tag(name = "Scene", description = "Scene CRUD API - 3D 씬 데이터 관리")
+@Tag(name = "Scene", description = """
+        Scene CRUD API - 3D 씬 데이터 관리
+
+        [인증 (선택사항)]
+        현재 JWT 토큰 검증이 비활성화되어 있어 토큰 없이도 모든 API 사용 가능합니다.
+        프론트엔드 개발 시 토큰을 사용하려면:
+        1. POST /auth/login 으로 로그인하여 JWT 토큰 획득
+        2. Authorization 헤더에 "Bearer {token}" 형식으로 전송
+           예: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        """)
 @RestController
 @RequestMapping("/scenes")
 @RequiredArgsConstructor

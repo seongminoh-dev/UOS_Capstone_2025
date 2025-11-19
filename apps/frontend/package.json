@@ -10,11 +10,14 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "axios": "^1.13.2",
     "react": "^19.1.1",
     "react-dom": "^19.1.1",
+    "react-router-dom": "^7.9.6",
     "three": "^0.180.0",
     "three-mesh-bvh": "^0.9.1",
-    "wgpu-matrix": "^3.4.0"
+    "wgpu-matrix": "^3.4.0",
+    "zustand": "^5.0.8"
   },
   "devDependencies": {
     "@eslint/js": "^9.36.0",

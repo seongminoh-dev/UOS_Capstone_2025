@@ -1,31 +1,69 @@
+import { useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuthStore } from '../stores/authStore';
 import './Header.css';
 
 export default function Header() {
+  const navigate = useNavigate();
+  const { user, isAuthenticated, isGuest, logout, initAuth } = useAuthStore();
+
+  // 초기화: localStorage에서 인증 상태 복원
+  useEffect(() => {
+    initAuth();
+  }, [initAuth]);
+
+  const handleLogout = () => {
+    logout();
+    navigate('/');
+  };
+
   return (
     <header className="header">
       <div className="header-container">
         {/* Logo Section */}
-        <div className="header-logo">
+        <Link to="/" className="header-logo">
           <div className="logo-icon">
             <div className="logo-shape"></div>
           </div>
           <span className="logo-text">인태리</span>
-        </div>
+        </Link>
 
         {/* Navigation */}
         <nav className="header-nav">
-          <a href="#home" className="nav-link active">
+          <Link to="/" className="nav-link active">
             씬
-          </a>
-          <a href="#products" className="nav-link">
+          </Link>
+          <Link to="/edit" className="nav-link">
             편집
-          </a>
+          </Link>
         </nav>
 
-        {/* Auth Buttons */}
+        {/* Auth Section */}
         <div className="header-auth">
-          <button className="auth-button auth-login">로그인</button>
-          <button className="auth-button auth-signup">회원가입</button>
+          {isAuthenticated && !isGuest ? (
+            // 회원 모드
+            <>
+              <div className="user-info">
+                <span className="user-nickname">{user?.nickname}</span>
+              </div>
+              <button
+                className="auth-button auth-logout"
+                onClick={handleLogout}
+              >
+                로그아웃
+              </button>
+            </>
+          ) : (
+            // 비회원 모드
+            <>
+              <Link to="/login">
+                <button className="auth-button auth-login">로그인</button>
+              </Link>
+              <Link to="/signup">
+                <button className="auth-button auth-signup">회원가입</button>
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>

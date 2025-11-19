@@ -5,6 +5,7 @@ import com.capstone.backend.dto.LoginRequest;
 import com.capstone.backend.dto.SignupRequest;
 import com.capstone.backend.entity.User;
 import com.capstone.backend.repository.UserRepository;
+import com.capstone.backend.security.JwtTokenProvider;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
@@ -16,7 +17,7 @@ public class AuthService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
-    // private final JwtTokenProvider jwtTokenProvider; // Uncomment when JWT is enabled
+    private final JwtTokenProvider jwtTokenProvider; // JWT 토큰 생성 활성화
 
     @Transactional
     public AuthResponse signup(SignupRequest request) {
@@ -40,15 +41,15 @@ public class AuthService {
 
         User savedUser = userRepository.save(user);
 
-        // Generate JWT token (currently disabled)
-        // String token = jwtTokenProvider.generateToken(savedUser.getUsername());
+        // Generate JWT token (활성화)
+        String token = jwtTokenProvider.generateToken(savedUser.getUsername());
 
         return AuthResponse.builder()
                 .id(savedUser.getId())
                 .username(savedUser.getUsername())
                 .email(savedUser.getEmail())
                 .nickname(savedUser.getNickname())
-                .token(null) // JWT disabled for testing
+                .token(token) // JWT 토큰 반환
                 .message("User registered successfully")
                 .build();
     }
@@ -64,15 +65,15 @@ public class AuthService {
             throw new RuntimeException("Invalid username or password");
         }
 
-        // Generate JWT token (currently disabled)
-        // String token = jwtTokenProvider.generateToken(user.getUsername());
+        // Generate JWT token (활성화)
+        String token = jwtTokenProvider.generateToken(user.getUsername());
 
         return AuthResponse.builder()
                 .id(user.getId())
                 .username(user.getUsername())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
-                .token(null) // JWT disabled for testing
+                .token(token) // JWT 토큰 반환
                 .message("Login successful")
                 .build();
     }

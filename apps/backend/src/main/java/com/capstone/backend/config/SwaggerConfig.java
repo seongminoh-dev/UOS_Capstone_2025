@@ -36,7 +36,21 @@ public class SwaggerConfig {
                                         .type(SecurityScheme.Type.HTTP)
                                         .scheme("bearer")
                                         .bearerFormat("JWT")
-                                        .description("JWT token authentication (Currently disabled for testing)")))
+                                        .description("""
+                                                JWT 인증 토큰 (프론트엔드 개발용)
+
+                                                [사용 방법]
+                                                1. POST /auth/login 또는 /auth/signup 으로 로그인/회원가입
+                                                2. 응답의 "token" 필드에서 JWT 토큰 획득
+                                                3. Authorization 헤더에 "Bearer {token}" 형식으로 전송
+                                                   예: Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+
+                                                [현재 상태]
+                                                - JWT 토큰 생성: 활성화 ✓
+                                                - JWT 토큰 검증: 비활성화 (모든 요청 허용)
+
+                                                프론트엔드 개발 중에는 토큰 없이도 모든 API 사용 가능합니다.
+                                                """)))
                 .addSecurityItem(new SecurityRequirement().addList("bearer-jwt"));
     }
 }
