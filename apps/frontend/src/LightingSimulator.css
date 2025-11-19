@@ -6,6 +6,69 @@
   padding: 70px 0 0 0;
   box-sizing: border-box;
   overflow: hidden;
+  background-color: #FAFAFA;
+}
+
+.simulator-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+/* Canvas Wrapper */
+.canvas-wrapper {
+  flex: 1;
+  height: 100%;
+  background-color: #2A2A2A;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.webgpu-canvas {
+  width: 100%;
+  height: 100%;
+}
+
+/* Canvas Placeholder */
+.canvas-placeholder {
+  text-align: center;
+  color: #FFFFFF;
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.placeholder-icon {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.placeholder-icon.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 0.5; }
+  50% { opacity: 1; }
+}
+
+.placeholder-content h3 {
+  font-size: 24px;
+  font-weight: 600;
+  margin: 0;
+  color: #FFFFFF;
+}
+
+.placeholder-content p {
+  font-size: 14px;
+  margin: 0;
+  color: #A0A0A0;
 }
 
 .simulator-title {

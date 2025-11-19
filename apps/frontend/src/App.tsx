@@ -3,6 +3,7 @@ import './App.css';
 import LightingSimulator from './LightingSimulator';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import EditPage from './pages/EditPage';
 
 function App() {
   return (
@@ -16,8 +17,8 @@ function App() {
           <Route path="/login" element={<LoginPage />} />
           <Route path="/signup" element={<SignupPage />} />
 
-          {/* TODO: 편집 페이지 (Three.js) */}
-          {/* <Route path="/edit" element={<EditPage />} /> */}
+          {/* 편집 페이지 (Three.js 실시간 미리보기) */}
+          <Route path="/edit" element={<EditPage />} />
         </Routes>
       </div>
     </BrowserRouter>

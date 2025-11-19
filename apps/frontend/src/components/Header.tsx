@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
 import './Header.css';
 
 export default function Header() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { user, isAuthenticated, isGuest, logout, initAuth } = useAuthStore();
 
   // 초기화: localStorage에서 인증 상태 복원
@@ -30,10 +31,10 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="header-nav">
-          <Link to="/" className="nav-link active">
+          <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
             씬
           </Link>
-          <Link to="/edit" className="nav-link">
+          <Link to="/edit" className={`nav-link ${location.pathname === '/edit' ? 'active' : ''}`}>
             편집
           </Link>
         </nav>

@@ -1,4 +1,4 @@
-import type { Scene } from '../Structs';
+import type { Scene } from '../service/Scene';
 
 /**
  * Dummy Scene 데이터
