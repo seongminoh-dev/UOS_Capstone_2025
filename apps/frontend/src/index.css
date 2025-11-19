@@ -26,12 +26,6 @@ body {
   margin: 0;
   padding: 0;
   min-width: 320px;
-  height: 100vh;
-  overflow: hidden;
-}
-
-html {
-  overflow: hidden;
 }
 
 h1 {
