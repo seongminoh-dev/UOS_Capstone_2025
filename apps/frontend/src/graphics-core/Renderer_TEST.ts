@@ -8,9 +8,12 @@ import      { MeshDescriptor }  from "./Structs";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
+import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
 
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
-import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw'
+import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
+
+import ShaderCode_Temporal_Test          from './shaders/PT_2_TemporalReuseTest.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
@@ -25,7 +28,8 @@ const EBufferIndex =
     Accel           : 3,
     Reservoir       : 4,
     PrevReservoir   : 5,
-    SIZE            : 6
+    MotionVector    : 6,
+    SIZE            : 7
 } as const;
 
 const ETextureIndex =
@@ -51,12 +55,12 @@ const EDataOffsetIndex =
 const EComputePassIndex =
 {
     GBufferCreation         : 0,
-    //MotionVectorCreation    : ,
-    Initialize              : 1,
-    TemporalReuse           : 2,
+    MotionVectorCreation    : 1,
+    Initialize              : 2,
+    TemporalReuse           : 3,
     //SpatialReuse            : ,
-    FinalShading            : 3,
-    SIZE                    : 4
+    FinalShading            : 4,
+    SIZE                    : 5
 } as const;
 
 
@@ -230,6 +234,7 @@ export class Renderer
             const ComputePassEncoder : GPUComputePassEncoder = CommandEncoder.beginComputePass();
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount);
+            this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount);
             //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount);
@@ -476,6 +481,8 @@ export class Renderer
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
         this.GPUBuffers[EBufferIndex.Reservoir]     = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
         this.GPUBuffers[EBufferIndex.PrevReservoir] = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
+        this.GPUBuffers[EBufferIndex.MotionVector] = this.CreateGPUStorageBuffer(new ArrayBuffer(2 * 32 * this.Canvas.width * this.Canvas.height));
+
 
         this.GPUTextures[ETextureIndex.G_Buffer]    = this.CreateGPUTexture();
         this.GPUTextures[ETextureIndex.Scene]       = this.CreateGPUTexture();
@@ -529,6 +536,28 @@ export class Renderer
             ComputePass.Create
             (
                 this.Device, 
+                ShaderCode_GetMotionVector, 
+                [   // Input, GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                ],
+                [   // Input, GPUTextureView
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Output, GPUBuffer
+                    this.GPUBuffers[EBufferIndex.MotionVector],
+
+                ],
+                [   // Output, GPUTextureView
+                    
+                ]
+            ),
+
+            ComputePass.Create
+            (
+                this.Device, 
                 ShaderCode_Initialize, 
                 [   // Input, GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
@@ -550,11 +579,12 @@ export class Renderer
             ComputePass.Create
             (
                 this.Device, 
-                ShaderCode_Temporal, 
+                ShaderCode_Temporal_Test, 
                 [   // Input, GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
                     this.GPUBuffers[EBufferIndex.PrevReservoir],
                 ],
                 [   // Input, GPUTextureView

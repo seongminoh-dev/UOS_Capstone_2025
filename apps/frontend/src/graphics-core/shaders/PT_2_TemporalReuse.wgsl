@@ -105,7 +105,7 @@ const STRIDE_DESCRIPTOR : u32 =  6u;
 const STRIDE_VERTEX     : u32 =  8u;
 
 const J_MIN : f32 = 0.25;  // temporal J clamp
-const J_MAX : f32 = 4.0;
+const J_MAX : f32 = 20.0;
 const UCW_MAX : f32 = 1000.0;   
 
 
@@ -377,14 +377,17 @@ fn RegeneratePrevPath(curResCP : CompactPath, prevResCP : CompactPath) -> Compac
 {
     var outCP : CompactPath = prevResCP;
 
-    for (var i = 0u; i < prevResCP.k && i < 4u; i++) {
-        outCP.rSeed[i] = prevResCP.rSeed[i];
+    // prefix 구간(0..k-1)은 현재 경로 seed를 복사
+    let k : u32 = min(curResCP.k, 4u);   // 혹은 min(prevResCP.k, 4u) 등 의도에 따라
+    for (var i = 0u; i < k; i++) {
+        outCP.rSeed[i] = curResCP.rSeed[i];
     }
 
-    outCP.Lobe_k_1 = curResCP.Lobe_k_1;
+    outCP.Lobe_k_1 = curResCP.Lobe_k_1;  // 이건 의도대로일 수 있음
 
     return outCP;
 }
+
 
 //==========================================================================
 // Temporal Reservoir Update (Hybrid Shift + Temporal Reuse)
@@ -442,18 +445,20 @@ fn UpdateReservoirTemporal(
         return;
     }
 
-    var J_shift : f32 = J_prev_primary / J_cur_primary;
-
-    J_shift = clamp(J_shift, J_MIN, J_MAX);
+    //var J_shift : f32 = J_prev_primary / J_cur_primary;
+    var J_shift = curRes.Sample.J / J_prev_primary;
+    //J_shift = clamp(J_shift, J_MIN, J_MAX);
 
     // --- 3. 각 후보의 effective weight (UCW 클램핑 포함) ---
 
-    let w_cur_raw  : f32 = min(curRes.UCW,  UCW_MAX);
-    let w_prev_raw : f32 = min(prevRes.UCW, UCW_MAX) * J_shift;
+    let w_cur_raw  : f32 = min(curRes.UCW * f32(curRes.C) ,  UCW_MAX);
+    let w_prev_raw : f32 = min(prevRes.UCW * f32(prevRes.C) , UCW_MAX) * J_shift;
 
     let w_cur  : f32 = max(w_cur_raw,  0.0);
     let w_prev : f32 = max(w_prev_raw, 0.0);
 
+    let W_new  = w_cur + w_prev;
+    let C_new  = curRes.C + prevRes.C;
 
     if (w_cur <= 0.0 && w_prev <= 0.0) {
         // 둘 다 쓸 수 있는 weight 없음 → 그냥 현재 유지
@@ -485,8 +490,8 @@ fn UpdateReservoirTemporal(
         outRes.Sample = curRes.Sample;
     }
 
-    outRes.UCW = min(w_sum, UCW_MAX);
-    outRes.C   = curRes.C + prevRes.C;
+    outRes.UCW = min(W_new / f32(C_new), UCW_MAX);
+    outRes.C   = C_new;
 
     ReservoirBuffer[curIdx] = outRes;
 }
