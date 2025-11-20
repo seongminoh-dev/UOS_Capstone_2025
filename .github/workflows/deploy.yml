@@ -1,0 +1,92 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # Backend Build
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: maven
+
+    - name: Build backend with Maven
+      run: |
+        cd apps/backend
+        mvn clean package -DskipTests
+
+    # Frontend Build
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        cache: 'npm'
+        cache-dependency-path: apps/frontend/package-lock.json
+
+    - name: Install frontend dependencies
+      run: |
+        cd apps/frontend
+        npm ci
+
+    - name: Build frontend
+      run: |
+        cd apps/frontend
+        npm run build
+
+    # Deploy to EC2
+    - name: Deploy to EC2
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      env:
+        PRIVATE_KEY: ${{ secrets.EC2_SSH_KEY }}
+        HOST: ${{ secrets.EC2_HOST }}
+        USER: ${{ secrets.EC2_USER }}
+      run: |
+        echo "$PRIVATE_KEY" > private_key.pem
+        chmod 600 private_key.pem
+
+        # Create deployment directory on EC2
+        ssh -i private_key.pem -o StrictHostKeyChecking=no ${USER}@${HOST} '
+          mkdir -p ~/deployment/backend
+          mkdir -p ~/deployment/frontend
+        '
+
+        # Copy backend JAR
+        scp -i private_key.pem -o StrictHostKeyChecking=no \
+          apps/backend/target/*.jar ${USER}@${HOST}:~/deployment/backend/app.jar
+
+        # Copy frontend build
+        scp -i private_key.pem -o StrictHostKeyChecking=no -r \
+          apps/frontend/dist/* ${USER}@${HOST}:~/deployment/frontend/
+
+        # Deploy and restart services
+        ssh -i private_key.pem -o StrictHostKeyChecking=no ${USER}@${HOST} '
+          # Stop backend service
+          sudo systemctl stop backend || true
+
+          # Copy new JAR to service location
+          sudo cp ~/deployment/backend/app.jar /opt/backend/app.jar
+
+          # Copy frontend to nginx
+          sudo rm -rf /var/www/html/*
+          sudo cp -r ~/deployment/frontend/* /var/www/html/
+
+          # Start backend service
+          sudo systemctl start backend
+
+          # Reload nginx
+          sudo systemctl reload nginx
+        '
+
+        rm -f private_key.pem
