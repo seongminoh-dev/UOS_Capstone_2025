@@ -540,6 +540,7 @@ export class Renderer
 
         // 1. 텍스처가 1장도 없으면 에러 처리 혹은 1x1 더미 텍스처 반환
         if (layerCount === 0) {
+            return this.CreateGPUTexture();
             throw new Error("CreateTextureArray2048: 입력된 비트맵이 없습니다.");
         }
 
