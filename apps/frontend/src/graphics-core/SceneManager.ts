@@ -1,4 +1,3 @@
-import { ResourceManager } from './ResourceManager';
 import { World } from './World';
 import { DUMMY_SCENE_1, AVAILABLE_SCENES } from './test/DummyScenes';
 import type { Scene } from './service/Scene';

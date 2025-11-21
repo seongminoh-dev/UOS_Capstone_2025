@@ -4,7 +4,6 @@ import      { vec3, quat, mat4, vec4 }          from 'wgpu-matrix';
 import      { GLTFLoader }                      from 'three/examples/jsm/loaders/GLTFLoader.js';
 import      { mergeGeometries }                 from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import      { computeBoundsTree, MeshBVH, SAH } from 'three-mesh-bvh';
-import      { ResourceManager }                 from './ResourceManager';
 
 export class Instance
 {
@@ -27,6 +26,7 @@ export class Instance
         const TranslationMatrix : Mat4 = mat4.translation(Translation);
         const RotationMatrix    : Mat4 = mat4.fromQuat(Rotation);
         const ScaleMatrix       : Mat4 = mat4.scaling(Scale);
+        
         let ModelMatrix : Mat4 = mat4.identity();
 
         ModelMatrix = mat4.mul(ModelMatrix, TranslationMatrix);
@@ -61,13 +61,14 @@ export class Mesh
     private readonly VertexNormals      : Float32Array;
     private readonly VertexUVs          : Float32Array;
     private readonly IndexArray         : Uint32Array;
-    private readonly Materials          : Material[];
+    private readonly MaterialIDs        : Array<string>;
 
     public readonly VertexCount         : number;
     public readonly IndexCount          : number;
     public readonly SubMeshCount        : number;
 
-    private constructor(InMesh : THREE.Mesh)
+
+    constructor(InMesh : THREE.Mesh, InResourcePool : ResourcePool<Mesh>)
     {
         // Build Blas Tree
         {
@@ -94,22 +95,26 @@ export class Mesh
 
         // Material Data
         {
-            this.Materials = [];
+            this.MaterialIDs = [];
 
             const MeshStandardMaterials : THREE.MeshStandardMaterial[] = InMesh.material as THREE.MeshStandardMaterial[];
-            for (const MeshStandardMaterial of MeshStandardMaterials) { this.Materials.push(new Material(MeshStandardMaterial)); }
-        
-            this.SubMeshCount = this.Materials.length;
+            for (const MeshStandardMaterial of MeshStandardMaterials)
+            {
+                const MaterialCreated : Material = new Material(MeshStandardMaterial);
+
+            }
+
+            this.SubMeshCount = this.MaterialIDs.length;
         }
 
     }
 
-    public static async Load(Name : string) : Promise<Mesh>
+    public static async Load( Name : string) : Promise<Mesh>
     {
         const LoadPath = "/assets/" + Name + ".glb";
 
-        const ModelLoader = new GLTFLoader();
-        const Model         = await ModelLoader.loadAsync(LoadPath);      
+        const ModelLoader   : GLTFLoader                = new GLTFLoader();
+        const Model                                     = await ModelLoader.loadAsync(LoadPath);      
         const Meshes        : THREE.Mesh[]              = [];
         const Geometries    : THREE.BufferGeometry[]    = [];
         const Materials     : THREE.Material[]          = [];
@@ -136,6 +141,7 @@ export class Mesh
         }
 
         const MergedMesh : THREE.Mesh = new THREE.Mesh(mergeGeometries(Geometries, true), Materials);
+
         return new Mesh(MergedMesh);
     }
 
@@ -294,18 +300,18 @@ export class Material
 {
     public static readonly Stride : number = 15;
 
-    private readonly Albedo            : Vec4;
-    private readonly EmissiveColor     : Vec3;
-    private readonly EmissiveIntensity : number;
+    private readonly Albedo                 : Vec4;
+    private readonly EmissiveColor          : Vec3;
+    private readonly EmissiveIntensity      : number;
 
-    private readonly Metalness         : number;
-    private readonly Roughness         : number;
-    private readonly Transmission      : number;
-    private readonly IOR               : number;
+    private readonly Metalness              : number;
+    private readonly Roughness              : number;
+    private readonly Transmission           : number;
+    private readonly IOR                    : number;
 
-    private readonly AlbedoTexture!    : ImageBitmap | null;
-    private readonly ORMTexture!       : ImageBitmap | null;
-    private readonly EmissiveTexture!  : ImageBitmap | null;
+    // private readonly TextureIndex_Albedo    : number;
+    // private readonly TextureIndex_ORM       : number;
+    // private readonly TextureIndex_Emissive  : number;
 
     constructor(InMaterial : THREE.MeshStandardMaterial)
     {
@@ -318,10 +324,11 @@ export class Material
         this.Transmission       = InMaterial.transparent ? 1.0 : 0.0;
         this.IOR                = 1.5;
 
-        this.AlbedoTexture      = InMaterial.map?.image as ImageBitmap;
-        this.ORMTexture         = (InMaterial.aoMap || InMaterial.metalnessMap || InMaterial.roughnessMap)?.image as ImageBitmap;
-        this.EmissiveTexture    = InMaterial.emissiveMap?.image as ImageBitmap;
-
+        const ImageBitmap_Albedo : ImageBitmap = InMaterial.map?.image as ImageBitmap;
+        //const ImageBitmap
+        // this.TextureIndex_Albedo    = ResourceManager.RegisterTexture( ImageBitmap_Albedo );
+        // this.TextureIndex_ORM       = ResourceManager.RegisterTexture( (InMaterial.aoMap || InMaterial.metalnessMap || InMaterial.roughnessMap)?.image as ImageBitmap );
+        // this.TextureIndex_Emissive  = ResourceManager.RegisterTexture( InMaterial.emissiveMap?.image as ImageBitmap );
     }
 
     public Serialize() : Uint32Array
@@ -332,13 +339,20 @@ export class Material
         {
             Float32View.set(this.Albedo, 0);
             Float32View.set(this.EmissiveColor, 4);
-            Float32View[7]  = this.EmissiveIntensity;
-            Float32View[8]  = this.Metalness;
-            Float32View[9]  = this.Roughness;
+            Float32View[ 7] = this.EmissiveIntensity;
+            Float32View[ 8] = this.Metalness;
+            Float32View[ 9] = this.Roughness;
             Float32View[10] = this.Transmission;
             Float32View[11] = this.IOR;
 
             // TODO : Texture Index 추가
+        }
+
+        const Int32View : Int32Array = new Int32Array(MaterialRawData);
+        {
+            // Int32View[12] = this.TextureIndex_Albedo;
+            // Int32View[13] = this.TextureIndex_ORM;
+            // Int32View[14] = this.TextureIndex_Emissive;
         }
 
         return new Uint32Array(MaterialRawData);

@@ -3,7 +3,6 @@ import type { Mat4 }            from "wgpu-matrix";
 import      { Camera }          from "./Camera";
 import      { ComputePass }     from "./ComputePass";
 import      { World }           from "./World";
-import      { ResourceManager } from "./ResourceManager";
 import      { MeshDescriptor }  from "./Structs";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
@@ -34,22 +33,24 @@ const EBufferIndex =
 
 const ETextureIndex =
 {
-    G_Buffer    : 0,
-    Scene       : 1,
-    Result      : 2,
-    SIZE        : 3
+    TexturePool : 0,
+    G_Buffer    : 1,
+    Scene       : 2,
+    Result      : 3,
+    SIZE        : 4
 } as const;
 
 const EDataOffsetIndex =
 {
     MeshDescriptor      : 0,
-    Material            : 1,
-    Light               : 2,
-    LightsCDF           : 3,
-    Index               : 4,
-    SubBlasRootArray    : 5,
-    Blas                : 6,
-    SIZE                : 7
+    MaterialID          : 1,
+    Material            : 2,
+    Light               : 3,
+    LightsCDF           : 4,
+    Index               : 5,
+    SubBlasRootArray    : 6,
+    Blas                : 7,
+    SIZE                : 8
 } as const;
 
 const EComputePassIndex =
@@ -182,46 +183,43 @@ export class Renderer
         const CameraLocation            = this.Camera.GetLocation();
         const ViewProjection            = this.Camera.GetViewProjectionMatrix();
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
+        const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const prevVP = this.Prev_VPMat ?? ViewProjection;
-
-        const ELEMENT_COUNT = 52;
-        const UniformData = new ArrayBuffer(4 * ELEMENT_COUNT);
+        const ELEMENT_COUNT = 48;
+        const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
-            const Float32View = new Float32Array(UniformData);
-            const Uint32View = new Uint32Array(UniformData);
+            const Float32View   = new Float32Array(UniformData);
+            const Uint32View    = new Uint32Array(UniformData);
 
             Uint32View[0] = this.Canvas.width;
             Uint32View[1] = this.Canvas.height;
-            Uint32View[2] = 10; // Max Bounce
-            Uint32View[3] = 1;
+            Uint32View[2] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View[3] = this.World.Lights.length;
             
-            for(let iter=0; iter<16; iter++) Float32View[4 + iter] = ViewProjection_Inverse?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection_Prev[iter]!;
 
-            Float32View[20] = CameraLocation[0];
-            Float32View[21] = CameraLocation[1];
-            Float32View[22] = CameraLocation[2];
-            Uint32View [23] = this.FrameCount;
+            Float32View[36] = CameraLocation[0];
+            Float32View[37] = CameraLocation[1];
+            Float32View[38] = CameraLocation[2];
+            Uint32View [39] = this.FrameCount;
 
-            Uint32View[24] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View[25] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View[26] = this.Offsets[EDataOffsetIndex.Light];
-            Uint32View[27] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View[40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View[41] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View[42] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View[43] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View[28] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View[29] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View[30] = this.Offsets[EDataOffsetIndex.Blas];
-            Uint32View[31] = this.World.InstancesPool.size;
-
-            Uint32View[32] = this.World.Lights.length;
-
-            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = prevVP[iter]!;
+            Uint32View[44] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View[45] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View[46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View[47] = this.Offsets[EDataOffsetIndex.Blas];
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
 
         this.Prev_VPMat = ViewProjection;
 
+        return;
     }
 
     public Render() : void
@@ -290,164 +288,6 @@ export class Renderer
     }
 
 
-
-    
-
-    private SerializeWorldData() : [ArrayBuffer, ArrayBuffer, ArrayBuffer, ImageBitmap[]]
-    {
-        // World의 모든 정보 취합
-        const [InstanceArray, MeshArray, MeshIDToIndexMap] = this.World.PackWorldData();
-
-        // World의 정보들로부터 GPU에 올릴 데이터들 모두 병합
-
-        let InstanceRawData : Uint32Array;
-        {
-            const SerializedInstanceArray : Uint32Array[] = [];
-            for (const InstanceToSerialize of InstanceArray) 
-            {
-                const InstanceSerialized : Uint32Array = InstanceToSerialize.Serialize(MeshIDToIndexMap);
-                SerializedInstanceArray.push( InstanceSerialized ); 
-            }
-
-            InstanceRawData = ResourceManager.MergeArrays(SerializedInstanceArray)[0];
-        }
-
-        let LightRawData : Uint32Array;
-        {
-            const SerializedLightArray : Uint32Array[] = [];
-            for (const LightToSerialize of this.World.Lights)
-            {
-                const LightSerialized : Uint32Array = LightToSerialize.Serialize();
-                SerializedLightArray.push(LightSerialized);
-            }
-
-            LightRawData = ResourceManager.MergeArrays(SerializedLightArray)[0];
-        }
-
-        let LightsCDFRawData : Uint32Array;
-        {
-            const LightsCDFArrayBuffer : ArrayBuffer = this.World.GetLightCDFBuffer();
-            LightsCDFRawData = new Uint32Array(LightsCDFArrayBuffer);
-        }
-
-        let VertexRawData       : Uint32Array;
-        let VertexOffsetData    : Uint32Array;
-        {
-            const SerializedVertexArray : Uint32Array[] = [];
-            for (const SerializedMesh of MeshArray) { SerializedVertexArray.push( SerializedMesh.VertexArray ); }
-
-            [VertexRawData, VertexOffsetData] = ResourceManager.MergeArrays(SerializedVertexArray);
-        }
-
-        let IndexRawData    : Uint32Array;
-        let IndexOffsetData : Uint32Array;
-        {
-            const SerializedIndexArray : Uint32Array[] = [];
-            for (const SerializedMesh of MeshArray) { SerializedIndexArray.push( SerializedMesh.IndexArray ); }
-
-            [IndexRawData, IndexOffsetData] = ResourceManager.MergeArrays(SerializedIndexArray);
-        }
-
-        let MaterialRawData     : Uint32Array;
-        let MaterialOffsetData  : Uint32Array;
-        {
-            const SerializedMaterialArray : Uint32Array[] = [];
-            for (const SerializedMesh of MeshArray) { SerializedMaterialArray.push( SerializedMesh.MaterialArray ); }
-
-            [MaterialRawData, MaterialOffsetData] = ResourceManager.MergeArrays(SerializedMaterialArray);
-        }
-
-        let SubBlasRootRawData      : Uint32Array;
-        let SubBlasRootOffsetData   : Uint32Array;
-        {
-            const SerializedSubBlasRootArray : Uint32Array[] = [];
-            for (const SerializedMesh of MeshArray) { SerializedSubBlasRootArray.push( SerializedMesh.SubBlasRootArray ); }
-
-            [SubBlasRootRawData, SubBlasRootOffsetData] = ResourceManager.MergeArrays(SerializedSubBlasRootArray);
-        }
-
-        let BlasRawData     : Uint32Array;
-        let BlasOffsetData  : Uint32Array;
-        {
-            const SerializedBlasArray : Uint32Array[] = [];
-            for (const SerializedMesh of MeshArray) { SerializedBlasArray.push( SerializedMesh.BlasArray ); }
-
-            [BlasRawData, BlasOffsetData] = ResourceManager.MergeArrays(SerializedBlasArray);
-        }
-
-        let TlasRawData : Uint32Array; // TODO
-        {
-            TlasRawData = new Uint32Array();
-        }
-
-        let MeshDescriptorRawData : Uint32Array;
-        {
-            const SerializedMeshDescriptorArray : Uint32Array[] = [];
-
-            for (let iter = 0; iter < MeshArray.length; iter++)
-            {
-                const CurrentMeshDescriptor : MeshDescriptor = new MeshDescriptor
-                (
-                    VertexOffsetData[iter],
-                    IndexOffsetData[iter],
-                    MaterialOffsetData[iter],
-                    SubBlasRootOffsetData[iter],
-                    BlasOffsetData[iter],
-                    MeshArray[iter].SubBlasRootArray.length,
-                );
-                
-                SerializedMeshDescriptorArray.push( CurrentMeshDescriptor.Serialize() );
-            }
-
-            MeshDescriptorRawData = ResourceManager.MergeArrays(SerializedMeshDescriptorArray)[0];
-        }
-
-        // Scene Buffer에 들어갈 데이터 채우기 | Instance + MeshDescriptor + Material  + Light + LightsCDF
-        const ArraysInSceneBuffer  = [InstanceRawData, MeshDescriptorRawData, MaterialRawData, LightRawData, LightsCDFRawData];
-        const [SceneBufferData, SceneBufferOffsets] = ResourceManager.MergeArrays(ArraysInSceneBuffer);
-        {
-            this.Offsets[EDataOffsetIndex.MeshDescriptor]   = SceneBufferOffsets[1];
-            this.Offsets[EDataOffsetIndex.Material]         = SceneBufferOffsets[2];
-            this.Offsets[EDataOffsetIndex.Light]            = SceneBufferOffsets[3];
-            this.Offsets[EDataOffsetIndex.LightsCDF]        = SceneBufferOffsets[4];
-        }
-
-        // Geometry Buffer에 들어갈 데이터 채우기 | Vertex + Index + PrimitiveToMaterial
-        const ArraysInGeometryBuffer = [VertexRawData, IndexRawData, SubBlasRootRawData];
-        const [GeometryBufferData, GeometryBufferOffsets] = ResourceManager.MergeArrays(ArraysInGeometryBuffer);
-        {
-            this.Offsets[EDataOffsetIndex.Index]            = GeometryBufferOffsets[1];
-            this.Offsets[EDataOffsetIndex.SubBlasRootArray] = GeometryBufferOffsets[2];
-        }
-
-        // Accel Buffer에 들어갈 데이터 채우기 | Tlas + Blas
-        const ArraysInAccelBuffer = [TlasRawData, BlasRawData];
-        const [AccelBufferData, AccelBufferOffsets] = ResourceManager.MergeArrays(ArraysInAccelBuffer);
-        {
-            this.Offsets[EDataOffsetIndex.Blas] = AccelBufferOffsets[1];
-        }
-
-        const SceneBufferRawData : ArrayBuffer = new ArrayBuffer(4 * SceneBufferData.length);
-        {
-            const Uint32View : Uint32Array = new Uint32Array(SceneBufferRawData);
-            Uint32View.set(SceneBufferData);
-        }
-
-        const GeometryBufferRawData : ArrayBuffer = new ArrayBuffer(4 * GeometryBufferData.length);
-        {
-            const Uint32View : Uint32Array = new Uint32Array(GeometryBufferRawData);
-            Uint32View.set(GeometryBufferData);
-        }
-
-        const AccelBufferRawData : ArrayBuffer = new ArrayBuffer(4 * AccelBufferData.length);
-        {
-            const Uint32View : Uint32Array = new Uint32Array(AccelBufferRawData);
-            Uint32View.set(AccelBufferData);
-        }
-
-        return [SceneBufferRawData, GeometryBufferRawData, AccelBufferRawData, []]; // TODO : Texture 채우기
-    }
-
     private CreateGPUStorageBuffer(InArrayBuffer : ArrayBuffer) : GPUBuffer
     {
         const StorageBufferUsageFlags   : GPUBufferUsageFlags   = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
@@ -473,17 +313,21 @@ export class Renderer
 
     private CreateGPUResources() : void
     {
-        const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps] = this.SerializeWorldData();
+        const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps, Offsets] = this.World.Serialize();
+
+        this.Offsets = Offsets;
 
         this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 256, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+
         this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
         this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
+
         this.GPUBuffers[EBufferIndex.Reservoir]     = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
         this.GPUBuffers[EBufferIndex.PrevReservoir] = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
-        this.GPUBuffers[EBufferIndex.MotionVector] = this.CreateGPUStorageBuffer(new ArrayBuffer(2 * 32 * this.Canvas.width * this.Canvas.height));
+        this.GPUBuffers[EBufferIndex.MotionVector]  = this.CreateGPUStorageBuffer(new ArrayBuffer(2 * 32 * this.Canvas.width * this.Canvas.height));
 
-
+        this.GPUTextures[ETextureIndex.TexturePool] = this.CreateTextureArray2048(ImageBitmaps);
         this.GPUTextures[ETextureIndex.G_Buffer]    = this.CreateGPUTexture();
         this.GPUTextures[ETextureIndex.Scene]       = this.CreateGPUTexture();
         this.GPUTextures[ETextureIndex.Result]      = this.CreateGPUTexture();
@@ -523,7 +367,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Accel],
                 ],
                 [   // Input, GPUTextureView
-
+                    this.GPUTextures[ETextureIndex.TexturePool].createView(),
                 ],
                 [   // Output, GPUBuffer
 
@@ -536,90 +380,111 @@ export class Renderer
             ComputePass.Create
             (
                 this.Device, 
-                ShaderCode_GetMotionVector, 
-                [   // Input, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Uniform],
-                    
-                    this.GPUBuffers[EBufferIndex.Scene],
-                    this.GPUBuffers[EBufferIndex.Geometry],
-                ],
-                [   // Input, GPUTextureView
-                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-                ],
-                [   // Output, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.MotionVector],
-
-                ],
-                [   // Output, GPUTextureView
-                    
-                ]
-            ),
-
-            ComputePass.Create
-            (
-                this.Device, 
-                ShaderCode_Initialize, 
+                ShaderCode_DEBUG, 
                 [   // Input, GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
-                    this.GPUBuffers[EBufferIndex.Accel],
                 ],
                 [   // Input, GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView(),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
                 ],
                 [   // Output, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Reservoir],
-                ],
-                [   // Output, GPUTextureView
 
-                ]
-            ),
-            
-            ComputePass.Create
-            (
-                this.Device, 
-                ShaderCode_Temporal_Test, 
-                [   // Input, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Uniform],
-                    this.GPUBuffers[EBufferIndex.Scene],
-                    this.GPUBuffers[EBufferIndex.Geometry],
-                    this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.PrevReservoir],
-                ],
-                [   // Input, GPUTextureView
-                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-                ],
-                [   // Output, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Reservoir],
-                ],
-                [   // Output, GPUTextureView
-
-                ]
-            ),
-
-            ComputePass.Create
-            (
-                this.Device, 
-                ShaderCode_FinalShading, 
-                [   // Input, GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Uniform],
-                    this.GPUBuffers[EBufferIndex.Scene],
-                    this.GPUBuffers[EBufferIndex.Geometry],
-                    this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir],
-                ],
-                [   // Input, GPUTextureView
-                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-                    this.GPUTextures[ETextureIndex.Scene].createView(),
-                ],
-                [   // Output, GPUBuffer
-                    
                 ],
                 [   // Output, GPUTextureView
                     this.GPUTextures[ETextureIndex.Result].createView(),
                 ]
             ),
+
+            // ComputePass.Create
+            // (
+            //     this.Device, 
+            //     ShaderCode_GetMotionVector, 
+            //     [   // Input, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Uniform],
+                    
+            //         this.GPUBuffers[EBufferIndex.Scene],
+            //         this.GPUBuffers[EBufferIndex.Geometry],
+            //     ],
+            //     [   // Input, GPUTextureView
+            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+            //     ],
+            //     [   // Output, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.MotionVector],
+
+            //     ],
+            //     [   // Output, GPUTextureView
+                    
+            //     ]
+            // ),
+
+            // ComputePass.Create
+            // (
+            //     this.Device, 
+            //     ShaderCode_Initialize, 
+            //     [   // Input, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Uniform],
+            //         this.GPUBuffers[EBufferIndex.Scene],
+            //         this.GPUBuffers[EBufferIndex.Geometry],
+            //         this.GPUBuffers[EBufferIndex.Accel],
+            //     ],
+            //     [   // Input, GPUTextureView
+            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+            //     ],
+            //     [   // Output, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Reservoir],
+            //     ],
+            //     [   // Output, GPUTextureView
+
+            //     ]
+            // ),
+            
+            // ComputePass.Create
+            // (
+            //     this.Device, 
+            //     ShaderCode_Temporal_Test, 
+            //     [   // Input, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Uniform],
+            //         this.GPUBuffers[EBufferIndex.Scene],
+            //         this.GPUBuffers[EBufferIndex.Geometry],
+            //         this.GPUBuffers[EBufferIndex.Accel],
+            //         this.GPUBuffers[EBufferIndex.PrevReservoir],
+            //     ],
+            //     [   // Input, GPUTextureView
+            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+            //     ],
+            //     [   // Output, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Reservoir],
+            //     ],
+            //     [   // Output, GPUTextureView
+
+            //     ]
+            // ),
+
+            // ComputePass.Create
+            // (
+            //     this.Device, 
+            //     ShaderCode_FinalShading, 
+            //     [   // Input, GPUBuffer
+            //         this.GPUBuffers[EBufferIndex.Uniform],
+            //         this.GPUBuffers[EBufferIndex.Scene],
+            //         this.GPUBuffers[EBufferIndex.Geometry],
+            //         this.GPUBuffers[EBufferIndex.Accel],
+            //         this.GPUBuffers[EBufferIndex.Reservoir],
+            //     ],
+            //     [   // Input, GPUTextureView
+            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+            //         this.GPUTextures[ETextureIndex.Scene].createView(),
+            //     ],
+            //     [   // Output, GPUBuffer
+                    
+            //     ],
+            //     [   // Output, GPUTextureView
+            //         this.GPUTextures[ETextureIndex.Result].createView(),
+            //     ]
+            // ),
         ];
 
         this.ComputePasses = await Promise.all(ComputePassesToCreate);
@@ -665,5 +530,78 @@ export class Renderer
         }
 
         return;
+    }
+
+    private CreateTextureArray2048(bitmaps: ImageBitmap[]) : GPUTexture
+    {
+        const WIDTH = 2048;
+        const HEIGHT = 2048;
+        const layerCount = bitmaps.length;
+
+        // 1. 텍스처가 1장도 없으면 에러 처리 혹은 1x1 더미 텍스처 반환
+        if (layerCount === 0) {
+            throw new Error("CreateTextureArray2048: 입력된 비트맵이 없습니다.");
+        }
+
+        // 2. GPUTexture 생성 (2D Array)
+        const textureDescriptor: GPUTextureDescriptor = {
+            size: [WIDTH, HEIGHT, layerCount], // [Width, Height, LayerCount]
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | 
+                GPUTextureUsage.COPY_DST | 
+                GPUTextureUsage.RENDER_ATTACHMENT,
+            dimension: '2d',
+            label: 'Global_Material_TextureArray_2048'
+        };
+        
+        const textureArray = this.Device.createTexture(textureDescriptor);
+
+        // 3. 리사이징을 위한 임시 캔버스 (재사용)
+        // OffscreenCanvas가 지원되지 않는 환경을 대비해 분기 처리 가능하나, WebGPU 환경이면 보통 지원됨
+        let resizeContext: OffscreenCanvasRenderingContext2D | null = null;
+        let resizeCanvas: OffscreenCanvas | null = null;
+
+        // 4. 순회 및 업로드
+        for (let i = 0; i < layerCount; i++) {
+            const bitmap = bitmaps[i];
+            
+            // 업로드 소스 (기본은 원본 비트맵)
+            let source: ImageBitmap | OffscreenCanvas = bitmap;
+
+            // A. 크기가 2048x2048이 아닌 경우 -> 캔버스를 거쳐서 리사이징
+            if (bitmap.width !== WIDTH || bitmap.height !== HEIGHT) {
+                
+                // 캔버스는 필요할 때 한 번만 생성 (Lazy Init)
+                if (!resizeCanvas || !resizeContext) {
+                    resizeCanvas = new OffscreenCanvas(WIDTH, HEIGHT);
+                    resizeContext = resizeCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+                    
+                    if (!resizeContext) {
+                        throw new Error("OffscreenCanvas Context 생성 실패");
+                    }
+                    // 이미지 보간 품질 설정 (취향에 따라 'low', 'medium', 'high')
+                    resizeContext.imageSmoothingQuality = 'high'; 
+                }
+
+                // 캔버스 초기화 및 그리기 (Stretch)
+                resizeContext.clearRect(0, 0, WIDTH, HEIGHT);
+                resizeContext.drawImage(bitmap, 0, 0, WIDTH, HEIGHT);
+                
+                // 소스를 캔버스로 교체
+                source = resizeCanvas;
+            }
+
+            // B. GPU 업로드
+            this.Device.queue.copyExternalImageToTexture(
+                { source: source },
+                { 
+                    texture: textureArray, 
+                    origin: [0, 0, i], // z축이 곧 배열의 인덱스(Layer)입니다.
+                },
+                [WIDTH, HEIGHT]
+            );
+        }
+
+        return textureArray;
     }
 };

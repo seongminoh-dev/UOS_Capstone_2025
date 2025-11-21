@@ -5,25 +5,24 @@
 struct Uniform
 {
     Resolution                      : vec2<u32>,
-    MAX_BOUNCE                      : u32,
-    SAMPLE_PER_PIXEL                : u32,
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
     FrameIndex                      : u32,
 
     Offset_MeshDescriptorBuffer     : u32,
+    Offset_MaterialIDBuffer         : u32,
     Offset_MaterialBuffer           : u32,
     Offset_LightBuffer              : u32,
-    Offset_LightsCDFBuffer          : u32,
 
+    Offset_LightsCDFBuffer          : u32,
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
-    InstanceCount                   : u32,
-
-    LightSourceCount                : u32,
 };
 
 
@@ -42,7 +41,7 @@ struct MeshDescriptor
 {
     Offset_Vertex       : u32,
     Offset_Index        : u32,
-    Offset_Material     : u32,
+    Offset_MaterialID   : u32,
     Offset_SubBlasRoot  : u32,
 
     Offset_Blas         : u32,
@@ -62,9 +61,9 @@ struct Material
     Transmission        : f32,
     IOR                 : f32,
 
-    BaseColorTextureID  : u32,
-    ORMTextureID        : u32,
-    EmissiveTextureID   : u32,
+    TextureID_Albedo    : i32,
+    TextureID_ORM       : i32,
+    TextureID_Emissive  : i32,
 };
 
 
@@ -132,9 +131,16 @@ struct CompactSurface
 
 struct Surface
 {
-    Position    : vec3<f32>,
-    Normal      : vec3<f32>,
-    Material    : Material,
+    Position        : vec3<f32>,
+    Normal          : vec3<f32>,
+
+    Albedo          : vec3<f32>,
+    Emission        : vec3<f32>,
+
+    Metalness       : f32,
+    Roughness       : f32,
+    Transmission    : f32,
+    IOR             : f32,
 };
 
 
@@ -167,6 +173,8 @@ const PI : f32 = 3.141592;
 @group(0) @binding(1) var<storage, read>    SceneBuffer     : array<u32>;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer  : array<u32>;
 @group(0) @binding(3) var<storage, read>    AccelBuffer     : array<u32>;
+
+@group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
 
 @group(1) @binding(10) var G_Buffer : texture_storage_2d<rgba32float, write>;
 
@@ -207,7 +215,7 @@ fn GetMeshDescriptor(MeshID : u32) -> MeshDescriptor
 
     OutMeshDescriptor.Offset_Vertex         = SceneBuffer[Offset + 0u];
     OutMeshDescriptor.Offset_Index          = SceneBuffer[Offset + 1u];
-    OutMeshDescriptor.Offset_Material       = SceneBuffer[Offset + 2u];
+    OutMeshDescriptor.Offset_MaterialID     = SceneBuffer[Offset + 2u];
     OutMeshDescriptor.Offset_SubBlasRoot    = SceneBuffer[Offset + 3u];
     OutMeshDescriptor.Offset_Blas           = SceneBuffer[Offset + 4u];
     OutMeshDescriptor.Count_SubMesh         = SceneBuffer[Offset + 5u];
@@ -215,9 +223,15 @@ fn GetMeshDescriptor(MeshID : u32) -> MeshDescriptor
     return OutMeshDescriptor;
 }
 
-fn GetMaterial(InMeshDescriptor : MeshDescriptor, MaterialID : u32) -> Material
+fn GetMaterialID(InMeshDescriptor : MeshDescriptor, SubMeshID : u32) -> u32
 {
-    let Offset      : u32           = UniformBuffer.Offset_MaterialBuffer + InMeshDescriptor.Offset_Material + (STRIDE_MATERIAL * MaterialID);
+    let Offset : u32 = UniformBuffer.Offset_MaterialIDBuffer + InMeshDescriptor.Offset_MaterialID + SubMeshID;
+    return SceneBuffer[ Offset ];
+}
+
+fn GetMaterial(MaterialID : u32) -> Material
+{
+    let Offset      : u32           = UniformBuffer.Offset_MaterialBuffer + (STRIDE_MATERIAL * MaterialID);
     var OutMaterial : Material      = Material();
 
     OutMaterial.Albedo.r            = bitcast<f32>(SceneBuffer[Offset + 0u]);
@@ -235,10 +249,20 @@ fn GetMaterial(InMeshDescriptor : MeshDescriptor, MaterialID : u32) -> Material
     OutMaterial.Transmission        = bitcast<f32>(SceneBuffer[Offset + 10u]);
     OutMaterial.IOR                 = bitcast<f32>(SceneBuffer[Offset + 11u]);
 
-    // ===================
-    let YELLOW : vec4<f32> = vec4<f32>(1.0, 1.0, 0.0, OutMaterial.Albedo.a);
+    OutMaterial.TextureID_Albedo    = -1;
+    OutMaterial.TextureID_ORM       = -1;
+    OutMaterial.TextureID_Emissive  = -1;
+    // OutMaterial.TextureID_Albedo    = bitcast<i32>(SceneBuffer[Offset + 12u]);
+    // OutMaterial.TextureID_ORM       = bitcast<i32>(SceneBuffer[Offset + 13u]);
+    // OutMaterial.TextureID_Emissive  = bitcast<i32>(SceneBuffer[Offset + 14u]);
 
-    OutMaterial.Albedo      = select(OutMaterial.Albedo, YELLOW, OutMaterial.Transmission > 0.0 );
+
+
+
+    // ===================
+    // let YELLOW : vec4<f32> = vec4<f32>(1.0, 1.0, 0.0, OutMaterial.Albedo.a);
+    // OutMaterial.Albedo      = select(OutMaterial.Albedo, YELLOW, OutMaterial.Transmission > 0.0 );
+
     OutMaterial.Roughness   = max(OutMaterial.Roughness, 0.01);
 
     return OutMaterial;
@@ -276,13 +300,36 @@ fn GetCompactSurface(CompactSurfaceRawData : vec4<f32>) -> CompactSurface
     return OutCompactSurface;
 }
 
+
+
+fn GetAlbedo(InMaterial : Material, UV : vec2<f32>) -> vec4<f32>
+{
+    return InMaterial.Albedo;
+}
+
+fn GetEmission(InMaterial : Material, UV : vec2<f32>) -> vec3<f32>
+{
+    return vec3f(0.0);
+}
+
+fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
+{
+    return InMaterial.Metalness;
+}
+
+fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
+{
+    return InMaterial.Roughness;
+}
+
+
+
 fn GetSurface(InCompactSurface : CompactSurface) -> Surface
 {
-    var OutSurface : Surface = Surface();
+    var OutSurface : Surface;
 
     let SurfaceInstance         : Instance          = GetInstance( InCompactSurface.InstanceID );
     let SurfaceMeshDescriptor   : MeshDescriptor    = GetMeshDescriptor( SurfaceInstance.MeshID );
-    let SurfaceMaterial         : Material          = GetMaterial( SurfaceMeshDescriptor, InCompactSurface.MaterialID );
     let SurfaceTriangleLocal    : Triangle          = GetTriangle( SurfaceMeshDescriptor, InCompactSurface.PrimitiveID );
     let SurfaceTriangle         : Triangle          = GetTriangleWorldSpace( SurfaceInstance, SurfaceTriangleLocal );
 
@@ -290,19 +337,36 @@ fn GetSurface(InCompactSurface : CompactSurface) -> Surface
     let V   : f32 = InCompactSurface.Barycentric.y;
     let W   : f32 = 1.0 - U - V;
 
-    let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
-    let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
-    let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
-    let N   : vec3<f32> = normalize( N0 + N1 + N2 );
+    {
+        let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
+        let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
+        let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
+        let N   : vec3<f32> = normalize( N0 + N1 + N2 );
 
-    let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
-    let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
-    let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
-    let P   : vec3<f32> = P0 + P1 + P2;
+        let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
+        let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
+        let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
+        let P   : vec3<f32> = P0 + P1 + P2;
 
-    OutSurface.Position = P;
-    OutSurface.Normal   = N;
-    OutSurface.Material = SurfaceMaterial;
+        OutSurface.Position = P;
+        OutSurface.Normal   = N;
+    }
+
+    let UV0 : vec2<f32> = SurfaceTriangle.Vertex_0.UV * U;
+    let UV1 : vec2<f32> = SurfaceTriangle.Vertex_1.UV * V;
+    let UV2 : vec2<f32> = SurfaceTriangle.Vertex_2.UV * W;
+    let UV  : vec2<f32> = UV0 + UV1 + UV2;
+
+    let SurfaceMaterial : Material = GetMaterial( InCompactSurface.MaterialID );
+    {
+        OutSurface.Albedo       = GetAlbedo( SurfaceMaterial, UV ).rgb;
+        OutSurface.Emission     = GetEmission( SurfaceMaterial, UV );
+
+        OutSurface.Metalness    = GetMetalness( SurfaceMaterial, UV );
+        OutSurface.Roughness    = GetRoughness( SurfaceMaterial, UV );
+        OutSurface.Transmission = SurfaceMaterial.Transmission;
+        OutSurface.IOR          = SurfaceMaterial.IOR;
+    }
 
     return OutSurface;
 }
@@ -526,8 +590,6 @@ fn TraceRay(InRay: Ray) -> HitResult
             let IntersectionRange : vec2<f32> = GetRayAABBIntersectionRange(LocalRay, GetBlasNode(CurrentMeshDescriptor, SubMeshID, 0u));
             if (!DoesRangesOverlap(RayValidRange, IntersectionRange)) { continue; }
 
-            ////////////////////////////
-
             // Blas Tree 순회
             var Stack           : array<u32, 96>;
             var StackPointer    : i32 = -1;
@@ -584,7 +646,6 @@ fn TraceRay(InRay: Ray) -> HitResult
                 let PrimitiveStartID : u32 = CurrentBlasNode.Offset;
                 let PrimitiveEndID   : u32 = PrimitiveStartID + (CurrentBlasNode.Count & 0x0000ffffu);
 
-                ////////////////////////////
                 for (var PrimitiveID : u32 = PrimitiveStartID; PrimitiveID < PrimitiveEndID; PrimitiveID++)
                 {
                     let CurrentTriangle : Triangle = GetTriangle(CurrentMeshDescriptor, PrimitiveID);
@@ -594,10 +655,14 @@ fn TraceRay(InRay: Ray) -> HitResult
                     // 최종 살아남은 Primitive를 선택
                     RayValidRange.y = PrimitiveHitDistance;
 
-                    BestHitResult.IsValidHit    = true;
-                    BestHitResult.SurfaceInfo.InstanceID    = InstanceID;
-                    BestHitResult.SurfaceInfo.MaterialID    = SubMeshID;
-                    BestHitResult.SurfaceInfo.PrimitiveID   = PrimitiveID;
+                    BestHitResult.IsValidHit                    = true;
+                    BestHitResult.SurfaceInfo.IsValidSurface    = true;
+                    BestHitResult.SurfaceInfo.InstanceID        = InstanceID;
+                    BestHitResult.SurfaceInfo.PrimitiveID       = PrimitiveID;
+
+                    let HitInstance         : Instance          = GetInstance(BestHitResult.SurfaceInfo.InstanceID);
+                    let HitMeshDescriptor   : MeshDescriptor    = GetMeshDescriptor(HitInstance.MeshID);
+                    BestHitResult.SurfaceInfo.MaterialID        = GetMaterialID(HitMeshDescriptor, SubMeshID);
                 }
             }
         }
@@ -614,7 +679,7 @@ fn TraceRay(InRay: Ray) -> HitResult
         let HitPrimitive        : Triangle          = GetTriangleWorldSpace(HitInstance, HitPrimitiveLocal);
         let HitPoint            : vec3<f32>         = InRay.Start + (BestHitResult.HitDistance * InRay.Direction);
 
-        BestHitResult.SurfaceInfo.Barycentric = GetBaryCentricWeights(HitPoint, HitPrimitive).xy;
+        BestHitResult.SurfaceInfo.Barycentric       = GetBaryCentricWeights(HitPoint, HitPrimitive).xy;
     }
     
     return BestHitResult;
@@ -634,6 +699,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>)
 
         if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
+
+    if (false) { let dummyData = textureLoad(TexturePool, vec2<i32>(0, 0), 0, 0); }
 
     // 1. Ray Trace 수행
     let CameraRay   : Ray       = GenerateRayFromThreadID(ThreadID.xy);

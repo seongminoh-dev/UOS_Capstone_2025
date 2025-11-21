@@ -27,16 +27,16 @@ export const DUMMY_SCENE_1: Scene = {
       },
     },
 
-    {
-      id: 'window_instance_0',
-      type: 'object',
-      meshName: 'PureWindow',
-      transform: {
-        position: [0, 0, 0],
-        rotation: [0, 90, 0], // 90 degrees rotation around Y axis
-        scale: [1, 1, 1],
-      },
-    },
+    // {
+    //   id: 'window_instance_0',
+    //   type: 'object',
+    //   meshName: 'PureWindow',
+    //   transform: {
+    //     position: [0, 0, 0],
+    //     rotation: [0, 90, 0], // 90 degrees rotation around Y axis
+    //     scale: [1, 1, 1],
+    //   },
+    // },
 
     //Directional Light
     {
@@ -45,7 +45,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         direction: [0, 0, -1],
         color: [1, 1, 1],
-        intensity: 0.5,
+        intensity: 1.5,
       },
     },
 
@@ -54,24 +54,24 @@ export const DUMMY_SCENE_1: Scene = {
       id: 'bulb',
       type: 'point-light',
       lightParams: {
-        position: [0, 0, -1],
+        position: [0, 1, -2],
         color: [1, 1, 1],
-        intensity: 10.0,
+        intensity: 20.0,
       },
     },
 
     // Rect Light
-    {
-      id: 'rect',
-      type: 'rect-light',
-      lightParams: {
-        position: [0, 1, -2],
-        u: [0.4, 0, 0],
-        v: [0, 0, 0.4],
-        color: [1, 1, 1],
-        intensity: 5.0,
-      }
-    },
+    // {
+    //   id: 'rect',
+    //   type: 'rect-light',
+    //   lightParams: {
+    //     position: [0, 1, -2],
+    //     u: [0.4, 0, 0],
+    //     v: [0, 0, 0.4],
+    //     color: [1, 1, 1],
+    //     intensity: 5.0,
+    //   }
+    // },
 
   ],
   createdAt: new Date().toISOString(),
