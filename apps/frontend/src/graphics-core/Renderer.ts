@@ -7,8 +7,6 @@ import fragmentShaderCode from './shaders/FragmentShader.wgsl?raw';
 
 import { World } from './World';
 import { Camera } from './Camera';
-import { ResourceManager } from './ResourceManager';
-import { MeshDescriptor } from './Structs';
 
 export class Renderer {
   // GPU Device Stuff
@@ -533,49 +531,52 @@ export class Renderer {
     this.FrameCount = 0;
   }
 
-  Update(): void {
-    this.FrameCount++;
-
-    // Camera Property
-    const CameraLocation = this.Camera.GetLocation();
-    const VP = this.Camera.GetViewProjectionMatrix();
-    const VPINV = mat4.invert(VP);
-
-    const ELEMENT_COUNT = 33;
-    const UniformData = new ArrayBuffer(4 * ELEMENT_COUNT);
+    public Update() : void
     {
-      const Float32View = new Float32Array(UniformData);
-      const Uint32View = new Uint32Array(UniformData);
+        this.FrameCount++;
 
-      Uint32View[0] = this.Canvas.width;
-      Uint32View[1] = this.Canvas.height;
-      Uint32View[2] = 10; // Max Bounce
-      Uint32View[3] = 1;
+        // Camera Properties
+        const CameraLocation            = this.Camera.GetLocation();
+        const ViewProjection            = this.Camera.GetViewProjectionMatrix();
+        const ViewProjection_Inverse    = mat4.invert(ViewProjection);
+        const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-      for (let iter = 0; iter < 16; iter++)
-        Float32View[4 + iter] = VPINV![iter];
+        const ELEMENT_COUNT = 48;
+        const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
+        {
+            const Float32View   = new Float32Array(UniformData);
+            const Uint32View    = new Uint32Array(UniformData);
 
-      Float32View[20] = CameraLocation[0];
-      Float32View[21] = CameraLocation[1];
-      Float32View[22] = CameraLocation[2];
-      Uint32View[23] = this.FrameCount;
+            Uint32View[0] = this.Canvas.width;
+            Uint32View[1] = this.Canvas.height;
+            Uint32View[2] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View[3] = this.World.Lights.length;
+            
+            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection_Prev[iter]!;
 
-      Uint32View[24] = this.Offset_MeshDescriptorBuffer;
-      Uint32View[25] = this.Offset_MaterialBuffer;
-      Uint32View[26] = this.Offset_LightBuffer;
-      Uint32View[27] = this.Offset_LightsCDFBuffer;
-      Uint32View[28] = this.Offset_IndexBuffer;
+            Float32View[36] = CameraLocation[0];
+            Float32View[37] = CameraLocation[1];
+            Float32View[38] = CameraLocation[2];
+            Uint32View [39] = this.FrameCount;
 
-      Uint32View[29] = this.Offset_SubBlasRootArrayBuffer;
-      Uint32View[30] = this.Offset_BlasBuffer;
-      Uint32View[31] = this.World.InstancesPool.size;
-      Uint32View[32] = this.World.Lights.length;
+            Uint32View[40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View[41] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View[42] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View[43] = this.Offsets[EDataOffsetIndex.Light];
+
+            Uint32View[44] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View[45] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View[46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View[47] = this.Offsets[EDataOffsetIndex.Blas];
+        }
+
+        this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
+
+        this.Prev_VPMat = ViewProjection;
+
+        return;
     }
-
-    this.Device.queue.writeBuffer(this.UniformBuffer, 0, UniformData);
-
-    return;
-  }
 
   async Render(): Promise<void> {
     const CommandEncoder: GPUCommandEncoder =

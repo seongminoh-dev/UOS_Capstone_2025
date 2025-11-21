@@ -73,11 +73,11 @@ export class WebGPUEngine {
             throw new Error('Failed to get GPU device');
         }
 
-        // Load scene
-        await this.sceneManager.loadScene(sceneId);
-
-        // Create and initialize renderer
+        // Create Renderer
         this.renderer = new Renderer(this.adapter, this.device, this.canvas);
+
+        // Load & Initialize scene
+        await this.sceneManager.loadScene(sceneId);
         await this.renderer.Initialize(this.world);
 
         // Setup input controller with camera

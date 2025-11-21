@@ -3,9 +3,10 @@ import type { Mat4 }            from "wgpu-matrix";
 import      { Camera }          from "./Camera";
 import      { ComputePass }     from "./ComputePass";
 import      { World }           from "./World";
-import      { MeshDescriptor }  from "./Structs";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
+import ShaderCode_MCPT              from './shaders/TEST_MCPT.wgsl?raw';
+
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
 
@@ -40,6 +41,12 @@ const ETextureIndex =
     SIZE        : 4
 } as const;
 
+const ESamplerIndex =
+{
+    Default : 0,
+    SIZE    : 1
+} as const;
+
 const EDataOffsetIndex =
 {
     MeshDescriptor      : 0,
@@ -55,13 +62,14 @@ const EDataOffsetIndex =
 
 const EComputePassIndex =
 {
+    //MCPT : 0,
     GBufferCreation         : 0,
-    MotionVectorCreation    : 1,
-    Initialize              : 2,
-    TemporalReuse           : 3,
+    //MotionVectorCreation    : 1,
+    Initialize              : 1,
+    //TemporalReuse           : 3,
     //SpatialReuse            : ,
-    FinalShading            : 4,
-    SIZE                    : 5
+    FinalShading            : 2,
+    SIZE                    : 3
 } as const;
 
 
@@ -78,6 +86,7 @@ export class Renderer
     // Resources
     private GPUBuffers  : GPUBuffer[];
     private GPUTextures : GPUTexture[];
+    private GPUSamplers : GPUSampler[];
     private Offsets     : number[];
 
     // Passes
@@ -124,6 +133,7 @@ export class Renderer
         {
             this.GPUBuffers         = new Array(EBufferIndex.SIZE);
             this.GPUTextures        = new Array(ETextureIndex.SIZE);
+            this.GPUSamplers        = new Array(ESamplerIndex.SIZE);
             this.Offsets            = new Array(EDataOffsetIndex.SIZE);
 
             this.ComputePasses      = new Array(EComputePassIndex.SIZE);
@@ -231,10 +241,9 @@ export class Renderer
         {
             const ComputePassEncoder : GPUComputePassEncoder = CommandEncoder.beginComputePass();
 
+            //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount);
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount);
-            this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount);
-            //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount);
 
             ComputePassEncoder.end();
@@ -311,9 +320,27 @@ export class Renderer
         return this.Device.createTexture(TextureDescriptor);
     }
 
+    private CreateGPUSampler() : GPUSampler
+    {
+
+        const SamplerDescriptor : GPUSamplerDescriptor = 
+        {
+            magFilter: 'linear',
+            minFilter: 'linear',
+            mipmapFilter: 'linear',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            addressModeW: 'repeat',
+            maxAnisotropy: 8, 
+        };
+
+        return this.Device.createSampler(SamplerDescriptor);
+    }
+
     private CreateGPUResources() : void
     {
         const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps, Offsets] = this.World.Serialize();
+
 
         this.Offsets = Offsets;
 
@@ -331,6 +358,8 @@ export class Renderer
         this.GPUTextures[ETextureIndex.G_Buffer]    = this.CreateGPUTexture();
         this.GPUTextures[ETextureIndex.Scene]       = this.CreateGPUTexture();
         this.GPUTextures[ETextureIndex.Result]      = this.CreateGPUTexture();
+
+        this.GPUSamplers[ESamplerIndex.Default]     = this.CreateGPUSampler();
 
         return;
     }
@@ -356,23 +385,24 @@ export class Renderer
         // Define All Compute Passes (Orders Respect To EComputePassIndex)
         const ComputePassesToCreate : Promise<ComputePass>[] =
         [
+
             ComputePass.Create
             (
                 this.Device, 
                 ShaderCode_GBufferCreation, 
-                [   // Input, GPUBuffer
+                [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
                 ],
-                [   // Input, GPUTextureView
-                    this.GPUTextures[ETextureIndex.TexturePool].createView(),
+                [   // Read GPUTextureView
                 ],
-                [   // Output, GPUBuffer
-
+                [   // Read GPUSampler
                 ],
-                [   // Output, GPUTextureView
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
                 ]
             ),
@@ -380,20 +410,49 @@ export class Renderer
             ComputePass.Create
             (
                 this.Device, 
-                ShaderCode_DEBUG, 
-                [   // Input, GPUBuffer
+                ShaderCode_Initialize, 
+                [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
                 ],
-                [   // Input, GPUTextureView
-                    this.GPUTextures[ETextureIndex.TexturePool].createView(),
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
                 ],
-                [   // Output, GPUBuffer
-
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
                 ],
-                [   // Output, GPUTextureView
+                [   // Write GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Write GPUTextureView
+                ]
+            ),
+
+            ComputePass.Create
+            (
+                this.Device, 
+                ShaderCode_FinalShading, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                    this.GPUTextures[ETextureIndex.Scene].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
                     this.GPUTextures[ETextureIndex.Result].createView(),
                 ]
             ),
@@ -401,87 +460,23 @@ export class Renderer
             // ComputePass.Create
             // (
             //     this.Device, 
-            //     ShaderCode_GetMotionVector, 
-            //     [   // Input, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.Uniform],
-                    
-            //         this.GPUBuffers[EBufferIndex.Scene],
-            //         this.GPUBuffers[EBufferIndex.Geometry],
-            //     ],
-            //     [   // Input, GPUTextureView
-            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-            //     ],
-            //     [   // Output, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.MotionVector],
-
-            //     ],
-            //     [   // Output, GPUTextureView
-                    
-            //     ]
-            // ),
-
-            // ComputePass.Create
-            // (
-            //     this.Device, 
-            //     ShaderCode_Initialize, 
-            //     [   // Input, GPUBuffer
+            //     ShaderCode_MCPT, 
+            //     [   // Read GPUBuffer
             //         this.GPUBuffers[EBufferIndex.Uniform],
             //         this.GPUBuffers[EBufferIndex.Scene],
             //         this.GPUBuffers[EBufferIndex.Geometry],
             //         this.GPUBuffers[EBufferIndex.Accel],
             //     ],
-            //     [   // Input, GPUTextureView
-            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-            //     ],
-            //     [   // Output, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.Reservoir],
-            //     ],
-            //     [   // Output, GPUTextureView
-
-            //     ]
-            // ),
-            
-            // ComputePass.Create
-            // (
-            //     this.Device, 
-            //     ShaderCode_Temporal_Test, 
-            //     [   // Input, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.Uniform],
-            //         this.GPUBuffers[EBufferIndex.Scene],
-            //         this.GPUBuffers[EBufferIndex.Geometry],
-            //         this.GPUBuffers[EBufferIndex.Accel],
-            //         this.GPUBuffers[EBufferIndex.PrevReservoir],
-            //     ],
-            //     [   // Input, GPUTextureView
-            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-            //     ],
-            //     [   // Output, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.Reservoir],
-            //     ],
-            //     [   // Output, GPUTextureView
-
-            //     ]
-            // ),
-
-            // ComputePass.Create
-            // (
-            //     this.Device, 
-            //     ShaderCode_FinalShading, 
-            //     [   // Input, GPUBuffer
-            //         this.GPUBuffers[EBufferIndex.Uniform],
-            //         this.GPUBuffers[EBufferIndex.Scene],
-            //         this.GPUBuffers[EBufferIndex.Geometry],
-            //         this.GPUBuffers[EBufferIndex.Accel],
-            //         this.GPUBuffers[EBufferIndex.Reservoir],
-            //     ],
-            //     [   // Input, GPUTextureView
-            //         this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+            //     [   // Read GPUTextureView
+            //         this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
             //         this.GPUTextures[ETextureIndex.Scene].createView(),
             //     ],
-            //     [   // Output, GPUBuffer
-                    
+            //     [   // Read GPUSampler
+            //         this.GPUSamplers[ESamplerIndex.Default],
             //     ],
-            //     [   // Output, GPUTextureView
+            //     [   // Write GPUBuffer
+            //     ],
+            //     [   // Write GPUTextureView
             //         this.GPUTextures[ETextureIndex.Result].createView(),
             //     ]
             // ),
@@ -540,8 +535,27 @@ export class Renderer
 
         // 1. 텍스처가 1장도 없으면 에러 처리 혹은 1x1 더미 텍스처 반환
         if (layerCount === 0) {
-            return this.CreateGPUTexture();
-            throw new Error("CreateTextureArray2048: 입력된 비트맵이 없습니다.");
+            // 1x1 크기, 1개 레이어 텍스처 생성
+            const dummyTexture = this.Device.createTexture({
+                size: [1, 1, 1], 
+                format: 'rgba8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+                dimension: '2d',
+                label: 'Dummy_White_1x1'
+            });
+
+            // 흰색 픽셀 데이터 (R, G, B, A) = (255, 255, 255, 255)
+            const whitePixel = new Uint8Array([255, 255, 255, 255]);
+
+            // 텍스처에 데이터 쓰기 (writeTexture 사용)
+            this.Device.queue.writeTexture(
+                { texture: dummyTexture },
+                whitePixel,
+                { bytesPerRow: 4, rowsPerImage: 1 },
+                [1, 1, 1]
+            );
+
+            return dummyTexture;
         }
 
         // 2. GPUTexture 생성 (2D Array)

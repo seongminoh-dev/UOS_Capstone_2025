@@ -617,7 +617,6 @@ export class World
 
 
 
-
         // 1. 모든 정보를 모으기
         let InstanceRawData : Uint32Array;
         {
@@ -690,11 +689,13 @@ export class World
             TlasRawData = new Uint32Array();
         }
 
+
+
         let MaterialIDRawData       : Uint32Array;
         let MaterialIDOffsetData    : Uint32Array;
         {
             const MaterialIDsArray : Uint32Array[] = [];
-            for (let iter = 0; iter < MaterialArray.length; iter++) { MaterialIDsArray.push( SerializedMeshArray[iter].MaterialIDArray ); }
+            for (let iter = 0; iter < SerializedMeshArray.length; iter++) { MaterialIDsArray.push( SerializedMeshArray[iter].MaterialIDArray ); }
 
             [MaterialIDRawData, MaterialIDOffsetData] = MergeArrays(MaterialIDsArray);
         }
@@ -807,7 +808,8 @@ export class World
     public LoadFromScene(scene : any) : void
     {
         // 기존 데이터 초기화
-        this.Clear();
+        this.InstancePool.Clear();
+        //this.Clear();
 
         // Scene의 모든 Asset을 순회하며 World에 추가
         for (const asset of scene.assets)

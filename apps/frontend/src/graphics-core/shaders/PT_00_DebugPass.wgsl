@@ -176,6 +176,8 @@ const PI : f32 = 3.141592;
 @group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
 
+@group(0) @binding(20) var TextureSampler : sampler;
+
 @group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba32float, write>;
 
 //==========================================================================
@@ -249,12 +251,9 @@ fn GetMaterial(MaterialID : u32) -> Material
     OutMaterial.Transmission        = bitcast<f32>(SceneBuffer[Offset + 10u]);
     OutMaterial.IOR                 = bitcast<f32>(SceneBuffer[Offset + 11u]);
 
-    OutMaterial.TextureID_Albedo    = -1;
-    OutMaterial.TextureID_ORM       = -1;
-    OutMaterial.TextureID_Emissive  = -1;
-    // OutMaterial.TextureID_Albedo    = bitcast<i32>(SceneBuffer[Offset + 12u]);
-    // OutMaterial.TextureID_ORM       = bitcast<i32>(SceneBuffer[Offset + 13u]);
-    // OutMaterial.TextureID_Emissive  = bitcast<i32>(SceneBuffer[Offset + 14u]);
+    OutMaterial.TextureID_Albedo    = bitcast<i32>(SceneBuffer[Offset + 12u]);
+    OutMaterial.TextureID_ORM       = bitcast<i32>(SceneBuffer[Offset + 13u]);
+    OutMaterial.TextureID_Emissive  = bitcast<i32>(SceneBuffer[Offset + 14u]);
 
 
 
@@ -304,22 +303,32 @@ fn GetCompactSurface(CompactSurfaceRawData : vec4<f32>) -> CompactSurface
 
 fn GetAlbedo(InMaterial : Material, UV : vec2<f32>) -> vec4<f32>
 {
-    return InMaterial.Albedo;
+    if ( InMaterial.TextureID_Albedo < 0 ) { return InMaterial.Albedo; }
+
+    let TextureAlbedo : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_Albedo, 0.0 );
+    return TextureAlbedo;
 }
 
 fn GetEmission(InMaterial : Material, UV : vec2<f32>) -> vec3<f32>
 {
-    return vec3f(0.0);
+    return InMaterial.EmissiveIntensity * InMaterial.EmissiveColor;
 }
 
 fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
 {
-    return InMaterial.Metalness;
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+
+    let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
+    return TextureORM.b;
 }
 
 fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
 {
-    return InMaterial.Roughness;
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+
+    let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
+    return TextureORM.g;
+
 }
 
 
@@ -370,8 +379,6 @@ fn GetSurface(InCompactSurface : CompactSurface) -> Surface
 
     return OutSurface;
 }
-
-
 
 fn GetVertex(InMeshDescriptor : MeshDescriptor, VertexID : u32) -> Vertex
 {
@@ -446,7 +453,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
-    if (false) { let dummyData = textureLoad(TexturePool, vec2<i32>(0, 0), 0, 0); }
 
     var ResultColor : vec3<f32>;
 

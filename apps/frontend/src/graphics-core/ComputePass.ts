@@ -25,6 +25,7 @@ export class ComputePass
         ShaderCode              : string,
         InputGPUBuffers         : GPUBuffer[],
         InputGPUTextureViews    : GPUTextureView[],
+        InputTextureSamplers    : GPUSampler[],
         OutputGPUBuffers        : GPUBuffer[],
         OutputGPUTextureViews   : GPUTextureView[],
     )                           : Promise<ComputePass>
@@ -46,7 +47,8 @@ export class ComputePass
         {
             const InputBufferEntries        : GPUBindGroupEntry[] = InputGPUBuffers.map( ( buffer, index ) => ( {binding : index, resource : { buffer: buffer } } ) );
             const InputTextureViewEntries   : GPUBindGroupEntry[] = InputGPUTextureViews.map( ( textureView, index ) => ( { binding: 10 + index, resource : textureView } ));
-            const InputBindGroupEntries     : GPUBindGroupEntry[] = [ ...InputBufferEntries, ...InputTextureViewEntries ];
+            const InputSamplerEntries       : GPUBindGroupEntry[] = InputTextureSamplers.map( ( sampler, index ) => ( { binding: 20 + index, resource : sampler } ));
+            const InputBindGroupEntries     : GPUBindGroupEntry[] = [ ...InputBufferEntries, ...InputTextureViewEntries, ...InputSamplerEntries ];
 
             InputBindGroup = InDevice.createBindGroup( {layout : Pipeline.getBindGroupLayout(0), entries : InputBindGroupEntries } );
         }

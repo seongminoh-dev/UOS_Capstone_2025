@@ -19,7 +19,7 @@ export const DUMMY_SCENE_1: Scene = {
     {
       id: 'scene_instance_0',
       type: 'object',
-      meshName: 'TestScene',
+      meshName: 'Bedroom',
       transform: {
         position: [0, 0, 0],
         rotation: [0, 0, 0], // Euler angles in degrees [x, y, z]
@@ -45,31 +45,89 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         direction: [0, 0, -1],
         color: [1, 1, 1],
+        intensity: 2.5,
+      },
+    },
+
+    {
+      id: 'sun_light2',
+      type: 'directional-light',
+      lightParams: {
+        direction: [-1, 0, 0],
+        color: [1, 1, 1],
         intensity: 1.5,
       },
     },
 
-    // Point Light
     {
-      id: 'bulb',
+      id: 'bulb1',
       type: 'point-light',
       lightParams: {
-        position: [0, 1, -2],
+        position: [-2.33, 7, -3.77],
         color: [1, 1, 1],
-        intensity: 20.0,
+        intensity: 5.0,
       },
     },
 
-    // Rect Light
+    {
+      id: 'bulb2',
+      type: 'point-light',
+      lightParams: {
+        position: [4.10, 7.5, -3.77],
+        color: [1, 1, 1],
+        intensity: 5.0,
+      },
+    },
+
+    {
+      id: 'bulb3',
+      type: 'point-light',
+      lightParams: {
+        position: [9.80, 7.5, -3.77],
+        color: [1, 1, 1],
+        intensity: 5.0,
+      },
+    },
+
+    {
+      id: 'bulb4',
+      type: 'point-light',
+      lightParams: {
+        position: [-2.33, 7, 3.77],
+        color: [1, 1, 1],
+        intensity: 5.0,
+      },
+    },
+
+    {
+      id: 'bulb5',
+      type: 'point-light',
+      lightParams: {
+        position: [4.10, 7.5, 3.77],
+        color: [1, 1, 1],
+        intensity: 5.0,
+      },
+    },
+
+    {
+      id: 'bulb6',
+      type: 'point-light',
+      lightParams: {
+        position: [9.80, 7.5, 3.77],
+        color: [1, 1, 1],
+        intensity: 5.0,
+      },
+    },
+
     // {
-    //   id: 'rect',
+    //   id: 'rect1',
     //   type: 'rect-light',
     //   lightParams: {
-    //     position: [0, 1, -2],
-    //     u: [0.4, 0, 0],
-    //     v: [0, 0, 0.4],
+    //     position: [-2.33, 7, -3.77],
+    //     u: [0.3, 0, 0],
+    //     v: [0, 0, 0.3],
     //     color: [1, 1, 1],
-    //     intensity: 5.0,
+    //     intensity: 6.0,
     //   }
     // },
 
