@@ -84,6 +84,7 @@ export class SceneManager {
 
     /**
      * Scene에서 사용하는 Asset을 로드합니다.
+     * 새로운 World API 사용: LoadRawMesh → CreateMesh → AddInstance
      * @param scene - 로드할 Scene
      */
     private async loadSceneAssets(scene: Scene): Promise<void> {
@@ -92,9 +93,9 @@ export class SceneManager {
 
         for (const asset of scene.assets) {
             if (asset.type === 'object' && asset.meshName) {
-                // 이미 로드된 Mesh는 건너뛰기
+                // 이미 로드된 Mesh는 건너뛰기 (World.MeshPool 사용)
                 if (
-                    !ResourceManager.MeshPool.has(asset.meshName) &&
+                    this.world.MeshPool.GetID(asset.meshName) === -1 &&
                     !meshNamesToLoad.includes(asset.meshName)
                 ) {
                     meshNamesToLoad.push(asset.meshName);
@@ -102,9 +103,20 @@ export class SceneManager {
             }
         }
 
-        // 필요한 Asset 로드 (아직 로드되지 않은 것만)
+        // 필요한 Asset 로드 (새로운 World API 사용)
         if (meshNamesToLoad.length > 0) {
-            await ResourceManager.LoadAssets(meshNamesToLoad);
+            console.log(`Loading ${meshNamesToLoad.length} meshes:`, meshNamesToLoad);
+
+            // 1. Promise.all로 모든 RawMesh를 동시에 로드
+            const rawMeshes = await Promise.all(
+                meshNamesToLoad.map(meshName => this.world.LoadRawMesh(meshName))
+            );
+
+            // 2. 각 RawMesh를 World.MeshPool에 등록
+            for (let i = 0; i < meshNamesToLoad.length; i++) {
+                this.world.CreateMesh(meshNamesToLoad[i], rawMeshes[i]);
+                console.log(`Mesh "${meshNamesToLoad[i]}" loaded and registered`);
+            }
         }
     }
 
