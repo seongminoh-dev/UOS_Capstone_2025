@@ -5,25 +5,24 @@
 struct Uniform
 {
     Resolution                      : vec2<u32>,
-    MAX_BOUNCE                      : u32,
-    SAMPLE_PER_PIXEL                : u32,
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
     FrameIndex                      : u32,
 
     Offset_MeshDescriptorBuffer     : u32,
+    Offset_MaterialIDBuffer         : u32,
     Offset_MaterialBuffer           : u32,
     Offset_LightBuffer              : u32,
-    Offset_LightsCDFBuffer          : u32,
 
+    Offset_LightsCDFBuffer          : u32,
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
-    InstanceCount                   : u32,
-
-    LightSourceCount                : u32,
 };
 
 struct Instance
@@ -38,12 +37,13 @@ struct MeshDescriptor
 {
     Offset_Vertex       : u32,
     Offset_Index        : u32,
-    Offset_Material     : u32,
+    Offset_MaterialID   : u32,
     Offset_SubBlasRoot  : u32,
 
     Offset_Blas         : u32,
     Count_SubMesh       : u32,
 };
+
 
 struct Material
 {
@@ -56,9 +56,9 @@ struct Material
     Transmission        : f32,
     IOR                 : f32,
 
-    BaseColorTextureID  : u32,
-    ORMTextureID        : u32,
-    EmissiveTextureID   : u32,
+    TextureID_Albedo    : i32,
+    TextureID_ORM       : i32,
+    TextureID_Emissive  : i32,
 };
 
 struct Light
@@ -112,10 +112,18 @@ struct CompactSurface
 
 struct Surface
 {
-    Position    : vec3<f32>,
-    Normal      : vec3<f32>,
-    Material    : Material,
+    Position        : vec3<f32>,
+    Normal          : vec3<f32>,
+
+    Albedo          : vec3<f32>,
+    Emission        : vec3<f32>,
+
+    Metalness       : f32,
+    Roughness       : f32,
+    Transmission    : f32,
+    IOR             : f32,
 };
+
 
 struct HitResult
 {
@@ -205,6 +213,10 @@ const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
 const ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
 
+const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
+const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
+const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
+const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
 //==========================================================================
 // Enums
@@ -232,10 +244,13 @@ const LOBE_LIGHT    : u32 = 3u;
 @group(0) @binding(3) var<storage, read>    AccelBuffer     : array<u32>;
 @group(0) @binding(4) var<storage, read>    ReservoirBuffer : array<Reservoir>;
 
-@group(0) @binding(10) var G_Buffer         : texture_2d<f32>;
-@group(0) @binding(11) var SceneTexture     : texture_2d<f32>;
+@group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
+@group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
+@group(0) @binding(12) var SceneTexture : texture_2d<f32>;
 
-@group(1) @binding(10) var ResultTexture    : texture_storage_2d<rgba32float, write>;
+@group(0) @binding(20) var TextureSampler : sampler;
+
+@group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba32float, write>;
 
 
 
@@ -276,7 +291,7 @@ fn GetMeshDescriptor(MeshID : u32) -> MeshDescriptor
 
     OutMeshDescriptor.Offset_Vertex         = SceneBuffer[Offset + 0u];
     OutMeshDescriptor.Offset_Index          = SceneBuffer[Offset + 1u];
-    OutMeshDescriptor.Offset_Material       = SceneBuffer[Offset + 2u];
+    OutMeshDescriptor.Offset_MaterialID     = SceneBuffer[Offset + 2u];
     OutMeshDescriptor.Offset_SubBlasRoot    = SceneBuffer[Offset + 3u];
     OutMeshDescriptor.Offset_Blas           = SceneBuffer[Offset + 4u];
     OutMeshDescriptor.Count_SubMesh         = SceneBuffer[Offset + 5u];
@@ -284,9 +299,15 @@ fn GetMeshDescriptor(MeshID : u32) -> MeshDescriptor
     return OutMeshDescriptor;
 }
 
-fn GetMaterial(InMeshDescriptor : MeshDescriptor, MaterialID : u32) -> Material
+fn GetMaterialID(InMeshDescriptor : MeshDescriptor, SubMeshID : u32) -> u32
 {
-    let Offset      : u32           = UniformBuffer.Offset_MaterialBuffer + InMeshDescriptor.Offset_Material + (STRIDE_MATERIAL * MaterialID);
+    let Offset : u32 = UniformBuffer.Offset_MaterialIDBuffer + InMeshDescriptor.Offset_MaterialID + SubMeshID;
+    return SceneBuffer[ Offset ];
+}
+
+fn GetMaterial(MaterialID : u32) -> Material
+{
+    let Offset      : u32           = UniformBuffer.Offset_MaterialBuffer + (STRIDE_MATERIAL * MaterialID);
     var OutMaterial : Material      = Material();
 
     OutMaterial.Albedo.r            = bitcast<f32>(SceneBuffer[Offset + 0u]);
@@ -304,23 +325,47 @@ fn GetMaterial(InMeshDescriptor : MeshDescriptor, MaterialID : u32) -> Material
     OutMaterial.Transmission        = bitcast<f32>(SceneBuffer[Offset + 10u]);
     OutMaterial.IOR                 = bitcast<f32>(SceneBuffer[Offset + 11u]);
 
-    // ===================
-    let YELLOW : vec4<f32> = vec4<f32>(1.0, 1.0, 0.0, OutMaterial.Albedo.a);
+    OutMaterial.TextureID_Albedo    = bitcast<i32>(SceneBuffer[Offset + 12u]);
+    OutMaterial.TextureID_ORM       = bitcast<i32>(SceneBuffer[Offset + 13u]);
+    OutMaterial.TextureID_Emissive  = bitcast<i32>(SceneBuffer[Offset + 14u]);
 
-    OutMaterial.Albedo      = select(OutMaterial.Albedo, YELLOW, OutMaterial.Transmission > 0.0 );
-    //OutMaterial.Albedo      = vec4f(1.0);
-    OutMaterial.Roughness   = max(OutMaterial.Roughness, 0.01);
-    //OutMaterial.Transmission = min(OutMaterial.Transmission, 0.95);
+
+    // ===================
+    OutMaterial.Roughness = max(OutMaterial.Roughness, 0.01);
 
     return OutMaterial;
 }
 
-fn GetMaterialFromHit(HitInfo : HitResult) -> Material
+fn GetAlbedo(InMaterial : Material, UV : vec2<f32>) -> vec4<f32>
 {
-    let HitInstance         : Instance          = GetInstance(HitInfo.SurfaceInfo.InstanceID);
-    let HitMeshDescriptor   : MeshDescriptor    = GetMeshDescriptor(HitInstance.MeshID);
-    
-    return GetMaterial(HitMeshDescriptor, HitInfo.SurfaceInfo.MaterialID);
+    if ( InMaterial.TextureID_Albedo < 0 ) { return InMaterial.Albedo; }
+
+    let SampledColor    : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_Albedo, 0.0 );
+    let LinearRGB       : vec3<f32> = pow(SampledColor.rgb, vec3<f32>(2.2));
+
+    return vec4<f32>(LinearRGB, SampledColor.a);
+}
+
+fn GetEmission(InMaterial : Material, UV : vec2<f32>) -> vec3<f32>
+{
+    return InMaterial.EmissiveIntensity * InMaterial.EmissiveColor;
+}
+
+fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
+{
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+
+    let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
+    return TextureORM.b;
+}
+
+fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
+{
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+
+    let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
+    return TextureORM.g;
+
 }
 
 fn GetLight(LightID : u32) -> Light
@@ -423,47 +468,63 @@ fn GetRcVertex(X : CompactSurface) -> vec4<f32>
     return OutRcVertex;
 }
 
-fn GetCompactSurface(RcVertex : vec4<f32>) -> CompactSurface
+fn GetCompactSurface(CompactSurfaceRawData : vec4<f32>) -> CompactSurface
 {
     var OutCompactSurface           : CompactSurface    = CompactSurface();
-    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(RcVertex.r);
+    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(CompactSurfaceRawData.r);
 
     OutCompactSurface.IsValidSurface    = bool( Valid_InstanceID_MaterialID & 0x80000000u );
     OutCompactSurface.InstanceID        = ( Valid_InstanceID_MaterialID & 0x7fff0000u ) >> 16u;
     OutCompactSurface.MaterialID        = ( Valid_InstanceID_MaterialID & 0x0000ffffu );
-    OutCompactSurface.PrimitiveID       = bitcast<u32>(RcVertex.g);
-    OutCompactSurface.Barycentric       = vec2<f32>( RcVertex.b, RcVertex.a );
+    OutCompactSurface.PrimitiveID       = bitcast<u32>(CompactSurfaceRawData.g);
+    OutCompactSurface.Barycentric       = vec2<f32>( CompactSurfaceRawData.b, CompactSurfaceRawData.a );
 
     return OutCompactSurface;
 }
 
-fn GetSurface(X : CompactSurface) -> Surface
+fn GetSurface(InCompactSurface : CompactSurface) -> Surface
 {
-    var OutSurface : Surface = Surface();
+    var OutSurface : Surface;
 
-    let SurfaceInstance         : Instance          = GetInstance( X.InstanceID );
+    let SurfaceInstance         : Instance          = GetInstance( InCompactSurface.InstanceID );
     let SurfaceMeshDescriptor   : MeshDescriptor    = GetMeshDescriptor( SurfaceInstance.MeshID );
-    let SurfaceMaterial         : Material          = GetMaterial( SurfaceMeshDescriptor, X.MaterialID );
-    let SurfaceTriangleLocal    : Triangle          = GetTriangle( SurfaceMeshDescriptor, X.PrimitiveID );
+    let SurfaceTriangleLocal    : Triangle          = GetTriangle( SurfaceMeshDescriptor, InCompactSurface.PrimitiveID );
     let SurfaceTriangle         : Triangle          = GetTriangleWorldSpace( SurfaceInstance, SurfaceTriangleLocal );
 
-    let U   : f32 = X.Barycentric.x;
-    let V   : f32 = X.Barycentric.y;
+    let U   : f32 = InCompactSurface.Barycentric.x;
+    let V   : f32 = InCompactSurface.Barycentric.y;
     let W   : f32 = 1.0 - U - V;
 
-    let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
-    let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
-    let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
-    let N   : vec3<f32> = normalize( N0 + N1 + N2 );
+    {
+        let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
+        let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
+        let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
+        let N   : vec3<f32> = normalize( N0 + N1 + N2 );
 
-    let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
-    let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
-    let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
-    let P   : vec3<f32> = P0 + P1 + P2;
+        let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
+        let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
+        let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
+        let P   : vec3<f32> = P0 + P1 + P2;
 
-    OutSurface.Position = P;
-    OutSurface.Normal   = N;
-    OutSurface.Material = SurfaceMaterial;
+        OutSurface.Position = P;
+        OutSurface.Normal   = N;
+    }
+
+    let UV0 : vec2<f32> = SurfaceTriangle.Vertex_0.UV * U;
+    let UV1 : vec2<f32> = SurfaceTriangle.Vertex_1.UV * V;
+    let UV2 : vec2<f32> = SurfaceTriangle.Vertex_2.UV * W;
+    let UV  : vec2<f32> = UV0 + UV1 + UV2;
+
+    let SurfaceMaterial : Material = GetMaterial( InCompactSurface.MaterialID );
+    {
+        OutSurface.Albedo       = GetAlbedo( SurfaceMaterial, UV ).rgb;
+        OutSurface.Emission     = GetEmission( SurfaceMaterial, UV );
+
+        OutSurface.Metalness    = GetMetalness( SurfaceMaterial, UV );
+        OutSurface.Roughness    = GetRoughness( SurfaceMaterial, UV );
+        OutSurface.Transmission = SurfaceMaterial.Transmission;
+        OutSurface.IOR          = SurfaceMaterial.IOR;
+    }
 
     return OutSurface;
 }
@@ -611,7 +672,7 @@ fn LoadReservoir(ThreadID : vec2<u32>) -> Reservoir
     return ReservoirBuffer[idx];
 }
 
-fn TraceRay(InRay : Ray) -> HitResult
+fn TraceRay(InRay: Ray) -> HitResult
 {
     var BestHitResult : HitResult = HitResult();
     var RayValidRange : vec2<f32> = vec2<f32>(1e-4, 1e10);
@@ -619,7 +680,7 @@ fn TraceRay(InRay : Ray) -> HitResult
     BestHitResult.IsValidHit = false;
 
     // Trace Ray
-    for (var InstanceID : u32 = 0u; InstanceID < UniformBuffer.InstanceCount; InstanceID++)
+    for (var InstanceID: u32 = 0u; InstanceID < UniformBuffer.InstanceCount; InstanceID++)
     {
         // 현재 Instance 기준으로 정보 가져오기
         let CurrentInstance         : Instance          = GetInstance(InstanceID);
@@ -632,7 +693,7 @@ fn TraceRay(InRay : Ray) -> HitResult
             if (!DoRangesOverlap(RayValidRange, IntersectionRange)) { continue; }
 
             // Blas Tree 순회
-            var Stack           : array<u32, 64>;
+            var Stack           : array<u32, 96>;
             var StackPointer    : i32 = -1;
             StackPointer++; Stack[StackPointer] = 0;
         
@@ -699,8 +760,11 @@ fn TraceRay(InRay : Ray) -> HitResult
                     BestHitResult.IsValidHit                    = true;
                     BestHitResult.SurfaceInfo.IsValidSurface    = true;
                     BestHitResult.SurfaceInfo.InstanceID        = InstanceID;
-                    BestHitResult.SurfaceInfo.MaterialID        = SubMeshID;
                     BestHitResult.SurfaceInfo.PrimitiveID       = PrimitiveID;
+
+                    let HitInstance         : Instance          = GetInstance(BestHitResult.SurfaceInfo.InstanceID);
+                    let HitMeshDescriptor   : MeshDescriptor    = GetMeshDescriptor(HitInstance.MeshID);
+                    BestHitResult.SurfaceInfo.MaterialID        = GetMaterialID(HitMeshDescriptor, SubMeshID);
                 }
             }
         }
@@ -717,7 +781,7 @@ fn TraceRay(InRay : Ray) -> HitResult
         let HitPrimitive        : Triangle          = GetTriangleWorldSpace(HitInstance, HitPrimitiveLocal);
         let HitPoint            : vec3<f32>         = InRay.Start + (BestHitResult.HitDistance * InRay.Direction);
 
-        BestHitResult.SurfaceInfo.Barycentric = GetBaryCentricWeights(HitPoint, HitPrimitive).xy;
+        BestHitResult.SurfaceInfo.Barycentric       = GetBaryCentricWeights(HitPoint, HitPrimitive).xy;
     }
     
     return BestHitResult;
@@ -794,7 +858,7 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
         let ClosestHit : HitResult = TraceRay(CurrentRay);
         if (!ClosestHit.IsValidHit || ClosestHit.HitDistance > RemainDistance) { return Transmittance; }
 
-        let HitMaterial : Material = GetMaterialFromHit(ClosestHit);
+        let HitMaterial : Material = GetMaterial(ClosestHit.SurfaceInfo.MaterialID);
         if (HitMaterial.Transmission == 0.0) { return 0.0; }
 
         Transmittance   *= HitMaterial.Transmission;
@@ -803,11 +867,8 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
         let HitSurface : Surface = GetSurface( ClosestHit.SurfaceInfo );
         CurrentRay = Ray(HitSurface.Position, CurrentRay.Direction);
     }
-    return 0.0;
 
-    // let RayResult : HitResult = TraceRay(CurrentRay);
-    // let bIsVisible : bool = ( !RayResult.IsValidHit || RayResult.HitDistance > Distance );
-    // return f32(bIsVisible);
+    return 0.0;
 }
 
 
@@ -877,10 +938,10 @@ fn BRDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
     let NdotH : f32 = max(dot(N, H), 0.0);
     let VdotH : f32 = max(dot(V, H), 0.0);
 
-    let BaseColor       : vec3<f32> = X.Material.Albedo.rgb;
-    let Metalness       : f32       = X.Material.Metalness;
-    let Roughness       : f32       = X.Material.Roughness;
-    let Transmission    : f32       = X.Material.Transmission;
+    let BaseColor       : vec3<f32> = X.Albedo.rgb;
+    let Metalness       : f32       = X.Metalness;
+    let Roughness       : f32       = X.Roughness;
+    let Transmission    : f32       = X.Transmission;
 
     let F0  : vec3<f32> = mix(vec3f(0.04), BaseColor, Metalness);
     let D   : f32       = GGXDistribution(NdotH, Roughness);
@@ -898,12 +959,12 @@ fn BRDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
 
 fn BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
 {
-    let Albedo      : vec3<f32> = X.Material.Albedo.rgb;
-    let Roughness   : f32       = X.Material.Roughness;
+    let Albedo      : vec3<f32> = X.Albedo.rgb;
+    let Roughness   : f32       = X.Roughness;
 
     let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in    : f32 = select(1.0, X.Material.IOR, bViewNormalSameHemisphere);
-    let n_out   : f32 = select(X.Material.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_in    : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
+    let n_out   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
     let H_norm  : f32 = length(n_in * L + n_out * V);
 
     let N : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
@@ -929,7 +990,7 @@ fn BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
 
 fn BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
 {
-    let T : f32 = X.Material.Transmission;
+    let T : f32 = X.Transmission;
     let N : vec3<f32> = X.Normal;
 
     if (dot(L, N) * dot(V, N) > 0.0) { return (1.0 - T) * BRDF(X, V, L); }
@@ -1035,9 +1096,9 @@ fn SampleNEE(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> Li
 fn SampleBRDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
 {
     // 1. HitInfo 해석
-    let Albedo          : vec3<f32> = X.Material.Albedo.rgb;
-    let Metalness       : f32       = X.Material.Metalness;
-    let Roughness       : f32       = X.Material.Roughness;
+    let Albedo          : vec3<f32> = X.Albedo.rgb;
+    let Metalness       : f32       = X.Metalness;
+    let Roughness       : f32       = X.Roughness;
  
     // 2. 정반사 확률 P_specular 계산
     let F0          : vec3<f32> = mix(vec3f(0.04), Albedo, Metalness);
@@ -1071,8 +1132,8 @@ fn SampleBRDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
 fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
 {
     let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in        : f32       = select(X.Material.IOR, 1.0, bViewNormalSameHemisphere);
-    let n_out       : f32       = select(1.0, X.Material.IOR, bViewNormalSameHemisphere);
+    let n_in        : f32       = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_out       : f32       = select(1.0, X.IOR, bViewNormalSameHemisphere);
     let N           : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
     let IORRatio    : f32       = n_in / n_out;
 
@@ -1094,7 +1155,7 @@ fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
     let bTreatAsReflection : bool = (Random(pRandomSeed) < P_reflection);
 
     let TBN : mat3x3<f32>   = TBNMatrix(N);
-    let H   : vec3<f32>     = TBN * SampleGGX(pRandomSeed, X.Material.Roughness);
+    let H   : vec3<f32>     = TBN * SampleGGX(pRandomSeed, X.Roughness);
     let L   : vec3<f32>     = normalize(select(refract(-V, H, IORRatio), reflect(-V, H), bTreatAsReflection));
     
     var OutBSDFSample : BSDFSample = BSDFSample();
@@ -1107,11 +1168,12 @@ fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
 
 fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
 {
-    let bTreatAsTransparent : bool = Random(pRandomSeed) < X.Material.Transmission;
+    let bTreatAsTransparent : bool = Random(pRandomSeed) < X.Transmission;
 
     if (bTreatAsTransparent) { return SampleBTDF(pRandomSeed, X, V); }
     return SampleBRDF(pRandomSeed, X, V);
 }
+
 
 
 
@@ -1121,23 +1183,18 @@ fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
 
 fn PDF_BRDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 {
-    // 1. HitInfo 해석
-    let Albedo      : vec3<f32> = X.Material.Albedo.rgb;
-    let Metalness   : f32       = X.Material.Metalness;
-    let Roughness   : f32       = X.Material.Roughness;
+    // 1. 정반사 확률 P_specular 계산
+    let F0          : vec3<f32> = mix(vec3f(0.04), X.Albedo, X.Metalness);
+    let P_specular  : f32       = mix(Luminance(F0), 1.0, X.Metalness);
 
-    // 2. 정반사 확률 P_specular 계산
-    let F0          : vec3<f32> = mix(vec3f(0.04), Albedo, Metalness);
-    let P_specular  : f32       = mix(Luminance(F0), 1.0, Metalness);
-
-    // 3. PDF_BRDF 계산
+    // 2. PDF_BRDF 계산
     let N       : vec3<f32> = X.Normal;
     let H       : vec3<f32> = normalize(L + V);
     let LdotN   : f32       = max(dot(L, N), 0.0);
     let NdotH   : f32       = max(dot(N, H), 0.0);
     let VdotH   : f32       = max(dot(V, H), 0.0);
 
-    let PDF_Specular    : f32 = GGXDistribution(NdotH, Roughness) / max(4.0 * VdotH, EPS);
+    let PDF_Specular    : f32 = GGXDistribution(NdotH, X.Roughness) / max(4.0 * VdotH, EPS);
     let PDF_Diffuse     : f32 = LdotN / PI;
     let PDF_BRDF        : f32 = mix(PDF_Diffuse, PDF_Specular, P_specular);
 
@@ -1147,12 +1204,12 @@ fn PDF_BRDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 fn PDF_BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 {
     // --- 1. 기본 정보 및 IOR 설정 ---
-    let Roughness   : f32      = X.Material.Roughness;
+    let Roughness   : f32      = X.Roughness;
     let Alpha       : f32      = Roughness * Roughness; // PDF 계산에 필요
 
     let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in   : f32 = select(X.Material.IOR, 1.0, bViewNormalSameHemisphere);
-    let n_out  : f32 = select(1.0, X.Material.IOR, bViewNormalSameHemisphere);
+    let n_in   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_out  : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
     let IORRatio : f32 = n_in / n_out;
     let N : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
 
@@ -1246,7 +1303,7 @@ fn PDF_LIGHT(X : Surface, V : vec3<f32>, XL : LightSample) -> f32
         let N : vec3<f32>   = LightSource.Direction;
         let A : f32         = LightSource.Area;
 
-        PDF_Point = dot(r,r) / (A * abs(dot(N, L)));
+        PDF_Point = dot(r,r) / max(A * abs(dot(N, L)), EPS);
     }
 
     return Pr_Choose * PDF_Point;
@@ -1269,8 +1326,8 @@ fn L_emit(XL : LightSample, X : Surface) -> vec3<f32>
 
 fn IsSafeToReconnect(A : Surface, Lobe_A : u32, B : Surface, Lobe_B : u32) -> bool
 {
-    let Roughness_A     : f32   = select(A.Material.Roughness, 1.0, Lobe_A == LOBE_LAMBERT);
-    let Roughness_B     : f32   = select(B.Material.Roughness, 1.0, Lobe_B == LOBE_LAMBERT);
+    let Roughness_A     : f32   = select(A.Roughness, 1.0, Lobe_A == LOBE_LAMBERT);
+    let Roughness_B     : f32   = select(B.Roughness, 1.0, Lobe_B == LOBE_LAMBERT);
     let bRoughEnough    : bool  = ( min(Roughness_A, Roughness_B) >= RECONNECTION_ROUGHNESS );
 
     let bFarEnough      : bool  = ( length(A.Position - B.Position) >= RECONNECTION_DISTANCE );
@@ -1280,13 +1337,14 @@ fn IsSafeToReconnect(A : Surface, Lobe_A : u32, B : Surface, Lobe_B : u32) -> bo
 
 fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
 {
-    let bRoughEnough        : bool  = ( X.Material.Roughness >= RECONNECTION_ROUGHNESS );
+    let bRoughEnough        : bool  = ( X.Roughness >= RECONNECTION_ROUGHNESS );
 
     let bIsDirectionalLight : bool  = ( XL.Type == LIGHT_DIRECTION ) || ( XL.Type == LIGHT_ENV );
     let bFarEnough          : bool  = bIsDirectionalLight || ( length(X.Position - XL.Position) >= RECONNECTION_DISTANCE );
 
     return bFarEnough && bRoughEnough;
 }
+
 
 fn SafeReconnectionIndex(InPath : Path) -> u32
 {
@@ -1407,20 +1465,29 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         return;
     }
 
+    if (false)
+    {
+        let s = GetSurface(Get_X1(ThreadID.xy));
+        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(s.Albedo, 1.0));
+        return;
+    }
+
     // 1. Load Path
     let Reservoir : Reservoir = LoadReservoir(ThreadID.xy);
 
     // Prevent Underflow
-    if ( Reservoir.C == 0u || Reservoir.Sample.length < 2u) 
+    if ( Reservoir.C == 0u || Reservoir.Sample.length < 2u || Reservoir.UCW != Reservoir.UCW) 
     {
         WriteColor(ThreadID.xy, vec3f(0.0));
         return; 
     }
+    // if ( false ){ WriteColor(ThreadID.xy, RED); }
+
 
     let PathSample  : Path = RegeneratePath( ThreadID.xy, Reservoir.Sample );
 
     // 2. 색 저장
-    var FrameColor : vec3<f32> =  Reservoir.UCW * PathContribution( PathSample );
+    var FrameColor : vec3<f32> = Reservoir.UCW * PathContribution( PathSample );
 
     WriteColor(ThreadID.xy, FrameColor);
 
