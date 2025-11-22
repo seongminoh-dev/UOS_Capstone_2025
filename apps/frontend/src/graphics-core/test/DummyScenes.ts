@@ -39,15 +39,15 @@ export const DUMMY_SCENE_1: Scene = {
     // },
 
     //Directional Light
-    {
-      id: 'sun_light',
-      type: 'directional-light',
-      lightParams: {
-        direction: [0, 0, -1],
-        color: [1, 1, 1],
-        intensity: 2.5,
-      },
-    },
+    // {
+    //   id: 'sun_light',
+    //   type: 'directional-light',
+    //   lightParams: {
+    //     direction: [0, 0, -1],
+    //     color: [1, 1, 1],
+    //     intensity: 2.5,
+    //   },
+    // },
 
     {
       id: 'sun_light2',
@@ -55,7 +55,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         direction: [-1, 0, 0],
         color: [1, 1, 1],
-        intensity: 1.5,
+        intensity: 0.5,
       },
     },
 
@@ -65,7 +65,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [-2.33, 7, -3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
@@ -75,7 +75,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [4.10, 7.5, -3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
@@ -85,7 +85,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [9.80, 7.5, -3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
@@ -95,7 +95,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [-2.33, 7, 3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
@@ -105,7 +105,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [4.10, 7.5, 3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
@@ -115,7 +115,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         position: [9.80, 7.5, 3.77],
         color: [1, 1, 1],
-        intensity: 5.0,
+        intensity: 15.0,
       },
     },
 
