@@ -252,7 +252,7 @@ const LOBE_LIGHT    : u32 = 3u;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
-@group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba32float, write>;
+@group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba16float, write>;
 
 
 

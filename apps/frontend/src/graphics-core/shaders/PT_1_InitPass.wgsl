@@ -241,10 +241,10 @@ const LOBE_LIGHT    : u32 = 3u;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer  : array<u32>;
 @group(0) @binding(3) var<storage, read>    AccelBuffer     : array<u32>;
 
-@group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
-@group(0) @binding(11) var G_Buffer : texture_2d<f32>;
+@group(0) @binding(10) var TexturePool      : texture_2d_array<f32>;
+@group(0) @binding(11) var G_Buffer         : texture_2d<f32>;
 
-@group(0) @binding(20) var TextureSampler : sampler;
+@group(0) @binding(20) var TextureSampler   : sampler;
 
 @group(1) @binding(0) var<storage, read_write> ReservoirBuffer : array<Reservoir>;
 

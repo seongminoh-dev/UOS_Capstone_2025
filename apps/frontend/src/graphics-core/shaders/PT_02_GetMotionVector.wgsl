@@ -218,7 +218,7 @@ const MAX_PATH_LENGTH : u32 = 5u; // rSeed[4] → length-1 <= 4 → length <= 5
 
 @group(0) @binding(10) var G_Buffer : texture_2d<f32>;
 
-@group(1) @binding(10) var MotionVectorTex : texture_storage_2d<rgba32float, write>;
+@group(1) @binding(10) var MotionVectorTex : texture_storage_2d<rgba16float, write>;
 
 //==========================================================================
 // Helpers: Scene / Mesh
@@ -385,8 +385,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
         let cur_i = vec2<i32>(curPixel);
 
         // convention: prev - cur  또는  cur - prev 중 택 1
-        mv_i = prevPixel - cur_i;
-        // mv_i = cur_i - prevPixel;
+        //mv_i = prevPixel - cur_i;
+        mv_i = cur_i - prevPixel;
     }
     let mv_f : vec2<f32> = vec2<f32>(mv_i); // i32 → f32 캐스팅
     

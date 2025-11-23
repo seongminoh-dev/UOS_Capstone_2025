@@ -48,7 +48,8 @@ const ETextureIndex =
 const ESamplerIndex =
 {
     Default : 0,
-    SIZE    : 1
+    Linear  : 1,
+    SIZE    : 2
 } as const;
 
 const EDataOffsetIndex =
@@ -160,6 +161,7 @@ export class Renderer
 
     public ResetFrameCount() : void 
     { 
+        return;
         this.FrameCount = 0; 
     }
 
@@ -195,9 +197,13 @@ export class Renderer
 
         // Camera Properties
         const CameraLocation            = this.Camera.GetLocation();
-        const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(this.Camera.GetProjectionMatrix(), this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
-        const ViewProjection            = mat4.multiply(ProjectionMatrix_Jittered, this.Camera.GetViewMatrix());
-        const ViewProjection_Inverse    = mat4.invert(ViewProjection);
+        const ViewMatrix                = this.Camera.GetViewMatrix();
+        const ProjectionMatrix          = this.Camera.GetProjectionMatrix();
+        const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(ProjectionMatrix, this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
+        
+        const ViewProjection            = mat4.multiply(ProjectionMatrix, ViewMatrix);
+        const ViewProjection_Jittered   = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
+        const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
         const ELEMENT_COUNT = 52;
@@ -231,8 +237,8 @@ export class Renderer
 
             Uint32View [48] = this.World.InstancePool.GetResourceArray().length;
             Uint32View [49] = this.World.Lights.length;
-            Float32View[50] = Jitter_X;
-            Float32View[51] = Jitter_Y;
+            Float32View[50] = (Jitter_X * 2) / this.Canvas.width;
+            Float32View[51] = (Jitter_Y * 2) / this.Canvas.height;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -324,21 +330,20 @@ export class Renderer
         return GPUBufferCreated;
     }
 
-    private CreateGPUTexture(width : number, height : number) : GPUTexture
+    private CreateGPUTexture(width : number, height : number, format : GPUTextureFormat) : GPUTexture
     {
         const TextureDescriptor : GPUTextureDescriptor =
         {
             size    : { width : width, height : height },
-            format  : "rgba32float",
+            format  : format,
             usage   : GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
         };
 
         return this.Device.createTexture(TextureDescriptor);
     }
 
-    private CreateGPUSampler() : GPUSampler
+    private CreateGPUSampler_Default() : GPUSampler
     {
-
         const SamplerDescriptor : GPUSamplerDescriptor = 
         {
             magFilter: 'linear',
@@ -347,7 +352,23 @@ export class Renderer
             addressModeU: 'repeat',
             addressModeV: 'repeat',
             addressModeW: 'repeat',
-            maxAnisotropy: 8, 
+            maxAnisotropy: 1, 
+        };
+
+        return this.Device.createSampler(SamplerDescriptor);
+    }
+
+    private CreateGPUSampler_Linear() : GPUSampler
+    {
+        const SamplerDescriptor : GPUSamplerDescriptor = 
+        {
+            magFilter: 'linear',
+            minFilter: 'linear',
+            mipmapFilter: 'linear',
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            addressModeW: 'clamp-to-edge',
+            maxAnisotropy: 1, 
         };
 
         return this.Device.createSampler(SamplerDescriptor);
@@ -367,13 +388,14 @@ export class Renderer
         this.GPUBuffers[EBufferIndex.PrevReservoir] = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
 
         this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
-        this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
-        this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
-        this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
-        this.GPUTextures[ETextureIndex.History_Read]    = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height);
-        this.GPUTextures[ETextureIndex.History_Write]   = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height);
+        this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba32float");
+        this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+        this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+        this.GPUTextures[ETextureIndex.History_Read]    = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height, "rgba16float");
+        this.GPUTextures[ETextureIndex.History_Write]   = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height, "rgba16float");
 
-        this.GPUSamplers[ESamplerIndex.Default] = this.CreateGPUSampler();
+        this.GPUSamplers[ESamplerIndex.Default] = this.CreateGPUSampler_Default();
+        this.GPUSamplers[ESamplerIndex.Linear]  = this.CreateGPUSampler_Linear();
 
         return;
     }
@@ -501,8 +523,10 @@ export class Renderer
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.Radiance].createView(),
                     this.GPUTextures[ETextureIndex.History_Read].createView(),
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
                 ],
                 [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Linear],
                 ],
                 [   // Write GPUBuffer
                 ],
