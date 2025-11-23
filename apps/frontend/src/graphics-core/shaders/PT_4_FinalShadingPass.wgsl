@@ -25,6 +25,7 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
+    Jitter                          : vec2<f32>
 };
 
 struct Instance

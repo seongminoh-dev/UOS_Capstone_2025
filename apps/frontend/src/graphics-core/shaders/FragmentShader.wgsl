@@ -1,26 +1,27 @@
 struct Uniform
 {
-    Resolution_Source               : vec2<u32>,
-    Resolution_Target               : vec2<u32>,
+  Resolution_Source               : vec2<u32>,
+  Resolution_Target               : vec2<u32>,
 
-    ViewProjectionMatrix_Inverse    : mat4x4<f32>,
-    ViewProjectionMatrix_Prev       : mat4x4<f32>,
+  ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+  ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
-    CameraWorldPosition             : vec3<f32>,
-    FrameIndex                      : u32,
+  CameraWorldPosition             : vec3<f32>,
+  FrameIndex                      : u32,
 
-    Offset_MeshDescriptorBuffer     : u32,
-    Offset_MaterialIDBuffer         : u32,
-    Offset_MaterialBuffer           : u32,
-    Offset_LightBuffer              : u32,
+  Offset_MeshDescriptorBuffer     : u32,
+  Offset_MaterialIDBuffer         : u32,
+  Offset_MaterialBuffer           : u32,
+  Offset_LightBuffer              : u32,
 
-    Offset_LightsCDFBuffer          : u32,
-    Offset_IndexBuffer              : u32,
-    Offset_SubBlasRootArrayBuffer   : u32,
-    Offset_BlasBuffer               : u32,
+  Offset_LightsCDFBuffer          : u32,
+  Offset_IndexBuffer              : u32,
+  Offset_SubBlasRootArrayBuffer   : u32,
+  Offset_BlasBuffer               : u32,
 
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
+  InstanceCount                   : u32,
+  LightSourceCount                : u32,
+  Jitter                          : vec2<f32>
 };
 
 fn ACESFilm(x: vec3<f32>) -> vec3<f32> 

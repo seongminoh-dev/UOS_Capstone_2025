@@ -7,6 +7,8 @@ import      { GLTFLoader }                      from 'three/examples/jsm/loaders
 import      { mergeGeometries }                 from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import      { computeBoundsTree, MeshBVH, SAH } from 'three-mesh-bvh';
 
+import      { Utils }                           from './Utils.ts';
+
 import      { Light, DirectionalLight, PointLight, RectLight } from './Structs.ts';
 
 /**
@@ -34,26 +36,6 @@ function eulerDegreesToQuat(eulerDegrees: [number, number, number]): Quat
     result = quat.multiply(qz, result);
 
     return result;
-}
-
-function MergeArrays(InArrays : Uint32Array[]) : [Uint32Array, Uint32Array]
-{
-    if (InArrays.length === 0) return [new Uint32Array(), new Uint32Array()];
-
-    const Offset : Uint32Array = new Uint32Array(InArrays.length); Offset[0] = 0;
-    for (let iter = 0; iter < InArrays.length - 1; iter++)
-    {
-        Offset[iter+1] = Offset[iter] + InArrays[iter].length;
-    }
-
-    const ArrayLength = Offset[InArrays.length - 1] + InArrays[InArrays.length - 1].length;
-    const MergedArray : Uint32Array = new Uint32Array(ArrayLength);
-    for (let iter = 0; iter < InArrays.length; iter++)
-    {
-        MergedArray.set(InArrays[iter], Offset[iter]);
-    }
-
-    return [MergedArray, Offset];
 }
 
 
@@ -159,7 +141,7 @@ function SerializeMesh(InMesh : Mesh) : SerializedMesh
         const SubBlasArrays : Uint32Array[] = [];
         for (const BlasData of InMesh.BlasTree) { SubBlasArrays.push(new Uint32Array(BlasData)); }
 
-        [SerializedBlasArray, SerializedSubBlasRootArray] = MergeArrays(SubBlasArrays);
+        [SerializedBlasArray, SerializedSubBlasRootArray] = Utils.MergeArrays(SubBlasArrays);
     }
 
     // Serialize Vertex Array
@@ -627,7 +609,7 @@ export class World
                 SerializedInstanceArray.push( SerializeInstance( InstanceArray[iter] ) );
             }
 
-            InstanceRawData = MergeArrays( SerializedInstanceArray )[0];
+            InstanceRawData = Utils.MergeArrays( SerializedInstanceArray )[0];
         }
 
         let LightRawData : Uint32Array;
@@ -639,7 +621,7 @@ export class World
                 SerializedLightArray.push(LightSerialized);
             }
 
-            LightRawData = MergeArrays(SerializedLightArray)[0];
+            LightRawData = Utils.MergeArrays(SerializedLightArray)[0];
         }
 
         let LightsCDFRawData : Uint32Array;
@@ -654,7 +636,7 @@ export class World
             const SerializedVertexArray : Uint32Array[] = [];
             for (let iter = 0; iter < SerializedMeshArray.length; iter++) { SerializedVertexArray.push( SerializedMeshArray[iter].VertexArray ); }
 
-            [VertexRawData, VertexOffsetData] = MergeArrays(SerializedVertexArray);
+            [VertexRawData, VertexOffsetData] = Utils.MergeArrays(SerializedVertexArray);
         }
 
         let IndexRawData    : Uint32Array;
@@ -663,7 +645,7 @@ export class World
             const SerializedIndexArray : Uint32Array[] = [];
             for (let iter = 0; iter < SerializedMeshArray.length; iter++) { SerializedIndexArray.push( SerializedMeshArray[iter].IndexArray ); }
 
-            [IndexRawData, IndexOffsetData] = MergeArrays(SerializedIndexArray);
+            [IndexRawData, IndexOffsetData] = Utils.MergeArrays(SerializedIndexArray);
         }
 
         let SubBlasRootRawData      : Uint32Array;
@@ -672,7 +654,7 @@ export class World
             const SerializedSubBlasRootArray : Uint32Array[] = [];
             for (const SerializedMesh of SerializedMeshArray) { SerializedSubBlasRootArray.push( SerializedMesh.SubBlasRootArray ); }
 
-            [SubBlasRootRawData, SubBlasRootOffsetData] = MergeArrays(SerializedSubBlasRootArray);
+            [SubBlasRootRawData, SubBlasRootOffsetData] = Utils.MergeArrays(SerializedSubBlasRootArray);
         }
 
         let BlasRawData     : Uint32Array;
@@ -681,7 +663,7 @@ export class World
             const SerializedBlasArray : Uint32Array[] = [];
             for (const SerializedMesh of SerializedMeshArray) { SerializedBlasArray.push( SerializedMesh.BlasArray ); }
 
-            [BlasRawData, BlasOffsetData] = MergeArrays(SerializedBlasArray);
+            [BlasRawData, BlasOffsetData] = Utils.MergeArrays(SerializedBlasArray);
         }
 
         let TlasRawData : Uint32Array; // TODO
@@ -697,7 +679,7 @@ export class World
             const MaterialIDsArray : Uint32Array[] = [];
             for (let iter = 0; iter < SerializedMeshArray.length; iter++) { MaterialIDsArray.push( SerializedMeshArray[iter].MaterialIDArray ); }
 
-            [MaterialIDRawData, MaterialIDOffsetData] = MergeArrays(MaterialIDsArray);
+            [MaterialIDRawData, MaterialIDOffsetData] = Utils.MergeArrays(MaterialIDsArray);
         }
 
         let MaterialRawData : Uint32Array;
@@ -705,7 +687,7 @@ export class World
             const SerializedMaterialArray : Uint32Array[] = [];
             for (let iter = 0; iter < MaterialArray.length; iter++) { SerializedMaterialArray.push( SerializeMaterial( MaterialArray[iter] ) ); }
 
-            MaterialRawData = MergeArrays(SerializedMaterialArray)[0];
+            MaterialRawData = Utils.MergeArrays(SerializedMaterialArray)[0];
         }
 
         let MeshDescriptorRawData : Uint32Array;
@@ -727,7 +709,7 @@ export class World
                 SerializedMeshDescriptorArray.push( SerializeMeshDescriptor( CurrentMeshDescriptor ) );
             }
 
-            MeshDescriptorRawData = MergeArrays(SerializedMeshDescriptorArray)[0];
+            MeshDescriptorRawData = Utils.MergeArrays(SerializedMeshDescriptorArray)[0];
         }
 
 
@@ -739,7 +721,7 @@ export class World
 
         // Scene Buffer에 들어갈 데이터 채우기 | Instance + MeshDescriptor + MaterialID + Material + Light + LightsCDF
         const ArraysInSceneBuffer  = [InstanceRawData, MeshDescriptorRawData, MaterialIDRawData, MaterialRawData, LightRawData, LightsCDFRawData];
-        const [SceneBufferData, SceneBufferOffsets] = MergeArrays(ArraysInSceneBuffer);
+        const [SceneBufferData, SceneBufferOffsets] = Utils.MergeArrays(ArraysInSceneBuffer);
         {
             Offsets[EDataOffsetIndex.MeshDescriptor]    = SceneBufferOffsets[1];
             Offsets[EDataOffsetIndex.MaterialID]        = SceneBufferOffsets[2];    
@@ -750,7 +732,7 @@ export class World
 
         // Geometry Buffer에 들어갈 데이터 채우기 | Vertex + Index + PrimitiveToMaterial
         const ArraysInGeometryBuffer = [VertexRawData, IndexRawData, SubBlasRootRawData];
-        const [GeometryBufferData, GeometryBufferOffsets] = MergeArrays(ArraysInGeometryBuffer);
+        const [GeometryBufferData, GeometryBufferOffsets] = Utils.MergeArrays(ArraysInGeometryBuffer);
         {
             Offsets[EDataOffsetIndex.Index]            = GeometryBufferOffsets[1];
             Offsets[EDataOffsetIndex.SubBlasRootArray] = GeometryBufferOffsets[2];
@@ -758,7 +740,7 @@ export class World
 
         // Accel Buffer에 들어갈 데이터 채우기 | Tlas + Blas
         const ArraysInAccelBuffer = [TlasRawData, BlasRawData];
-        const [AccelBufferData, AccelBufferOffsets] = MergeArrays(ArraysInAccelBuffer);
+        const [AccelBufferData, AccelBufferOffsets] = Utils.MergeArrays(ArraysInAccelBuffer);
         {
             Offsets[EDataOffsetIndex.Blas] = AccelBufferOffsets[1];
         }
@@ -824,7 +806,7 @@ export class World
                 }
 
                 const position  : Vec3 = vec3.fromValues(...asset.transform.position);
-                const rotation  : Quat = eulerDegreesToQuat(asset.transform.rotation);
+                const rotation  : Quat = quat.fromEuler(asset.transform.rotation[0], asset.transform.rotation[1], asset.transform.rotation[2], 'zyx');
                 const scale     : Vec3 = vec3.fromValues(...asset.transform.scale);
 
                 this.AddInstance(asset.id, asset.meshName, position, rotation, scale);
@@ -871,36 +853,6 @@ export class World
 
         console.log(`Loaded scene "${scene.name}" with ${scene.assets.length} assets`);
     }
-
-    // public PackWorldData() : [Array<Instance>, Array<SerializedMesh>, Map<string, number>]
-    // {
-    //     function convertMapToArray<T>(InMap: Map<string, T>): [T[], Map<string, number>]
-    //     {
-    //         const ArrayData: T[] = [...InMap.values()];
-
-    //         const IDToIndexMap: Map<string, number> = new Map<string, number>();
-    //         {
-    //             const IDData: string[] = [...InMap.keys()];
-
-    //             for (let iter=0; iter<IDData.length; iter++)
-    //                 IDToIndexMap.set(IDData[iter], iter);
-    //         }
-
-    //         return [ArrayData, IDToIndexMap];
-    //     }
-        
-    //     const InstanceArray = convertMapToArray<Instance>(this.InstancesPool)[0];
-
-    //     const UsedMeshesSerialized : Map<string, SerializedMesh> = new Map<string, SerializedMesh>();
-    //     for (const InstanceUsing of InstanceArray) 
-    //     {
-    //         const MeshToSerialize : Mesh = ResourceManager.MeshPool.get(InstanceUsing.MeshID)!;
-    //         UsedMeshesSerialized.set(InstanceUsing.MeshID, MeshToSerialize.Serialize());
-    //     }
-                
-    //     const [SerializedMeshArray, MeshIDToIndexMap] = convertMapToArray(UsedMeshesSerialized);
-    //     return [InstanceArray, SerializedMeshArray, MeshIDToIndexMap];
-    // }
 
     public GetLightCDFBuffer() : ArrayBuffer
     {

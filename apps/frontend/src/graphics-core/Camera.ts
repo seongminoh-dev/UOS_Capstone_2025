@@ -1,5 +1,7 @@
 import { vec3, quat, mat4 } from "wgpu-matrix"
-import type { Vec3, Quat, Mat4  } from "wgpu-matrix";
+import type { Vec3, Quat, Mat4 } from "wgpu-matrix";
+
+import { Utils } from "./Utils";
 
 export class Camera
 {
@@ -52,6 +54,7 @@ export class Camera
         return mat4.multiply(ProjectionMatrix, ViewMatrix);
     }
 
+
     public GetViewMatrix() : Mat4
     {
         const TranslationMatrix : Mat4 = mat4.translation(this.Location);
@@ -61,6 +64,11 @@ export class Camera
         const ViewMatrix        : Mat4 = mat4.invert(WorldMatrix);
 
         return ViewMatrix;
+    }
+
+    public GetProjectionMatrix() : Mat4
+    {
+        return this.ProjectionMatrix;
     }
 
     public GetForwardVector() : Vec3

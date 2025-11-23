@@ -20,6 +20,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
+import { Utils } from "./Utils";
 
 
 const EBufferIndex =
@@ -194,7 +195,8 @@ export class Renderer
 
         // Camera Properties
         const CameraLocation            = this.Camera.GetLocation();
-        const ViewProjection            = this.Camera.GetViewProjectionMatrix();
+        const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(this.Camera.GetProjectionMatrix(), this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
+        const ViewProjection            = mat4.multiply(ProjectionMatrix_Jittered, this.Camera.GetViewMatrix());
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
@@ -217,18 +219,20 @@ export class Renderer
             Float32View[38] = CameraLocation[2];
             Uint32View [39] = this.FrameCount;
 
-            Uint32View[40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View[41] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View[42] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View[43] = this.Offsets[EDataOffsetIndex.Light];
+            Uint32View [40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [41] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [42] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [43] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View[44] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View[45] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View[46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View[47] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [44] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [45] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [47] = this.Offsets[EDataOffsetIndex.Blas];
 
-            Uint32View[48] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View[49] = this.World.Lights.length;
+            Uint32View [48] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [49] = this.World.Lights.length;
+            Float32View[50] = Jitter_X;
+            Float32View[51] = Jitter_Y;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
