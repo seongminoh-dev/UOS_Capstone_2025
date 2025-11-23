@@ -214,8 +214,7 @@ const MAX_PATH_LENGTH : u32 = 5u; // rSeed[4] → length-1 <= 4 → length <= 5
 
 @group(0) @binding(10) var G_Buffer         : texture_2d<f32>;
 
-@group(1) @binding(0) var<storage, read_write> MotionVectorBuffer  : array<MotionVector>;
-
+@group(1) @binding(10) var MotionVectorTex : texture_storage_2d<rgba32float, write>;
 
 //==========================================================================
 // Helpers: Scene / Mesh
@@ -362,21 +361,16 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
 }
 
 
-
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
 
     let curPixel : vec2<u32> = ThreadID.xy;
 
-    // 필요하면 해상도 가드
+    // 해상도 가드
     if (curPixel.x >= UniformBuffer.Resolution.x ||
         curPixel.y >= UniformBuffer.Resolution.y) {
         return;
     }
-
-    let Idx : u32 =
-        curPixel.y * UniformBuffer.Resolution.x +
-        curPixel.x;
 
     let prevPixel : vec2<i32> = GetPrevScreenPx(curPixel);
 
@@ -386,14 +380,18 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
     if (all(prevPixel >= vec2<i32>(0))) {
         let cur_i = vec2<i32>(curPixel);
 
-        // 원하는 convention에 맞게 선택:
-        // prev - cur  또는  cur - prev
-        mv_i = prevPixel - cur_i;      // 여기서 방향 결정
+        // convention: prev - cur  또는  cur - prev 중 택 1
+        mv_i = prevPixel - cur_i;
         // mv_i = cur_i - prevPixel;
     }
-
-    // 부호 있는 i32 결과를 그대로 u32에 비트패턴만 옮김
-    MotionVectorBuffer[Idx].MV = bitcast<vec2<u32>>(mv_i);
+    let mv_f : vec2<f32> = vec2<f32>(mv_i); // i32 → f32 캐스팅
+    
+    textureStore(
+        MotionVectorTex,
+        vec2<i32>(curPixel),
+        vec4<f32>(mv_f, 0.0, 0.0)
+    );
+    
 }
 
     
