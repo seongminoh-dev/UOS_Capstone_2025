@@ -2,27 +2,24 @@
 struct Uniform
 {
     Resolution                      : vec2<u32>,
-    MAX_BOUNCE                      : u32,
-    SAMPLE_PER_PIXEL                : u32,
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
     FrameIndex                      : u32,
 
     Offset_MeshDescriptorBuffer     : u32,
+    Offset_MaterialIDBuffer         : u32,
     Offset_MaterialBuffer           : u32,
     Offset_LightBuffer              : u32,
-    Offset_LightsCDFBuffer          : u32,
 
+    Offset_LightsCDFBuffer          : u32,
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
-    InstanceCount                   : u32,
-
-    LightSourceCount                : u32,
-
-    PrevViewProjectionMatrix        : mat4x4<f32>,
 };
 
 struct Instance
@@ -176,8 +173,8 @@ struct Reservoir
 
 struct MotionVector
 {
-    MV : vec2<u32>
-}
+    MV : vec2<u32>,
+};
 //==========================================================================
 // Constants / Enums
 //==========================================================================
@@ -213,7 +210,6 @@ const MAX_PATH_LENGTH : u32 = 5u; // rSeed[4] → length-1 <= 4 → length <= 5
 
 @group(0) @binding(0) var<uniform>          UniformBuffer       : Uniform;
 @group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
-
 @group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
 
 @group(0) @binding(10) var G_Buffer         : texture_2d<f32>;
@@ -337,7 +333,7 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
         + tri.Vertex_2 * gamma;
 
     // 이전 프레임 VP로 투영
-    let prevClip   : vec4<f32> = UniformBuffer.PrevViewProjectionMatrix * vec4<f32>(hitPos, 1.0);
+    let prevClip   : vec4<f32> = UniformBuffer.ViewProjectionMatrix_Prev * vec4<f32>(hitPos, 1.0);
 
     // 카메라 뒤쪽이면 무효
     if (prevClip.w <= 0.0) {
@@ -365,16 +361,39 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
     return pi;
 }
 
-@compute @workgroup_size(8,8,1)
-fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>){
 
+
+@compute @workgroup_size(8,8,1)
+fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
 
     let curPixel : vec2<u32> = ThreadID.xy;
+
+    // 필요하면 해상도 가드
+    if (curPixel.x >= UniformBuffer.Resolution.x ||
+        curPixel.y >= UniformBuffer.Resolution.y) {
+        return;
+    }
+
     let Idx : u32 =
-        u32(curPixel.y) * UniformBuffer.Resolution.x +
-        u32(curPixel.x);
+        curPixel.y * UniformBuffer.Resolution.x +
+        curPixel.x;
 
     let prevPixel : vec2<i32> = GetPrevScreenPx(curPixel);
 
-    MotionVectorBuffer[Idx].MV = vec2<u32>(prevPixel) - curPixel;
+    var mv_i : vec2<i32> = vec2<i32>(0, 0);
+
+    // prevPixel이 유효할 때만 모션 계산
+    if (all(prevPixel >= vec2<i32>(0))) {
+        let cur_i = vec2<i32>(curPixel);
+
+        // 원하는 convention에 맞게 선택:
+        // prev - cur  또는  cur - prev
+        mv_i = prevPixel - cur_i;      // 여기서 방향 결정
+        // mv_i = cur_i - prevPixel;
+    }
+
+    // 부호 있는 i32 결과를 그대로 u32에 비트패턴만 옮김
+    MotionVectorBuffer[Idx].MV = bitcast<vec2<u32>>(mv_i);
 }
+
+    
