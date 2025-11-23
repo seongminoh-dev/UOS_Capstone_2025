@@ -31,18 +31,18 @@ const EBufferIndex =
     Accel           : 3,
     Reservoir       : 4,
     PrevReservoir   : 5,
-    MotionVector    : 6,
-    SIZE            : 7
+    SIZE            : 6
 } as const;
 
 const ETextureIndex =
 {
     TexturePool     : 0,
     G_Buffer        : 1,
-    Radiance        : 2,
-    History_Read    : 3,
-    History_Write   : 4,
-    SIZE            : 5
+    MotionVector    : 2,
+    Radiance        : 3,
+    History_Read    : 4,
+    History_Write   : 5,
+    SIZE            : 6
 } as const;
 
 const ESamplerIndex =
@@ -67,13 +67,13 @@ const EDataOffsetIndex =
 const EComputePassIndex =
 {
     GBufferCreation         : 0,
-    //MotionVectorCreation    : 1,
-    Initialize              : 1,
+    MotionVectorCreation    : 1,
+    Initialize              : 2,
     //TemporalReuse           : 3,
     //SpatialReuse            : ,
-    FinalShading            : 2,
-    PostProcess             : 3,
-    SIZE                    : 4
+    FinalShading            : 3,
+    PostProcess             : 4,
+    SIZE                    : 5
 } as const;
 
 
@@ -254,6 +254,7 @@ export class Renderer
             const ComputePassEncoder : GPUComputePassEncoder = CommandEncoder.beginComputePass();
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
@@ -356,26 +357,21 @@ export class Renderer
     {
         const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps, Offsets] = this.World.Serialize();
 
-
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]   = this.Device.createBuffer( { size : 256, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
-
-        this.GPUBuffers[EBufferIndex.Scene]     = this.CreateGPUStorageBuffer(SceneBufferData);
-        this.GPUBuffers[EBufferIndex.Geometry]  = this.CreateGPUStorageBuffer(GeometryBufferData);
-        this.GPUBuffers[EBufferIndex.Accel]     = this.CreateGPUStorageBuffer(AccelBufferData);
-
+        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 256, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
+        this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
+        this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
         this.GPUBuffers[EBufferIndex.Reservoir]     = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
         this.GPUBuffers[EBufferIndex.PrevReservoir] = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
-        this.GPUBuffers[EBufferIndex.MotionVector]  = this.CreateGPUStorageBuffer(new ArrayBuffer(2 * 32 * this.Canvas.width * this.Canvas.height));
 
         this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
         this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
+        this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
         this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2);
         this.GPUTextures[ETextureIndex.History_Read]    = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height);
         this.GPUTextures[ETextureIndex.History_Write]   = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height);
-
-        console.log( this.GPUTextures[ETextureIndex.History_Write] );
 
         this.GPUSamplers[ESamplerIndex.Default] = this.CreateGPUSampler();
 
@@ -422,6 +418,27 @@ export class Renderer
                 ],
                 [   // Write GPUTextureView
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ]
+            ),
+
+            ComputePass.Create // Motion Vector Creation
+            (
+                this.Device, 
+                ShaderCode_GetMotionVector,
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
                 ]
             ),
 

@@ -1,9 +1,8 @@
 
 struct Uniform
 {
-    Resolution                      : vec2<u32>,
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
+    Resolution_Source               : vec2<u32>,
+    Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
@@ -20,7 +19,12 @@ struct Uniform
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
+
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
+    Jitter                          : vec2<f32>
 };
+
 
 struct Instance
 {
@@ -212,7 +216,7 @@ const MAX_PATH_LENGTH : u32 = 5u; // rSeed[4] → length-1 <= 4 → length <= 5
 @group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
 
-@group(0) @binding(10) var G_Buffer         : texture_2d<f32>;
+@group(0) @binding(10) var G_Buffer : texture_2d<f32>;
 
 @group(1) @binding(10) var MotionVectorTex : texture_storage_2d<rgba32float, write>;
 
@@ -349,10 +353,10 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
 
     // NDC [-1,1] → [0,1] → 픽셀 좌표
     let prevScreen01 : vec2<f32> = prevNdc.xy * 0.5 + vec2<f32>(0.5, 0.5);
-    let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution);
+    let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution_Source);
 
     var pi : vec2<i32> = vec2<i32>(prevScreenPx);
-    let resi : vec2<i32> = vec2<i32>(UniformBuffer.Resolution);
+    let resi : vec2<i32> = vec2<i32>(UniformBuffer.Resolution_Source);
 
     // 혹시 1.0에 걸려서 width/height가 나오는 경우를 대비해 clamp
     pi = clamp(pi, vec2<i32>(0, 0), resi - vec2<i32>(1, 1));
@@ -367,8 +371,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
     let curPixel : vec2<u32> = ThreadID.xy;
 
     // 해상도 가드
-    if (curPixel.x >= UniformBuffer.Resolution.x ||
-        curPixel.y >= UniformBuffer.Resolution.y) {
+    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
+        curPixel.y >= UniformBuffer.Resolution_Source.y) {
         return;
     }
 
