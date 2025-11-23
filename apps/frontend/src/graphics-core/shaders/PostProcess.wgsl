@@ -4,9 +4,8 @@
 
 struct Uniform
 {
-    Resolution                      : vec2<u32>,
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
+    Resolution_Source               : vec2<u32>,
+    Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
@@ -23,6 +22,9 @@ struct Uniform
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
+
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
 };
 
 //==========================================================================
@@ -58,17 +60,19 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution.y);
+        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
+        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
 
         if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
-    let FrameColor : vec4<f32> = textureLoad(RadianceTexture, ThreadID.xy, 0);
-    let SceneColor : vec4<f32> = textureLoad(HistoryTexture, ThreadID.xy, 0);
-    let WriteColor : vec4<f32> = mix(SceneColor, FrameColor, 1.0 / f32(UniformBuffer.FrameIndex + 1));
+    {
+        let FrameColor : vec4<f32> = textureLoad(RadianceTexture, ThreadID.xy, 0);
+        let SceneColor : vec4<f32> = textureLoad(HistoryTexture, ThreadID.xy, 0);
+        let WriteColor : vec4<f32> = mix(SceneColor, FrameColor, 1.0 / f32(UniformBuffer.FrameIndex + 1));
 
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor.rgb, 1.0));
+        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor.rgb, 1.0));
+    }
 
     return;
 }

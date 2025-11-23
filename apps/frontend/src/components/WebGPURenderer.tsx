@@ -38,8 +38,8 @@ export default function WebGPURenderer({
 
         // WebGPU 내부 해상도 제한 (성능 최적화)
         // CSS로는 크게 표시되지만, 실제 렌더링은 낮은 해상도로
-        const MAX_WIDTH = 512;   // 최대 내부 렌더 너비 512 384 1024 768
-        const MAX_HEIGHT = 384;  // 최대 내부 렌더 높이 (4:3 비율 유지) 
+        const MAX_WIDTH = 1024;   // 최대 내부 렌더 너비
+        const MAX_HEIGHT = 768;  // 최대 내부 렌더 높이 (4:3 비율 유지) 
 
         // 4:3 비율 유지하면서 크기 계산
         let newWidth = Math.min(containerWidth, MAX_WIDTH);
