@@ -206,7 +206,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 52;
+        const ELEMENT_COUNT = 68;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -218,27 +218,28 @@ export class Renderer
             Uint32View[3] = this.Canvas.height;
             
             for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection_Prev[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Prev[iter]!;
 
-            Float32View[36] = CameraLocation[0];
-            Float32View[37] = CameraLocation[1];
-            Float32View[38] = CameraLocation[2];
-            Uint32View [39] = this.FrameCount;
+            Float32View[52] = CameraLocation[0];
+            Float32View[53] = CameraLocation[1];
+            Float32View[54] = CameraLocation[2];
+            Uint32View [55] = this.FrameCount;
 
-            Uint32View [40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View [41] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View [42] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View [43] = this.Offsets[EDataOffsetIndex.Light];
+            Uint32View [56] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [57] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [58] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [59] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View [44] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View [45] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View [46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View [47] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [60] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [61] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [62] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [63] = this.Offsets[EDataOffsetIndex.Blas];
 
-            Uint32View [48] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View [49] = this.World.Lights.length;
-            Float32View[50] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[51] = (Jitter_Y * 2) / this.Canvas.height;
+            Uint32View [64] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [65] = this.World.Lights.length;
+            Float32View[66] = (Jitter_X * 2) / this.Canvas.width;
+            Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -380,7 +381,7 @@ export class Renderer
 
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 256, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 512, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
         this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
         this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
