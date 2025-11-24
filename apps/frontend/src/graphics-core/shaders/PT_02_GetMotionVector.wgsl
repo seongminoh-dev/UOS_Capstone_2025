@@ -23,7 +23,9 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
-    Jitter                          : vec2<f32>
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -306,7 +308,7 @@ fn GetTriangleFromPrimitive(primitiveID : u32, instanceID : u32) -> Triangle
     return triWorld;
 }
 
-fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
+fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<f32>
 {
     let gbuf : vec4<f32> = textureLoad(G_Buffer, vec2<i32>(curPixel), 0);
 
@@ -314,7 +316,7 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
     let packed_r  : u32 = bitcast<u32>(gbuf.r);
     let valid     : bool = (packed_r & 0x80000000u) != 0u;
     if (!valid) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     // barycentric
@@ -340,7 +342,7 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
 
     // 카메라 뒤쪽이면 무효
     if (prevClip.w <= 0.0) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     let prevNdc : vec3<f32> = prevClip.xyz / prevClip.w;
@@ -348,18 +350,18 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
     // NDC가 [-1, 1] 범위 밖이면 무효
     if (any(prevNdc.xy < vec2<f32>(-1.0, -1.0)) ||
         any(prevNdc.xy > vec2<f32>( 1.0,  1.0))) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     // NDC [-1,1] → [0,1] → 픽셀 좌표
     let prevScreen01 : vec2<f32> = prevNdc.xy * 0.5 + vec2<f32>(0.5, 0.5);
     let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution_Source);
 
-    var pi : vec2<i32> = vec2<i32>(prevScreenPx);
-    let resi : vec2<i32> = vec2<i32>(UniformBuffer.Resolution_Source);
+    var pi : vec2<f32> = prevScreenPx;
+    let resi : vec2<f32> = vec2<f32>(UniformBuffer.Resolution_Source);
 
     // 혹시 1.0에 걸려서 width/height가 나오는 경우를 대비해 clamp
-    pi = clamp(pi, vec2<i32>(0, 0), resi - vec2<i32>(1, 1));
+    pi = clamp(pi, vec2<f32>(0, 0), resi - vec2<f32>(1, 1));
 
     return pi;
 }
@@ -376,13 +378,13 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
         return;
     }
 
-    let prevPixel : vec2<i32> = GetPrevScreenPx(curPixel);
+    let prevPixel : vec2<f32> = GetPrevScreenPx(curPixel);
 
-    var mv_i : vec2<i32> = vec2<i32>(0, 0);
+    var mv_i : vec2<f32> = vec2<f32>(0, 0);
 
     // prevPixel이 유효할 때만 모션 계산
-    if (all(prevPixel >= vec2<i32>(0))) {
-        let cur_i = vec2<i32>(curPixel);
+    if (all(prevPixel >= vec2<f32>(0))) {
+        let cur_i = vec2<f32>(curPixel);
 
         // convention: prev - cur  또는  cur - prev 중 택 1
         //mv_i = prevPixel - cur_i;

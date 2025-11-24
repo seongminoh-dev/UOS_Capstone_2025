@@ -26,8 +26,11 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
-    Jitter                          : vec2<f32>
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
+
 struct Instance
 {
     ModelMatrix         : mat4x4<f32>,

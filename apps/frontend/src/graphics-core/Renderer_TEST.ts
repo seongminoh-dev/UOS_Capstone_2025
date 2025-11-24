@@ -102,6 +102,7 @@ export class Renderer
     // Scene Data
     private World       : World;
     private Camera      : Camera;
+    private FrameID     : number;
     private FrameCount  : number;
     private Prev_VPMat  : Mat4;
 
@@ -147,6 +148,7 @@ export class Renderer
 
             this.World              = World.prototype;
             this.Camera             = Camera.prototype;
+            this.FrameID            = 0;
             this.FrameCount         = 0;
             this.Prev_VPMat         = mat4.create();
         }
@@ -160,8 +162,7 @@ export class Renderer
     }
 
     public ResetFrameCount() : void 
-    { 
-        return;
+    {
         this.FrameCount = 0; 
     }
 
@@ -193,6 +194,7 @@ export class Renderer
 
     public Update() : void
     {
+        this.FrameID++;
         this.FrameCount++;
 
         // Camera Properties
@@ -206,7 +208,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 68;
+        const ELEMENT_COUNT = 72;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -224,7 +226,7 @@ export class Renderer
             Float32View[52] = CameraLocation[0];
             Float32View[53] = CameraLocation[1];
             Float32View[54] = CameraLocation[2];
-            Uint32View [55] = this.FrameCount;
+            Uint32View [55] = this.FrameID;
 
             Uint32View [56] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
             Uint32View [57] = this.Offsets[EDataOffsetIndex.MaterialID];
@@ -240,6 +242,8 @@ export class Renderer
             Uint32View [65] = this.World.Lights.length;
             Float32View[66] = (Jitter_X * 2) / this.Canvas.width;
             Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
+
+            Uint32View [68] = this.FrameCount;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -520,11 +524,14 @@ export class Renderer
                 ShaderCode_PostProcess, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.Radiance].createView(),
                     this.GPUTextures[ETextureIndex.History_Read].createView(),
                     this.GPUTextures[ETextureIndex.MotionVector].createView(),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Linear],
@@ -573,7 +580,8 @@ export class Renderer
                 entries : 
                 [
                     { binding :  0, resource : this.GPUBuffers[EBufferIndex.Uniform] },
-                    { binding : 10, resource : this.GPUTextures[ETextureIndex.History_Write].createView() }
+                    { binding : 10, resource : this.GPUTextures[ETextureIndex.History_Write].createView() },
+                    { binding : 20, resource : this.GPUSamplers[ESamplerIndex.Linear] },
                 ],
             };
 
