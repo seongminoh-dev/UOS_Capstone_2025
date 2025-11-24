@@ -4,11 +4,11 @@
 
 struct Uniform
 {
-    Resolution                      : vec2<u32>,
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
+    Resolution_Source               : vec2<u32>,
+    Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
@@ -23,6 +23,12 @@ struct Uniform
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
+
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -246,11 +252,10 @@ const LOBE_LIGHT    : u32 = 3u;
 
 @group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
-@group(0) @binding(12) var SceneTexture : texture_2d<f32>;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
-@group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba32float, write>;
+@group(1) @binding(10) var ResultTexture : texture_storage_2d<rgba16float, write>;
 
 
 
@@ -657,18 +662,9 @@ fn TBNMatrix(N : vec3<f32>) -> mat3x3<f32>
 // Utils
 //==========================================================================
 
-fn WriteColor(ThreadID : vec2<u32>, FrameColor : vec3<f32>)
-{
-    let SceneColor : vec4<f32> = textureLoad(SceneTexture, ThreadID.xy, 0);
-    let WriteColor : vec3<f32> = mix(SceneColor.rgb, FrameColor, 1.0 / f32(UniformBuffer.FrameIndex + 1));
-
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
-    return;
-}
-
 fn LoadReservoir(ThreadID : vec2<u32>) -> Reservoir
 {
-    let idx : u32 = ThreadID.y * UniformBuffer.Resolution.x + ThreadID.x;
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
     return ReservoirBuffer[idx];
 }
 
@@ -804,7 +800,7 @@ fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
 
 fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
 {
-    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution);
+    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
     let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
 
     return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
@@ -1345,7 +1341,6 @@ fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
     return bFarEnough && bRoughEnough;
 }
 
-
 fn SafeReconnectionIndex(InPath : Path) -> u32
 {
     for (var k = 2u; k < InPath.length; k++)
@@ -1453,8 +1448,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution.y);
+        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
+        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
         if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
@@ -1465,31 +1460,26 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         return;
     }
 
-    if (false)
-    {
-        let s = GetSurface(Get_X1(ThreadID.xy));
-        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(s.Albedo, 1.0));
-        return;
-    }
-
     // 1. Load Path
     let Reservoir : Reservoir = LoadReservoir(ThreadID.xy);
 
-    // Prevent Underflow
-    if ( Reservoir.C == 0u || Reservoir.Sample.length < 2u || Reservoir.UCW != Reservoir.UCW) 
+    // Store Black If Invalid Reservoir
     {
-        WriteColor(ThreadID.xy, vec3f(0.0));
-        return; 
+        let bReservoirInvalid   : bool = ( Reservoir.C == 0u ) || ( Reservoir.Sample.length < 2u );
+        let bUCWInvalid         : bool = ( Reservoir.UCW != Reservoir.UCW );
+
+        if ( bReservoirInvalid || bUCWInvalid ) 
+        {
+            textureStore(ResultTexture, ThreadID.xy, vec4<f32>(vec3f(0.0), 1.0));
+            return; 
+        }
     }
-    // if ( false ){ WriteColor(ThreadID.xy, RED); }
 
+    // Compute Final Color
+    let PathSample : Path       = RegeneratePath( ThreadID.xy, Reservoir.Sample );
+    let FrameColor : vec3<f32>  = Reservoir.UCW * PathContribution( PathSample );
 
-    let PathSample  : Path = RegeneratePath( ThreadID.xy, Reservoir.Sample );
-
-    // 2. 색 저장
-    var FrameColor : vec3<f32> = Reservoir.UCW * PathContribution( PathSample );
-
-    WriteColor(ThreadID.xy, FrameColor);
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
 
     return;
 }

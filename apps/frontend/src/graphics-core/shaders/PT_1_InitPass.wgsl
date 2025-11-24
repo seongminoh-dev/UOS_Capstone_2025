@@ -4,11 +4,11 @@
 
 struct Uniform
 {
-    Resolution                      : vec2<u32>,
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
+    Resolution_Source               : vec2<u32>,
+    Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
@@ -23,6 +23,12 @@ struct Uniform
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
+
+    InstanceCount                   : u32,
+    LightSourceCount                : u32,
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -238,10 +244,10 @@ const LOBE_LIGHT    : u32 = 3u;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer  : array<u32>;
 @group(0) @binding(3) var<storage, read>    AccelBuffer     : array<u32>;
 
-@group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
-@group(0) @binding(11) var G_Buffer : texture_2d<f32>;
+@group(0) @binding(10) var TexturePool      : texture_2d_array<f32>;
+@group(0) @binding(11) var G_Buffer         : texture_2d<f32>;
 
-@group(0) @binding(20) var TextureSampler : sampler;
+@group(0) @binding(20) var TextureSampler   : sampler;
 
 @group(1) @binding(0) var<storage, read_write> ReservoirBuffer : array<Reservoir>;
 
@@ -652,7 +658,7 @@ fn TBNMatrix(N : vec3<f32>) -> mat3x3<f32>
 
 fn StoreReservoir(ThreadID : vec2<u32>, pReservoir : ptr<function, Reservoir>)
 {
-    let idx : u32 = ThreadID.y * UniformBuffer.Resolution.x + ThreadID.x;
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
     ReservoirBuffer[idx] = (*pReservoir);
 
     return;
@@ -791,7 +797,7 @@ fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
 
 fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
 {
-    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution);
+    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
     let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
 
     return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
@@ -1451,8 +1457,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution.y);
+        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
+        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
         if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }

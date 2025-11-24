@@ -1,28 +1,31 @@
 
 struct Uniform
 {
-    Resolution                      : vec2<u32>,
-    MAX_BOUNCE                      : u32,
-    SAMPLE_PER_PIXEL                : u32,
+    Resolution_Source               : vec2<u32>,
+    Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
+    ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
     FrameIndex                      : u32,
 
     Offset_MeshDescriptorBuffer     : u32,
+    Offset_MaterialIDBuffer         : u32,
     Offset_MaterialBuffer           : u32,
     Offset_LightBuffer              : u32,
-    Offset_LightsCDFBuffer          : u32,
 
+    Offset_LightsCDFBuffer          : u32,
     Offset_IndexBuffer              : u32,
     Offset_SubBlasRootArrayBuffer   : u32,
     Offset_BlasBuffer               : u32,
+
     InstanceCount                   : u32,
-
     LightSourceCount                : u32,
+    Jitter                          : vec2<f32>,
 
-    PrevViewProjectionMatrix        : mat4x4<f32>,
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -176,8 +179,8 @@ struct Reservoir
 
 struct MotionVector
 {
-    MV : vec2<u32>
-}
+    MV : vec2<u32>,
+};
 //==========================================================================
 // Constants / Enums
 //==========================================================================
@@ -213,13 +216,11 @@ const MAX_PATH_LENGTH : u32 = 5u; // rSeed[4] → length-1 <= 4 → length <= 5
 
 @group(0) @binding(0) var<uniform>          UniformBuffer       : Uniform;
 @group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
-
 @group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
 
-@group(0) @binding(10) var G_Buffer         : texture_2d<f32>;
+@group(0) @binding(10) var G_Buffer : texture_2d<f32>;
 
-@group(1) @binding(0) var<storage, read_write> MotionVectorBuffer  : array<MotionVector>;
-
+@group(1) @binding(10) var MotionVectorTex : texture_storage_2d<rgba16float, write>;
 
 //==========================================================================
 // Helpers: Scene / Mesh
@@ -307,7 +308,7 @@ fn GetTriangleFromPrimitive(primitiveID : u32, instanceID : u32) -> Triangle
     return triWorld;
 }
 
-fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
+fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<f32>
 {
     let gbuf : vec4<f32> = textureLoad(G_Buffer, vec2<i32>(curPixel), 0);
 
@@ -315,7 +316,7 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
     let packed_r  : u32 = bitcast<u32>(gbuf.r);
     let valid     : bool = (packed_r & 0x80000000u) != 0u;
     if (!valid) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     // barycentric
@@ -337,11 +338,11 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
         + tri.Vertex_2 * gamma;
 
     // 이전 프레임 VP로 투영
-    let prevClip   : vec4<f32> = UniformBuffer.PrevViewProjectionMatrix * vec4<f32>(hitPos, 1.0);
+    let prevClip   : vec4<f32> = UniformBuffer.ViewProjectionMatrix_Prev * vec4<f32>(hitPos, 1.0);
 
     // 카메라 뒤쪽이면 무효
     if (prevClip.w <= 0.0) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     let prevNdc : vec3<f32> = prevClip.xyz / prevClip.w;
@@ -349,32 +350,54 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
     // NDC가 [-1, 1] 범위 밖이면 무효
     if (any(prevNdc.xy < vec2<f32>(-1.0, -1.0)) ||
         any(prevNdc.xy > vec2<f32>( 1.0,  1.0))) {
-        return vec2<i32>(-1, -1);
+        return vec2<f32>(-1, -1);
     }
 
     // NDC [-1,1] → [0,1] → 픽셀 좌표
     let prevScreen01 : vec2<f32> = prevNdc.xy * 0.5 + vec2<f32>(0.5, 0.5);
-    let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution);
+    let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution_Source);
 
-    var pi : vec2<i32> = vec2<i32>(prevScreenPx);
-    let resi : vec2<i32> = vec2<i32>(UniformBuffer.Resolution);
+    var pi : vec2<f32> = prevScreenPx;
+    let resi : vec2<f32> = vec2<f32>(UniformBuffer.Resolution_Source);
 
     // 혹시 1.0에 걸려서 width/height가 나오는 경우를 대비해 clamp
-    pi = clamp(pi, vec2<i32>(0, 0), resi - vec2<i32>(1, 1));
+    pi = clamp(pi, vec2<f32>(0, 0), resi - vec2<f32>(1, 1));
 
     return pi;
 }
 
-@compute @workgroup_size(8,8,1)
-fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>){
 
+@compute @workgroup_size(8,8,1)
+fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
 
     let curPixel : vec2<u32> = ThreadID.xy;
-    let Idx : u32 =
-        u32(curPixel.y) * UniformBuffer.Resolution.x +
-        u32(curPixel.x);
 
-    let prevPixel : vec2<i32> = GetPrevScreenPx(curPixel);
+    // 해상도 가드
+    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
+        curPixel.y >= UniformBuffer.Resolution_Source.y) {
+        return;
+    }
 
-    MotionVectorBuffer[Idx].MV = vec2<u32>(prevPixel) - curPixel;
+    let prevPixel : vec2<f32> = GetPrevScreenPx(curPixel);
+
+    var mv_i : vec2<f32> = vec2<f32>(0, 0);
+
+    // prevPixel이 유효할 때만 모션 계산
+    if (all(prevPixel >= vec2<f32>(0))) {
+        let cur_i = vec2<f32>(curPixel);
+
+        // convention: prev - cur  또는  cur - prev 중 택 1
+        //mv_i = prevPixel - cur_i;
+        mv_i = cur_i - prevPixel;
+    }
+    let mv_f : vec2<f32> = vec2<f32>(mv_i); // i32 → f32 캐스팅
+    
+    textureStore(
+        MotionVectorTex,
+        vec2<i32>(curPixel),
+        vec4<f32>(mv_f, 0.0, 0.0)
+    );
+    
 }
+
+    
