@@ -15,6 +15,9 @@ import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
 import ShaderCode_Temporal_Test     from './shaders/PT_2_TemporalReuseTest.wgsl?raw';
 
+
+import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
+
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
@@ -70,11 +73,11 @@ const EComputePassIndex =
     GBufferCreation         : 0,
     MotionVectorCreation    : 1,
     Initialize              : 2,
-    //TemporalReuse           : 3,
-    //SpatialReuse            : ,
-    FinalShading            : 3,
-    PostProcess             : 4,
-    SIZE                    : 5
+    TemporalReuse           : 3,
+    SpatialReuse            : 4,
+    FinalShading            : 5,
+    PostProcess             : 6,
+    SIZE                    : 7
 } as const;
 
 
@@ -490,6 +493,62 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Reservoir],
                 ],
                 [   // Write GPUTextureView
+                ]
+            ),
+    
+    
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
+                ShaderCode_Temporal_Test, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.PrevReservoir],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Write GPUTextureView
+                    
+                ]
+            ),
+
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
+                ShaderCode_Spatial, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Write GPUTextureView
+                    
                 ]
             ),
 
