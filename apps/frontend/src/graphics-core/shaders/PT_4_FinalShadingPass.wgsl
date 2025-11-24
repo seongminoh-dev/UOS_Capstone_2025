@@ -1276,7 +1276,7 @@ fn PDF_BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 
     if (dot(L, N) * dot(V, N) > 0.0) { return PDF_BRDF(X, V, L); }
     return PDF_BTDF(X, V, L);
-}
+    }
 
 fn PDF_LIGHT(X : Surface, V : vec3<f32>, XL : LightSample) -> f32
 {

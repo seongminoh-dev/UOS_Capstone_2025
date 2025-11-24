@@ -398,7 +398,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let CurrentColor    : vec3<f32> = Encode( textureSampleLevel(RadianceTexture, LinearSampler, UV_Unjitter, 0.0).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
     let WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
-
+    
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
 
 

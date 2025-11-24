@@ -155,7 +155,7 @@ struct LightSample
 struct CompactPath
 {
     rSeed       : array<u32, 4u>,
-    XL          : LightSample,    
+    XL          : LightSample,
     RcVertex    : vec4<f32>,
 
     k           : u32,
@@ -486,18 +486,18 @@ fn GetSurface(InCompactSurface : CompactSurface) -> Surface
     let W   : f32 = 1.0 - U - V;
 
     {
-    let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
-    let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
-    let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
-    let N   : vec3<f32> = normalize( N0 + N1 + N2 );
+        let N0  : vec3<f32> = SurfaceTriangle.Vertex_0.Normal * U;
+        let N1  : vec3<f32> = SurfaceTriangle.Vertex_1.Normal * V;
+        let N2  : vec3<f32> = SurfaceTriangle.Vertex_2.Normal * W;
+        let N   : vec3<f32> = normalize( N0 + N1 + N2 );
 
-    let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
-    let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
-    let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
-    let P   : vec3<f32> = P0 + P1 + P2;
+        let P0  : vec3<f32> = SurfaceTriangle.Vertex_0.Position * U;
+        let P1  : vec3<f32> = SurfaceTriangle.Vertex_1.Position * V;
+        let P2  : vec3<f32> = SurfaceTriangle.Vertex_2.Position * W;
+        let P   : vec3<f32> = P0 + P1 + P2;
 
-    OutSurface.Position = P;
-    OutSurface.Normal   = N;
+        OutSurface.Position = P;
+        OutSurface.Normal   = N;
     }
 
     let UV0 : vec2<f32> = SurfaceTriangle.Vertex_0.UV * U;
@@ -1109,7 +1109,7 @@ fn DirectionToLight(X : Surface, XL : LightSample) -> vec3<f32>
 }
 
 fn L_emit(XL : LightSample, X : Surface) -> vec3<f32>
-{ 
+{
     let bIsPointLight   : bool      = (XL.Type == LIGHT_POINT);
     let r               : vec3<f32> = XL.Position - X.Position;
     let Attenuation     : f32       = select(1.0, 1.0 / max(dot(r, r), EPS), bIsPointLight);
@@ -1313,7 +1313,7 @@ fn GetLight(LightID : u32) -> Light
 //==========================================================================
 
 fn SampleCosineHemisphere(pRandomSeed : ptr<function, u32>) -> vec3<f32>
-    {
+{
     let Random_1 : f32 = Random(pRandomSeed);
     let Random_2 : f32 = Random(pRandomSeed);
 
@@ -1429,7 +1429,7 @@ fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
     OutBSDFSample.Lobe      = LOBE_GGX;
 
     return OutBSDFSample;
-    }
+}
 
 
 fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
@@ -1576,7 +1576,7 @@ fn calculate_J(InPath : Path, k : u32) -> f32
 
     return J;
 }
-
+ 
 
 //==========================================================================
 // Main
@@ -1687,7 +1687,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     if (prevRes.C == 0u || prevRes.Sample.length < 2u) {
         ReservoirBuffer[curIdx] = baseRes;
         return;
-}
+    }
 
     // 이전 프레임 path 재생성
     var prevPath : Path = RegeneratePath(prevPixel, prevRes.Sample);
