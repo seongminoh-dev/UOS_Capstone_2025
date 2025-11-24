@@ -5,6 +5,7 @@ struct Uniform
     Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
@@ -22,7 +23,9 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
-    Jitter                          : vec2<f32>
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -189,6 +192,7 @@ struct Reservoir
 
     Padding : vec2<f32>,
 };
+
 
 //==========================================================================
 // Constants / Enums
@@ -1036,36 +1040,39 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
 
 fn PathContribution(InPath : Path) -> vec3<f32>
 {
-    var f = vec3f(1.0);
+    var contribution : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1u; i++)
+    var f       : vec3<f32> = vec3f(1.0);
+    var p       : f32       = 1.0;
+    var w_sum   : f32       = 0.0;
+
+
+    for (var i = 1u; i < 4u; i++)
     {
-        let Xp = InPath.Surface[i - 1];
-        let Xc = InPath.Surface[i];
-        let Xn = InPath.Surface[i + 1];
+        let X : Surface     = InPath.Surface[i];
+        let V : vec3<f32>   = normalize( InPath.Surface[i - 1].Position - X.Position );
+        var L : vec3<f32>;
 
-        let V = normalize(Xp.Position - Xc.Position);    // 들어오는 방향
-        let L = normalize(Xn.Position - Xc.Position);    // 나가는 방향
-        let N = Xc.Normal;
+        L = DirectionToLight(X, InPath.XL);
 
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
+        contribution = f * L_emit(InPath.XL, X) * 
+        BSDF(X, V, L) * abs(dot(X.Normal, L)) * Visibility(X.Position, InPath.XL.Position);
+
+        let P_hat : f32 = Luminance( contribution );
+
+        var PathPDF : f32 = p * InPath.XL.PDF;
+
+        let RIS : f32 = P_hat / PathPDF;
+        w_sum += RIS;
+
+        f *= BSDF(X, V, L) * abs(dot(X.Normal, L));
+        p *= PDF_BSDF(X, V, L);
     }
 
-    // 최종 Light hit
-    {
-        let Xp = InPath.Surface[InPath.length - 2];
-        let Xc = InPath.Surface[InPath.length - 1];
 
-        let V = normalize(Xp.Position - Xc.Position);
-        let L = DirectionToLight(Xc, InPath.XL);
-        let N = Xc.Normal;
-
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
-        f *= L_emit(InPath.XL, Xc) * Visibility(Xc.Position, InPath.XL.Position);
-    }
-
-    return f;
+    return contribution;
 }
+
 
 
 fn PathPDF(InPath : Path) -> f32
@@ -1090,7 +1097,6 @@ fn PathPDF(InPath : Path) -> f32
 
     return pdf;
 }
-
 //==========================================================================
 // GBuffer / Reprojection / Path 재구성
 //==========================================================================
@@ -1519,7 +1525,8 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
     // ------------------------------------------------------------
     var outRes        : Reservoir = baseRes;
     var chosen_P_hat  : f32 = P_hat_Base;
-    var chosen_weight : f32 = w_base;     // ★ 중요: 선택된 후보의 weight 저장
+    var chosen_weight : f32 = w_base;    
+    var p_hat_total   : f32 = P_hat_Base;
     var W_total       : f32 = w_base;
     var totalC        : u32 = baseRes.C;
 
@@ -1619,21 +1626,23 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 continue;
             }
 
-            let pdf_prev_raw : f32 = PathPDF(offsetPath);
+            let pdf_prev_raw : f32 = PathPDF(offsetPath)/det_J;
             if (!(pdf_prev_raw > 0.0) || !isFinite(pdf_prev_raw)) {
                 continue;
             }
             let q_off : f32 = max(pdf_prev_raw, EPS);
 
-            var w_off : f32 = P_hat_Off * det_J / q_off;
+            p_hat_total += P_hat_Off;
+            var w_off : f32 = ((P_hat_Off/p_hat_total) * P_hat_Off) / q_off;
             w_off = clamp(w_off, 0.0, MAX_RIS);
+
+            let W_new_total : f32 = W_total + w_off;
 
             if (!isFinite(w_off) || w_off <= 0.0) {
                 continue;
             }
 
             // streaming merge
-            let W_new_total : f32 = W_total + w_off;
             if (!isFinite(W_new_total) || W_new_total <= 0.0) {
                 continue;
             }
@@ -1644,7 +1653,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
             if (r < p_choose_off) {
                 outRes.Sample = shiftCompact;
                 chosen_P_hat = P_hat_Off;
-                outRes.UCW = baseRes.UCW/det_J;
+                outRes.UCW = W_new_total / P_hat_Off;
                 chosen_weight = w_off;    // ★ 선택된 후보의 weight 저장
             }
 

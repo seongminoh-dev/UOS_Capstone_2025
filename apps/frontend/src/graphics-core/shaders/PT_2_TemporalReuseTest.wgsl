@@ -9,6 +9,7 @@ struct Uniform
     Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
@@ -26,7 +27,9 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
-    Jitter                          : vec2<f32>
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -852,118 +855,6 @@ fn BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
 }
 
 //==========================================================================
-// Sampling
-//==========================================================================
-
-fn SampleCosineHemisphere(pRandomSeed : ptr<function, u32>) -> vec3<f32>
-{
-    let Random_1 : f32 = Random(pRandomSeed);
-    let Random_2 : f32 = Random(pRandomSeed);
-
-    let R       : f32 = sqrt(Random_1);
-    let Phi     : f32 = 2.0 * PI * Random_2;
-
-    let X   : f32 = R * cos(Phi);
-    let Y   : f32 = R * sin(Phi);
-    let Z   : f32 = sqrt(1.0 - Random_1);
-
-    return vec3<f32>(X, Y, Z);
-}
-
-fn SampleGGX(pRandomSeed : ptr<function, u32>, Roughness: f32) -> vec3<f32>
-{
-    let Random_1 : f32 = Random(pRandomSeed);
-    let Random_2 : f32 = Random(pRandomSeed);
-
-    let Alpha   : f32 = Roughness * Roughness;
-    let Phi     : f32 = 2.0 * PI * Random_1;
-
-    let CosTheta : f32 = sqrt((1.0 - Random_2) / (1.0 + (Alpha * Alpha - 1.0) * Random_2));
-    let SinTheta : f32 = sqrt(1.0 - CosTheta * CosTheta);
-
-    let H_X : f32 = SinTheta * cos(Phi);
-    let H_Y : f32 = SinTheta * sin(Phi);
-    let H_Z : f32 = CosTheta;
-
-    return normalize(vec3<f32>(H_X, H_Y, H_Z));
-}
-
-fn SampleBRDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let Albedo          : vec3<f32> = X.Material.Albedo.rgb;
-    let Metalness       : f32       = X.Material.Metalness;
-    let Roughness       : f32       = X.Material.Roughness;
- 
-    let F0          : vec3<f32> = mix(vec3<f32>(0.04,0.04,0.04), Albedo, Metalness);
-    let P_specular  : f32       = mix(Luminance(F0), 1.0, Metalness);
-
-    let N   : vec3<f32>     = X.Normal;
-    let TBN : mat3x3<f32>   = TBNMatrix(N);
-    var L   : vec3<f32>;
-
-    let bTreatAsSpecular : bool = Random(pRandomSeed) < P_specular;
-    if (bTreatAsSpecular)
-    {
-        let H = TBN * SampleGGX(pRandomSeed, Roughness);
-        L = reflect(-V, H);
-    }
-    else
-    {
-        L = TBN * SampleCosineHemisphere(pRandomSeed);
-    }
-
-    var OutBSDFSample : BSDFSample = BSDFSample();
-
-    OutBSDFSample.Direction = L;
-    OutBSDFSample.Lobe      = select(LOBE_LAMBERT, LOBE_GGX, bTreatAsSpecular);
-
-    return OutBSDFSample;
-}
-
-fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in        : f32       = select(X.Material.IOR, 1.0, bViewNormalSameHemisphere);
-    let n_out       : f32       = select(1.0, X.Material.IOR, bViewNormalSameHemisphere);
-    let N           : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
-    let IORRatio    : f32       = n_in / n_out;
-
-    var P_reflection : f32;
-    {
-        let r   : f32 = (1.0 - IORRatio) / (1.0 + IORRatio);
-        let r2  : f32 = r * r;
-
-        let cosTheta : f32 = abs(dot(V, N));
-        P_reflection = Frensel(cosTheta, vec3<f32>(r2,r2,r2)).x;
-
-        let cos2 = cosTheta * cosTheta;
-        let R2  = IORRatio * IORRatio;
-        if ( cos2 < (R2 - 1.0)/R2 ) { P_reflection = 1.0; }
-    }
-
-    let bTreatAsReflection : bool = (Random(pRandomSeed) < P_reflection);
-
-    let TBN : mat3x3<f32>   = TBNMatrix(N);
-    let H   : vec3<f32>     = TBN * SampleGGX(pRandomSeed, X.Material.Roughness);
-    let L   : vec3<f32>     = normalize(select(refract(-V, H, IORRatio), reflect(-V, H), bTreatAsReflection));
-    
-    var OutBSDFSample : BSDFSample = BSDFSample();
-
-    OutBSDFSample.Direction = L;
-    OutBSDFSample.Lobe      = LOBE_GGX;
-
-    return OutBSDFSample;
-}
-
-fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let bTreatAsTransparent : bool = Random(pRandomSeed) < X.Material.Transmission;
-
-    if (bTreatAsTransparent) { return SampleBTDF(pRandomSeed, X, V); }
-    return SampleBRDF(pRandomSeed, X, V);
-}
-
-//==========================================================================
 // PDFs  (여기 BTDF 안에 전파 야코비안이 들어감)
 //==========================================================================
 
@@ -1148,49 +1039,36 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
 // Path Reconstruction / Contribution / PDF
 //==========================================================================
 
-fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
-{
-    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution);
-    let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
-
-    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
-}
-
-fn Get_X1(ThreadID : vec2<u32>) -> CompactSurface
-{
-    let GBufferData : vec4<f32> = textureLoad(G_Buffer, vec2<i32>(ThreadID), 0);
-    return GetCompactSurface(GBufferData);
-}
 
 fn PathContribution(InPath : Path) -> vec3<f32>
 {
-    var f = vec3f(1.0);
+    var contribution : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1u; i++)
+    var f       : vec3<f32> = vec3f(1.0);
+    var p       : f32       = 1.0;
+
+
+    for (var i = 1u; i < 4u; i++)
     {
-        let Xp = InPath.Surface[i - 1];
-        let Xc = InPath.Surface[i];
-        let Xn = InPath.Surface[i + 1];
+        let X : Surface     = InPath.Surface[i];
+        let V : vec3<f32>   = normalize( InPath.Surface[i - 1].Position - X.Position );
+        var L : vec3<f32>;
 
-        let V = normalize(Xp.Position - Xc.Position);    // 들어오는 방향
-        let L = normalize(Xn.Position - Xc.Position);    // 나가는 방향
-        let N = Xc.Normal;
+        L = DirectionToLight(X, InPath.XL);
 
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
+        contribution = f * L_emit(InPath.XL, X) * 
+        BSDF(X, V, L) * abs(dot(X.Normal, L)) * Visibility(X.Position, InPath.XL.Position);
+
+        let P_hat : f32 = Luminance( contribution );
+
+        var PathPDF : f32 = p * InPath.XL.PDF;
+
+        let RIS : f32 = P_hat / PathPDF;
+
+        f *= BSDF(X, V, L) * abs(dot(X.Normal, L));
+        p *= PDF_BSDF(X, V, L);
     }
 
-    // 최종 Light hit
-    {
-        let Xp = InPath.Surface[InPath.length - 2];
-        let Xc = InPath.Surface[InPath.length - 1];
-
-        let V = normalize(Xp.Position - Xc.Position);
-        let L = DirectionToLight(Xc, InPath.XL);
-        let N = Xc.Normal;
-
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
-        f *= L_emit(InPath.XL, Xc) * Visibility(Xc.Position, InPath.XL.Position);
-    }
 
     return f;
 }
@@ -1640,7 +1518,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let prevRes : Reservoir = PrevReservoirBuffer[prevIdx];
 
-        // --------- TEMPORAL VALIDATION (중요!!) ---------
 
     // 현재 surface 정보
     let currSurfComp : CompactSurface = Get_X1(curPixel);
@@ -1756,7 +1633,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let q_off : f32 = max(pdf_prev_raw, EPS);
 
-    var w_off : f32 = P_hat_Off * det_J / q_off;
+    var w_off : f32 = ((P_hat_Off/(P_hat_Off+P_hat_Base)) * P_hat_Off) / q_off;
     w_off = clamp(w_off, 0.0, MAX_RIS);
 
     // 둘 다 0이면 의미 없음
@@ -1791,7 +1668,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         // 이전 프레임 경로(shifted)를 채택
         outRes.Sample = shiftCompact;
         chosen_P_hat  = P_hat_Off;
-        outRes.UCW = baseRes.UCW/det_J;//W_sum/(w_off);
+        outRes.UCW = baseRes.Sample.J/det_J;//W_sum/(w_off);
         
     } 
 
@@ -1799,7 +1676,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let newC : u32 = clamp(baseRes.C + prevRes.C, 1u, 1000000u);
     outRes.C = newC;
 
-    //outRes.UCW = W_sum / max(chosen_P_hat, EPS);
+    outRes.UCW = W_sum / max(chosen_P_hat, EPS);
     
 
     // 필요하다면 너무 큰 weight 방지를 위한 클램프 (선택 사항)

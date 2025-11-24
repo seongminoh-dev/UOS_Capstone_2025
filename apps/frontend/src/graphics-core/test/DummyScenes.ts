@@ -155,17 +155,17 @@ export const DUMMY_SCENE_2: Scene = {
         scale: [1, 1, 1],
       },
     },
-    // PureWindow Instance
-    {
-      id: 'window_instance_0',
-      type: 'object',
-      meshName: 'PureWindow',
-      transform: {
-        position: [0, 0, 0],
-        rotation: [0, 90, 0], // 90 degrees rotation around Y axis
-        scale: [1, 1, 1],
-      },
-    },
+    //// PureWindow Instance
+    //{
+    //  id: 'window_instance_0',
+    //  type: 'object',
+    //  meshName: 'PureWindow',
+    //  transform: {
+    //    position: [0, 0, 0],
+    //    rotation: [0, 90, 0], // 90 degrees rotation around Y axis
+    //    scale: [1, 1, 1],
+    //  },
+    //},
     // Chair Instance
     {
       id: 'chair_instance_0',
