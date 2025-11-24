@@ -15,6 +15,9 @@ import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
 import ShaderCode_Temporal_Test     from './shaders/PT_2_TemporalReuseTest.wgsl?raw';
 
+
+import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
+
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
@@ -70,11 +73,11 @@ const EComputePassIndex =
     GBufferCreation         : 0,
     MotionVectorCreation    : 1,
     Initialize              : 2,
-    //TemporalReuse           : 3,
-    //SpatialReuse            : ,
-    FinalShading            : 3,
-    PostProcess             : 4,
-    SIZE                    : 5
+    TemporalReuse           : 3,
+    SpatialReuse            : 4,
+    FinalShading            : 5,
+    PostProcess             : 6,
+    SIZE                    : 7
 } as const;
 
 
@@ -102,7 +105,6 @@ export class Renderer
     // Scene Data
     private World       : World;
     private Camera      : Camera;
-    private FrameID     : number;
     private FrameCount  : number;
     private Prev_VPMat  : Mat4;
 
@@ -148,7 +150,6 @@ export class Renderer
 
             this.World              = World.prototype;
             this.Camera             = Camera.prototype;
-            this.FrameID            = 0;
             this.FrameCount         = 0;
             this.Prev_VPMat         = mat4.create();
         }
@@ -162,7 +163,8 @@ export class Renderer
     }
 
     public ResetFrameCount() : void 
-    {
+    { 
+        return;
         this.FrameCount = 0; 
     }
 
@@ -194,7 +196,6 @@ export class Renderer
 
     public Update() : void
     {
-        this.FrameID++;
         this.FrameCount++;
 
         // Camera Properties
@@ -208,7 +209,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 72;
+        const ELEMENT_COUNT = 52;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -220,30 +221,27 @@ export class Renderer
             Uint32View[3] = this.Canvas.height;
             
             for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Prev[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection_Prev[iter]!;
 
-            Float32View[52] = CameraLocation[0];
-            Float32View[53] = CameraLocation[1];
-            Float32View[54] = CameraLocation[2];
-            Uint32View [55] = this.FrameID;
+            Float32View[36] = CameraLocation[0];
+            Float32View[37] = CameraLocation[1];
+            Float32View[38] = CameraLocation[2];
+            Uint32View [39] = this.FrameCount;
 
-            Uint32View [56] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View [57] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View [58] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View [59] = this.Offsets[EDataOffsetIndex.Light];
+            Uint32View [40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [41] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [42] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [43] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View [60] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View [61] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View [62] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View [63] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [44] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [45] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [47] = this.Offsets[EDataOffsetIndex.Blas];
 
-            Uint32View [64] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View [65] = this.World.Lights.length;
-            Float32View[66] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
-
-            Uint32View [68] = this.FrameCount;
+            Uint32View [48] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [49] = this.World.Lights.length;
+            Float32View[50] = (Jitter_X * 2) / this.Canvas.width;
+            Float32View[51] = (Jitter_Y * 2) / this.Canvas.height;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -267,6 +265,9 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+    
+            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -385,7 +386,7 @@ export class Renderer
 
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 512, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 256, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
         this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
         this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
@@ -492,6 +493,62 @@ export class Renderer
                 [   // Write GPUTextureView
                 ]
             ),
+    
+    
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
+                ShaderCode_Temporal_Test, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.PrevReservoir],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Write GPUTextureView
+                    
+                ]
+            ),
+
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
+                ShaderCode_Spatial, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    
+                    this.GPUBuffers[EBufferIndex.Reservoir],
+                ],
+                [   // Write GPUTextureView
+                    
+                ]
+            ),
 
             ComputePass.Create // Final Shading
             (
@@ -524,14 +581,11 @@ export class Renderer
                 ShaderCode_PostProcess, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
-                    this.GPUBuffers[EBufferIndex.Scene],
-                    this.GPUBuffers[EBufferIndex.Geometry],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.Radiance].createView(),
                     this.GPUTextures[ETextureIndex.History_Read].createView(),
                     this.GPUTextures[ETextureIndex.MotionVector].createView(),
-                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Linear],
@@ -580,8 +634,7 @@ export class Renderer
                 entries : 
                 [
                     { binding :  0, resource : this.GPUBuffers[EBufferIndex.Uniform] },
-                    { binding : 10, resource : this.GPUTextures[ETextureIndex.History_Write].createView() },
-                    { binding : 20, resource : this.GPUSamplers[ESamplerIndex.Linear] },
+                    { binding : 10, resource : this.GPUTextures[ETextureIndex.History_Write].createView() }
                 ],
             };
 
