@@ -401,5 +401,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
 
+
     return;
 }

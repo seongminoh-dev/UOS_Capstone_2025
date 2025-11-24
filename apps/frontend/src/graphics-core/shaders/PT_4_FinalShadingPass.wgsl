@@ -1373,6 +1373,7 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
+    // 최종 Light hit
     {
         let X_Prev : Surface = InPath.Surface[InPath.length - 2];
         let X_Curr : Surface = InPath.Surface[InPath.length - 1];
@@ -1435,6 +1436,7 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
 
     return OutPath;
 }
+
 
 
 
