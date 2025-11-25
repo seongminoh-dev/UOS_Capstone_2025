@@ -1459,13 +1459,8 @@ fn calculate_J(InPath : Path, k : u32) -> f32
 }
  
 
-
-
-
 //==========================================================================
 // Main
-//==========================================================================
-// Main (Spatial reuse + Hybrid Shift over neighbourhood)
 //==========================================================================
 
 // 커널 반경 (1 = 3x3, 2 = 5x5 ...)
@@ -1611,7 +1606,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
             // Jacobian J
             var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
             if (!(J_val > 0.0) || !isFinite(J_val)) {
-                J_val = 1.0;
+                continue;
             }
             shiftCompact.J = J_val;
 

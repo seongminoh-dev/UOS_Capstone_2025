@@ -13,7 +13,6 @@ import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?r
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
-import ShaderCode_Temporal_Test     from './shaders/PT_2_TemporalReuseTest.wgsl?raw';
 
 
 import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
@@ -504,7 +503,7 @@ export class Renderer
             ComputePass.Create // Initialize
             (
                 this.Device, 
-                ShaderCode_Temporal_Test, 
+                ShaderCode_Temporal, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -515,6 +514,7 @@ export class Renderer
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
 
                 ],
                 [   // Read GPUSampler

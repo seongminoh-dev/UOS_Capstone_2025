@@ -1,3 +1,7 @@
+//==========================================================================
+// Data Structures
+//==========================================================================
+
 
 struct Uniform
 {
@@ -5,6 +9,7 @@ struct Uniform
     Resolution_Target               : vec2<u32>,
 
     ViewProjectionMatrix_Inverse    : mat4x4<f32>,
+    ViewProjectionMatrix_Clean      : mat4x4<f32>,
     ViewProjectionMatrix_Prev       : mat4x4<f32>,
 
     CameraWorldPosition             : vec3<f32>,
@@ -22,7 +27,9 @@ struct Uniform
 
     InstanceCount                   : u32,
     LightSourceCount                : u32,
-    Jitter                          : vec2<f32>
+    Jitter                          : vec2<f32>,
+
+    FrameCount                      : u32,
 };
 
 struct Instance
@@ -173,14 +180,6 @@ struct Path
     length     : u32,
 };
 
-struct PathReservoir
-{
-    Sample  : Path,
-    C       : u32,
-    P_hat   : f32,
-    w_sum   : f32,
-};
-
 struct Reservoir
 {
     Sample  : CompactPath,
@@ -221,11 +220,8 @@ const MAX_J      : f32 = 1e+4;
 const MAX_RIS    : f32 = 1e+4;   // 너무 큰 weight 방지용
 const MAX_X1_GAP : f32 = 0.05;   // prev / base x1 위치 허용 오차
 
-
 const RECONNECTION_DISTANCE  : f32 = 0.01;
 const RECONNECTION_ROUGHNESS : f32 = 0.05;
-
-
 //==========================================================================
 // GPU Bindings
 //==========================================================================
@@ -234,9 +230,11 @@ const RECONNECTION_ROUGHNESS : f32 = 0.05;
 @group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
 @group(0) @binding(3) var<storage, read>    AccelBuffer         : array<u32>;
+@group(0) @binding(4) var<storage, read>    PrevReservoirBuffer : array<Reservoir>;
 
 @group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer : texture_2d<f32>;
+@group(0) @binding(12) var MotionVectorTex : texture_storage_2d<rgba16float, read>;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
@@ -296,8 +294,6 @@ fn GetInstance(InstanceID : u32) -> Instance
 
     return OutInstance;
 }
-
-
 
 fn GetMeshDescriptor(MeshID : u32) -> MeshDescriptor
 {
@@ -848,7 +844,9 @@ fn BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
     return T * BTDF(X, V, L);
 }
 
-
+//==========================================================================
+// PDFs 
+//==========================================================================
 
 fn PDF_BRDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 {
@@ -938,17 +936,10 @@ fn PDF_BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 fn PDF_BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 {
     let N : vec3<f32> = X.Normal;
-    let T : f32       = X.Transmission;
 
-    if (dot(L, N) * dot(V, N) > 0.0) {
-        // reflection hemisphere
-        return (1.0 - T) * PDF_BRDF(X, V, L);
-    } else {
-        // transmission hemisphere
-        return T * PDF_BTDF(X, V, L);
-    }
+    if (dot(L, N) * dot(V, N) > 0.0) { return PDF_BRDF(X, V, L); }
+    return PDF_BTDF(X, V, L);
 }
-
 fn GetLightsCDF(Idx : u32) -> f32
 {
     let Offset : u32 = UniformBuffer.Offset_LightsCDFBuffer;
@@ -1034,37 +1025,42 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
     return 0.0;
 }
 
+//==========================================================================
+// Path Reconstruction / Contribution / PDF
+//==========================================================================
+
+
 fn PathContribution(InPath : Path) -> vec3<f32>
 {
-    var f = vec3f(1.0);
+    var contribution : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1u; i++)
+    var f       : vec3<f32> = vec3f(1.0);
+    var p       : f32       = 1.0;
+
+
+    for (var i = 1u; i < 4u; i++)
     {
-        let Xp = InPath.Surface[i - 1];
-        let Xc = InPath.Surface[i];
-        let Xn = InPath.Surface[i + 1];
+        let X : Surface     = InPath.Surface[i];
+        let V : vec3<f32>   = normalize( InPath.Surface[i - 1].Position - X.Position );
+        var L : vec3<f32>;
 
-        let V = normalize(Xp.Position - Xc.Position);    // 들어오는 방향
-        let L = normalize(Xn.Position - Xc.Position);    // 나가는 방향
-        let N = Xc.Normal;
+        L = DirectionToLight(X, InPath.XL);
 
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
+        contribution = f * L_emit(InPath.XL, X) * 
+        BSDF(X, V, L) * abs(dot(X.Normal, L)) * Visibility(X.Position, InPath.XL.Position);
+
+        let P_hat : f32 = Luminance( contribution );
+
+        var PathPDF : f32 = p * InPath.XL.PDF;
+
+        let RIS : f32 = P_hat / PathPDF;
+
+        f *= BSDF(X, V, L) * abs(dot(X.Normal, L));
+        p *= PDF_BSDF(X, V, L);
     }
 
-    // 최종 Light hit
-    {
-        let Xp = InPath.Surface[InPath.length - 2];
-        let Xc = InPath.Surface[InPath.length - 1];
 
-        let V = normalize(Xp.Position - Xc.Position);
-        let L = DirectionToLight(Xc, InPath.XL);
-        let N = Xc.Normal;
-
-        f *= BSDF(Xc, V, L) * abs(dot(N, L));
-        f *= L_emit(InPath.XL, Xc) * Visibility(Xc.Position, InPath.XL.Position);
-    }
-
-    return f;
+    return contribution;
 }
 
 
@@ -1381,6 +1377,16 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
     return OutPath;
 }
 
+fn IsSafeToReconnect(A : Surface, Lobe_A : u32, B : Surface, Lobe_B : u32) -> bool
+{
+    let Roughness_A     : f32   = select(A.Roughness, 1.0, Lobe_A == LOBE_LAMBERT);
+    let Roughness_B     : f32   = select(B.Roughness, 1.0, Lobe_B == LOBE_LAMBERT);
+    let bRoughEnough    : bool  = ( min(Roughness_A, Roughness_B) >= RECONNECTION_ROUGHNESS );
+
+    let bFarEnough      : bool  = ( length(A.Position - B.Position) >= RECONNECTION_DISTANCE );
+
+    return bFarEnough && bRoughEnough;
+}
 
 //==========================================================================
 // 하이브리드 시프트 (prefix = prev, suffix = base)
@@ -1396,9 +1402,9 @@ fn DoHybridShift(
 
     // k 범위 체크
     if (k < 2u || k >= baseRes.length || prevRes.length <= k) {
+        result.length = 0;
         return result;
     }
-
     // prefix 부분의 rSeed는 이전 프레임 걸 사용
     for (var i : u32 = 0u; i < k; i++) {
         result.rSeed[i] = prevRes.rSeed[i];
@@ -1410,8 +1416,6 @@ fn DoHybridShift(
 
     return result;
 }
-
- 
 
 fn calculate_J(InPath : Path, k : u32) -> f32
 {
@@ -1451,24 +1455,15 @@ fn calculate_J(InPath : Path, k : u32) -> f32
     return J;
 }
  
-
-
-
-
-//==========================================================================
-// Main
-//==========================================================================
-// Main (Spatial reuse + Hybrid Shift over neighbourhood)
-//==========================================================================
-
 // 커널 반경 (1 = 3x3, 2 = 5x5 ...)
 const KERNEL_RADIUS : i32 = 2;
 @compute @workgroup_size(8, 8, 1)
 fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
 {
-    let curPixel : vec2<u32> = gid.xy;
+    /*Base Path*/
+    // 현재 픽셀 인덱스 계산 & 유효성 체크
+    let curPixel : vec2<u32> = ThreadID.xy;
 
-    // 해상도 가드
     if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
         curPixel.y >= UniformBuffer.Resolution_Source.y) {
         return;
@@ -1478,41 +1473,27 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
         curPixel.y * UniformBuffer.Resolution_Source.x +
         curPixel.x;
 
-    // 0. base reservoir
-    var baseRes : Reservoir = ReservoirBuffer[curIdx];
+    // base path 재생성 & 유효성 체크
+    var baseRes : Reservoir = ReservoirBuffer[curIdx]; //base path
+    let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
 
-    if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
-        return;
-    }
-
-    // surface check
-    let curSurfComp : CompactSurface = Get_X1(curPixel);
-    if (!curSurfComp.IsValidSurface) {
-        return;
-    }
-    let curSurf : Surface = GetSurface(curSurfComp);
-
-    // base path
-    var basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
-    if (basePath.length < 2u) {
-        return;
-    }
-
-    // base contribution
     let contribBase : vec3<f32> = PathContribution(basePath);
     let P_hat_Base  : f32       = Luminance(contribBase);
-    if (!(P_hat_Base > 0.0) || !isFinite(P_hat_Base)) {
-        return;
-    }
 
-    let q_base_raw : f32 = PathPDF(basePath);
-    if (!(q_base_raw > 0.0) || !isFinite(q_base_raw)) {
+    if (!(P_hat_Base > 0.0) || !isFinite(P_hat_Base)) {
         ReservoirBuffer[curIdx] = baseRes;
         return;
     }
-    let q_base : f32 = max(q_base_raw, EPS);
 
-    var w_base : f32 = clamp(P_hat_Base / q_base, 0.0, MAX_RIS);
+    let p_base_raw : f32 = PathPDF(basePath);
+    if (!(p_base_raw > 0.0) || !isFinite(p_base_raw)) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+    let p_base : f32 = max(p_base_raw, EPS);
+
+    var w_base : f32 = P_hat_Base / p_base;
+    w_base = clamp(w_base, 0.0, MAX_RIS);
 
     // ------------------------------------------------------------
     // Streaming merge 초기 상태
@@ -1558,31 +1539,6 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 continue;
             }
 
-            // spatial validity
-            let neiSurfComp : CompactSurface = Get_X1(vec2<u32>(nx, ny));
-            if (!neiSurfComp.IsValidSurface) {
-                continue;
-            }
-
-            if (curSurfComp.InstanceID != neiSurfComp.InstanceID ||
-                curSurfComp.MaterialID != neiSurfComp.MaterialID) {
-                continue;
-            }
-
-            let neiSurf : Surface = GetSurface(neiSurfComp);
-
-            let Ndot : f32 = dot(curSurf.Normal, neiSurf.Normal);
-            if (Ndot < 0.5) {
-                continue;
-            }
-
-            let dC : f32 = length(curSurf.Position - UniformBuffer.CameraWorldPosition);
-            let dN : f32 = length(neiSurf.Position - UniformBuffer.CameraWorldPosition);
-            let relDepth : f32 = abs(dC - dN) / max(dC, 1e-6);
-            if (relDepth > 0.03) {
-                continue;
-            }
-
             // neighbour path 생성
             var prevPath : Path = RegeneratePath(vec2<u32>(nx, ny), neiRes.Sample);
             if (prevPath.length < 2u) {
@@ -1591,8 +1547,11 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
 
             // hybrid shift
             var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
-            var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
+            if(!(shiftCompact.length > 0)){
+                continue;
+            }
 
+            var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
             if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
                 continue;
             }
@@ -1600,14 +1559,19 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
             // Jacobian J
             var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
             if (!(J_val > 0.0) || !isFinite(J_val)) {
-                J_val = 1.0;
+                continue;
             }
             shiftCompact.J = J_val;
 
-            // detJ
-            let baseJ = max(baseRes.Sample.J, EPS);
-            var det_J : f32 = 1.0;//baseJ / max(J_val, EPS);
+            let base_k = baseRes.Sample.k;
+            if(!(IsSafeToReconnect(prevPath.Surface[base_k - 1], prevPath.Lobe[base_k - 1],
+                                    basePath.Surface[base_k], basePath.Lobe[base_k])))
+            {
+                continue;
+            }
 
+            // detJ
+            let det_J : f32= baseRes.Sample.J / J_val;
             if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
                 continue;
             }
@@ -1619,22 +1583,21 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 continue;
             }
 
-            let pdf_prev_raw : f32 = PathPDF(offsetPath);
-            if (!(pdf_prev_raw > 0.0) || !isFinite(pdf_prev_raw)) {
+            let p_prev_raw : f32 = PathPDF(offsetPath);
+            if (!(p_prev_raw > 0.0) || !isFinite(p_prev_raw)) {
                 continue;
             }
-            let q_off : f32 = max(pdf_prev_raw, EPS);
+            let p_off : f32 = max(p_prev_raw, EPS);
 
-            var w_off : f32 = P_hat_Off * det_J / q_off;
+            var w_off : f32 = ((P_hat_Off/(P_hat_Off+P_hat_Base)) * P_hat_Off) / p_off;
             w_off = clamp(w_off, 0.0, MAX_RIS);
 
             if (!isFinite(w_off) || w_off <= 0.0) {
                 continue;
             }
 
-            // streaming merge
-            let W_new_total : f32 = W_total + w_off;
-            if (!isFinite(W_new_total) || W_new_total <= 0.0) {
+            let W_sum : f32 = w_base + w_off;
+            if (!(W_sum > 0.0) || !isFinite(W_sum)) {
                 continue;
             }
 
@@ -1645,7 +1608,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 outRes.Sample = shiftCompact;
                 chosen_P_hat = P_hat_Off;
                 outRes.UCW = baseRes.UCW/det_J;
-                chosen_weight = w_off;    // ★ 선택된 후보의 weight 저장
+                chosen_weight = w_off; 
             }
 
             W_total = min(W_new_total,1e12);
@@ -1664,11 +1627,6 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
             ReservoirBuffer[curIdx] = baseRes;
             return;
     } else {
-
-        let MAX_UCW : f32 = 100.0; // 환경 따라 10~500 사이로 실험
-        let C_float : f32 = max(f32(outRes.C), 1.0);
-        //let final_ucw_val : f32 = W_total / max(chosen_weight, EPS);
-        //outRes.UCW = clamp(final_ucw_val, 0.0, MAX_UCW);
         ReservoirBuffer[curIdx] = outRes;
     }   
      
