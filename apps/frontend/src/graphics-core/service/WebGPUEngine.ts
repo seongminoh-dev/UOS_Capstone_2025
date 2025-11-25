@@ -120,8 +120,24 @@ export class WebGPUEngine {
             throw new Error('Engine not initialized');
         }
 
+        // 1. 현재 카메라 상태 저장
+        const currentCamera = this.renderer.GetCamera();
+        const savedLocation = currentCamera.GetLocation();
+        const savedPitch = currentCamera.GetPitch();
+        const savedYaw = currentCamera.GetYaw();
+
+        // 2. Scene 전환 및 Renderer 재초기화
         await this.sceneManager.switchScene(sceneId);
         await this.renderer.Initialize(this.world);
+
+        // 3. 새 카메라에 저장된 상태 복원
+        const newCamera = this.renderer.GetCamera();
+        newCamera.SetLocation(savedLocation);
+        newCamera.SetPitch(savedPitch);
+        newCamera.SetYaw(savedYaw);
+
+        // 4. InputController에 새 카메라 참조 전달
+        this.inputController.setCamera(newCamera);
     }
 
     /**
@@ -134,11 +150,27 @@ export class WebGPUEngine {
             throw new Error('Engine not initialized');
         }
 
+        // 1. 현재 카메라 상태 저장
+        const currentCamera = this.renderer.GetCamera();
+        const savedLocation = currentCamera.GetLocation();
+        const savedPitch = currentCamera.GetPitch();
+        const savedYaw = currentCamera.GetYaw();
+
+        // 2. 캔버스 크기 변경
         this.canvas.width = width;
         this.canvas.height = height;
 
-        // Reinitialize renderer with new size
+        // 3. Renderer 재초기화 (새 카메라 생성됨)
         await this.renderer.Initialize(this.world);
+
+        // 4. 새 카메라에 저장된 상태 복원
+        const newCamera = this.renderer.GetCamera();
+        newCamera.SetLocation(savedLocation);
+        newCamera.SetPitch(savedPitch);
+        newCamera.SetYaw(savedYaw);
+
+        // 5. InputController에 새 카메라 참조 전달
+        this.inputController.setCamera(newCamera);
     }
 
     /**
