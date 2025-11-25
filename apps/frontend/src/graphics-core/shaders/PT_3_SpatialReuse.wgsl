@@ -1458,7 +1458,7 @@ fn calculate_J(InPath : Path, k : u32) -> f32
 // 커널 반경 (1 = 3x3, 2 = 5x5 ...)
 const KERNEL_RADIUS : i32 = 2;
 @compute @workgroup_size(8, 8, 1)
-fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
+fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
     /*Base Path*/
     // 현재 픽셀 인덱스 계산 & 유효성 체크
@@ -1601,7 +1601,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 continue;
             }
 
-            let p_choose_off : f32 = w_off / W_new_total;
+            let p_choose_off : f32 = w_off / (W_total+w_off);
             let r : f32 = Random(&rng);
 
             if (r < p_choose_off) {
@@ -1611,7 +1611,7 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
                 chosen_weight = w_off; 
             }
 
-            W_total = min(W_new_total,1e12);
+            W_total = min((W_total+w_off),1e12);
             totalC = min(totalC + neiRes.C, 1000000u);
         }
     }
