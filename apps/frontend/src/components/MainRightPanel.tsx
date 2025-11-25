@@ -31,7 +31,8 @@ export default function MainRightPanel({
   const [activeTab, setActiveTab] = useState<Tab>('lighting');
 
   // Zustand Stores
-  const { scenes, loadScenes, updateScene, createScene } = useSceneStore();
+  const { scenes, loadScenes, updateScene, createScene, deleteScene } =
+    useSceneStore();
   const { user, isGuest } = useAuthStore();
 
   // Instance 편집 모달
@@ -39,7 +40,9 @@ export default function MainRightPanel({
 
   // Save Confirm 모달
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<Scene | null | 'edit'>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<
+    Scene | null | 'edit'
+  >(null);
 
   // Scene 변경 감지 상태
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -210,7 +213,9 @@ export default function MainRightPanel({
   };
 
   // Asset 삭제 핸들러
-  const [deletingAssetId, setDeletingAssetId] = useState<string | number | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<
+    string | number | null
+  >(null);
   const [dontShowDeleteConfirm, setDontShowDeleteConfirm] = useState(false);
 
   const handleDeleteAssetRequest = (assetId: string | number) => {
@@ -263,6 +268,63 @@ export default function MainRightPanel({
     setDontShowDeleteConfirm(false);
   };
 
+  // Scene 삭제 관련 상태
+  const [deletingSceneId, setDeletingSceneId] = useState<
+    number | string | null
+  >(null);
+  const [hiddenDummySceneIds, setHiddenDummySceneIds] = useState<
+    Set<string | number>
+  >(new Set());
+
+  // Scene 삭제 요청 핸들러
+  const handleDeleteSceneRequest = (
+    sceneId: number | string,
+    e?: React.MouseEvent
+  ) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setDeletingSceneId(sceneId);
+  };
+
+  // Scene 삭제 확인 핸들러
+  const handleConfirmDeleteScene = async () => {
+    if (!deletingSceneId) return;
+
+    try {
+      const isDeletingCurrentScene =
+        selectedScene && selectedScene.id === deletingSceneId;
+
+      // Dummy Scene인지 확인
+      const isDummyScene = AVAILABLE_SCENES.some(
+        (s) => s.id === deletingSceneId
+      );
+
+      if (isDummyScene) {
+        // Dummy Scene은 로컬 상태로 숨김 처리
+        setHiddenDummySceneIds((prev) => new Set(prev).add(deletingSceneId));
+      } else {
+        // 일반 Scene은 store에서 삭제
+        await deleteScene(deletingSceneId);
+      }
+
+      setDeletingSceneId(null);
+
+      // 렌더링 중인 씬 삭제 시 씬 선택 화면으로
+      if (isDeletingCurrentScene) {
+        onSelectScene(null as any);
+      }
+    } catch (error) {
+      console.error('Failed to delete scene:', error);
+      alert('Scene 삭제에 실패했습니다.');
+    }
+  };
+
+  // Scene 삭제 취소 핸들러
+  const handleCancelDeleteScene = () => {
+    setDeletingSceneId(null);
+  };
+
   // Scene 정보 편집 시작
   const handleStartEditingInfo = () => {
     if (!currentScene) return;
@@ -299,7 +361,10 @@ export default function MainRightPanel({
     // 회원 모드: API에서 가져온 Scene 목록
     // 게스트 모드: 메모리 + Dummy Scene
     const availableScenes = isGuest
-      ? [...scenes, ...AVAILABLE_SCENES] // 게스트: 메모리 + Dummy
+      ? [
+          ...scenes,
+          ...AVAILABLE_SCENES.filter((s) => !hiddenDummySceneIds.has(s.id)),
+        ] // 게스트: 메모리 + Dummy (숨긴 것 제외)
       : scenes; // 회원: API만
 
     return (
@@ -316,21 +381,29 @@ export default function MainRightPanel({
         <div className="panel-content">
           <div className="scene-list">
             {availableScenes.map((scene) => (
-              <button
-                key={scene.id}
-                className="scene-card"
-                onClick={() => onSelectScene(scene)}
-              >
-                <div className="scene-card-header">
-                  <h3>{scene.name}</h3>
-                  <span className="scene-asset-count">
-                    {scene.assets.length}개 Asset
-                  </span>
-                </div>
-                {scene.description && (
-                  <p className="scene-description">{scene.description}</p>
-                )}
-              </button>
+              <div key={scene.id} className="scene-card-wrapper">
+                <button
+                  className="scene-card"
+                  onClick={() => onSelectScene(scene)}
+                >
+                  <div className="scene-card-header">
+                    <h3>{scene.name}</h3>
+                    <span className="scene-asset-count">
+                      {scene.assets.length}개 Asset
+                    </span>
+                  </div>
+                  {scene.description && (
+                    <p className="scene-description">{scene.description}</p>
+                  )}
+                </button>
+                <button
+                  className="scene-delete-btn"
+                  onClick={(e) => handleDeleteSceneRequest(scene.id, e)}
+                  title="Scene 삭제"
+                >
+                  🗑️
+                </button>
+              </div>
             ))}
           </div>
 
@@ -343,6 +416,53 @@ export default function MainRightPanel({
             </button>
           </div>
         </div>
+
+        {/* Scene 삭제 확인 모달 */}
+        {deletingSceneId && (
+          <div className="modal-overlay" onClick={handleCancelDeleteScene}>
+            <div
+              className="modal-content"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: '400px' }}
+            >
+              <div className="modal-header">
+                <h2 className="modal-title">Scene 삭제</h2>
+                <button
+                  className="modal-close"
+                  onClick={handleCancelDeleteScene}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ padding: '24px' }}>
+                <p style={{ margin: 0, lineHeight: '1.6' }}>
+                  이 Scene을 삭제하시겠습니까?
+                  <br />
+                  <span style={{ color: '#DC2626', fontSize: '13px' }}>
+                    이 작업은 되돌릴 수 없습니다.
+                  </span>
+                </p>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  className="modal-button modal-cancel"
+                  onClick={handleCancelDeleteScene}
+                >
+                  취소
+                </button>
+                <button
+                  className="modal-button modal-save"
+                  onClick={handleConfirmDeleteScene}
+                  style={{ backgroundColor: '#DC2626' }}
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -357,13 +477,19 @@ export default function MainRightPanel({
   const testScene = objectAssets.find((a) => a.meshName === 'TestScene');
 
   // 태양은 특별한 DirectionalLight (id로 식별)
-  const sunLight = lightAssets.find((a) =>
-    a.type === 'directional-light' && (a.id === 'sun' || a.id === 'Sun' || a.id === 'sun_light')
+  const sunLight = lightAssets.find(
+    (a) =>
+      a.type === 'directional-light' &&
+      (a.id === 'sun' || a.id === 'Sun' || a.id === 'sun_light')
   );
 
   // 일반 DirectionalLight들 (태양 제외)
-  const directionalLights = lightAssets.filter((a) =>
-    a.type === 'directional-light' && a.id !== 'sun' && a.id !== 'Sun' && a.id !== 'sun_light'
+  const directionalLights = lightAssets.filter(
+    (a) =>
+      a.type === 'directional-light' &&
+      a.id !== 'sun' &&
+      a.id !== 'Sun' &&
+      a.id !== 'sun_light'
   );
 
   return (
@@ -382,19 +508,25 @@ export default function MainRightPanel({
         {/* Tab Navigation */}
         <div className="panel-tab-nav">
           <button
-            className={`panel-tab-button ${activeTab === 'lighting' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'lighting' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('lighting')}
           >
             조명
           </button>
           <button
-            className={`panel-tab-button ${activeTab === 'furniture' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'furniture' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('furniture')}
           >
             가구
           </button>
           <button
-            className={`panel-tab-button ${activeTab === 'info' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'info' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('info')}
           >
             정보
@@ -415,13 +547,17 @@ export default function MainRightPanel({
                 <label className="form-label">시간대</label>
                 <div className="button-group">
                   <button
-                    className={`toggle-button ${timeOfDay === 'day' ? 'active' : ''}`}
+                    className={`toggle-button ${
+                      timeOfDay === 'day' ? 'active' : ''
+                    }`}
                     onClick={() => setTimeOfDay('day')}
                   >
                     낮
                   </button>
                   <button
-                    className={`toggle-button ${timeOfDay === 'night' ? 'active' : ''}`}
+                    className={`toggle-button ${
+                      timeOfDay === 'night' ? 'active' : ''
+                    }`}
                     onClick={() => setTimeOfDay('night')}
                   >
                     밤
@@ -431,9 +567,7 @@ export default function MainRightPanel({
 
               {/* 시간 */}
               <div className="form-group">
-                <label className="form-label">
-                  시간: {sunTime}시
-                </label>
+                <label className="form-label">시간: {sunTime}시</label>
                 <input
                   type="range"
                   min="6"
@@ -520,7 +654,9 @@ export default function MainRightPanel({
 
               {/* Point Light & Rect Light */}
               {lightAssets
-                .filter((a) => a.type === 'point-light' || a.type === 'rect-light')
+                .filter(
+                  (a) => a.type === 'point-light' || a.type === 'rect-light'
+                )
                 .map((asset) => (
                   <div key={asset.id} className="asset-item clickable">
                     <div
@@ -532,7 +668,9 @@ export default function MainRightPanel({
                         {asset.type === 'point-light' ? '💡' : '🔲'}
                       </span>
                       <span className="asset-name">
-                        {asset.type === 'point-light' ? 'PointLight' : 'RectLight'}
+                        {asset.type === 'point-light'
+                          ? 'PointLight'
+                          : 'RectLight'}
                       </span>
                     </div>
                     <button
@@ -549,18 +687,20 @@ export default function MainRightPanel({
                 ))}
 
               {directionalLights.length === 0 &&
-                lightAssets.filter((a) => a.type === 'point-light' || a.type === 'rect-light').length === 0 && (
-                <div className="empty-state">
-                  추가 조명이 없습니다
-                  <br />
-                  <button
-                    className="link-button"
-                    onClick={handleEditPageRequest}
-                  >
-                    편집 페이지에서 추가하기
-                  </button>
-                </div>
-              )}
+                lightAssets.filter(
+                  (a) => a.type === 'point-light' || a.type === 'rect-light'
+                ).length === 0 && (
+                  <div className="empty-state">
+                    추가 조명이 없습니다
+                    <br />
+                    <button
+                      className="link-button"
+                      onClick={handleEditPageRequest}
+                    >
+                      편집 페이지에서 추가하기
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -629,8 +769,17 @@ export default function MainRightPanel({
         {activeTab === 'info' && (
           <div className="tab-section">
             <div className="section-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 className="section-title" style={{ margin: 0 }}>Scene 정보</h3>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '16px',
+                }}
+              >
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  Scene 정보
+                </h3>
                 {!isEditingInfo && (
                   <button
                     className="link-button"
@@ -654,11 +803,19 @@ export default function MainRightPanel({
                   </div>
                   <div className="info-item">
                     <span className="info-label">설명</span>
-                    <span className="info-value">{currentScene.description || '(없음)'}</span>
+                    <span className="info-value">
+                      {currentScene.description || '(없음)'}
+                    </span>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                >
                   <div className="form-group">
                     <label className="form-label">Scene 이름</label>
                     <input
@@ -674,7 +831,9 @@ export default function MainRightPanel({
                     <textarea
                       className="form-input"
                       value={editingSceneDescription}
-                      onChange={(e) => setEditingSceneDescription(e.target.value)}
+                      onChange={(e) =>
+                        setEditingSceneDescription(e.target.value)
+                      }
                       placeholder="Scene 설명 입력"
                       rows={3}
                       style={{ resize: 'vertical' }}
@@ -705,7 +864,9 @@ export default function MainRightPanel({
               <div className="info-grid">
                 <div className="info-item">
                   <span className="info-label">총 Asset 수</span>
-                  <span className="info-value">{selectedScene.assets.length}개</span>
+                  <span className="info-value">
+                    {selectedScene.assets.length}개
+                  </span>
                 </div>
                 <div className="info-item">
                   <span className="info-label">오브젝트</span>
@@ -753,7 +914,7 @@ export default function MainRightPanel({
           onClick={handleSaveAndRender}
           style={{
             opacity: hasUnsavedChanges ? 1 : 0.5,
-            cursor: hasUnsavedChanges ? 'pointer' : 'not-allowed'
+            cursor: hasUnsavedChanges ? 'pointer' : 'not-allowed',
           }}
         >
           {hasUnsavedChanges ? '저장하고 적용' : '렌더링'}
@@ -870,7 +1031,10 @@ export default function MainRightPanel({
 
       {/* Scene 생성 모달 */}
       {showCreateSceneModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateSceneModal(false)}>
+        <div
+          className="modal-overlay"
+          onClick={() => setShowCreateSceneModal(false)}
+        >
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
@@ -878,13 +1042,22 @@ export default function MainRightPanel({
           >
             <div className="modal-header">
               <h2 className="modal-title">새 Scene 만들기</h2>
-              <button className="modal-close" onClick={() => setShowCreateSceneModal(false)}>
+              <button
+                className="modal-close"
+                onClick={() => setShowCreateSceneModal(false)}
+              >
                 ✕
               </button>
             </div>
 
             <div className="modal-body" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+              <div
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: '16px',
+                }}
+              >
                 <div className="form-group">
                   <label className="form-label">Scene 이름 *</label>
                   <input
@@ -922,6 +1095,65 @@ export default function MainRightPanel({
                 onClick={handleCreateNewScene}
               >
                 생성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Scene 삭제 확인 모달 */}
+      {deletingSceneId && (
+        <div className="modal-overlay" onClick={handleCancelDeleteScene}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '450px' }}
+          >
+            <div className="modal-header">
+              <h2 className="modal-title">Scene 삭제</h2>
+              <button className="modal-close" onClick={handleCancelDeleteScene}>
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body">
+              <p style={{ margin: 0, marginBottom: '16px', lineHeight: '1.6' }}>
+                이 Scene을 삭제하시겠습니까?
+                <br />
+                <span style={{ color: '#DC2626', fontSize: '13px' }}>
+                  이 작업은 되돌릴 수 없습니다.
+                </span>
+              </p>
+              {selectedScene && selectedScene.id === deletingSceneId && (
+                <p
+                  style={{
+                    margin: 0,
+                    padding: '12px',
+                    backgroundColor: '#FEF3C7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#92400E',
+                  }}
+                >
+                  현재 렌더링 중인 Scene입니다. 삭제 시 Scene 선택 화면으로
+                  이동합니다.
+                </p>
+              )}
+            </div>
+
+            <div className="modal-actions">
+              <button
+                className="modal-button modal-cancel"
+                onClick={handleCancelDeleteScene}
+              >
+                취소
+              </button>
+              <button
+                className="modal-button modal-save"
+                onClick={handleConfirmDeleteScene}
+                style={{ backgroundColor: '#DC2626' }}
+              >
+                삭제
               </button>
             </div>
           </div>
