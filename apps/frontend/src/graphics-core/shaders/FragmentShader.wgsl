@@ -110,7 +110,7 @@ fn fs_main(@location(0) PixelUV: vec2<f32>) -> @location(0) vec4<f32>
 {
 
   var TextureColor_Linear : vec3<f32>;
-  if (false)
+  if (true)
   {
     let Width   : f32 = f32( UniformBuffer.Resolution_Target.x );
     let Height  : f32 = f32( UniformBuffer.Resolution_Target.y );

@@ -213,11 +213,17 @@ const STRIDE_BLAS       : u32 =  8u;
 const RECONNECTION_DISTANCE     : f32 = 0.1;
 const RECONNECTION_ROUGHNESS    : f32 = 0.5;
 
+const MIN_ROUGHNESS : f32 = 0.02;
+
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
-const ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
 
+const ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
+const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
+const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
+const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
+const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
 //==========================================================================
 // Enums
@@ -328,9 +334,8 @@ fn GetMaterial(MaterialID : u32) -> Material
     OutMaterial.TextureID_ORM       = bitcast<i32>(SceneBuffer[Offset + 13u]);
     OutMaterial.TextureID_Emissive  = bitcast<i32>(SceneBuffer[Offset + 14u]);
 
-
     // ===================
-    OutMaterial.Roughness = max(OutMaterial.Roughness, 0.01);
+    OutMaterial.Roughness = max(OutMaterial.Roughness, MIN_ROUGHNESS);
 
     return OutMaterial;
 }
@@ -360,11 +365,10 @@ fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
 
 fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
 {
-    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Roughness; }
 
     let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
-    return TextureORM.g;
-
+    return max( TextureORM.g, 0.01 );
 }
 
 fn GetLight(LightID : u32) -> Light
@@ -990,8 +994,6 @@ fn BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
     return T * BTDF(X, V, L);
 }
 
-
-
 //==========================================================================
 // Sampling Methods
 //==========================================================================
@@ -1450,7 +1452,6 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
 // Main
 //==========================================================================
 
-
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
@@ -1561,8 +1562,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         }
 
     }
-
-
 
     // 3. 최종 살아남은 경로를 Reservoir 에 저장
     {

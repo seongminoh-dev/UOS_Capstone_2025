@@ -27,27 +27,36 @@ export const DUMMY_SCENE_1: Scene = {
       },
     },
 
-    // {
-    //   id: 'window_instance_0',
-    //   type: 'object',
-    //   meshName: 'PureWindow',
-    //   transform: {
-    //     position: [0, 0, 0],
-    //     rotation: [0, 90, 0], // 90 degrees rotation around Y axis
-    //     scale: [1, 1, 1],
-    //   },
-    // },
+    {
+      id: 'window_instance_0',
+      type: 'object',
+      meshName: 'WhiteWindow',
+      transform: {
+        position: [0, 2, 0],
+        rotation: [0, 3.14 / 2, 0],
+        scale: [1, 1, 1],
+      },
+    },
 
-    //Directional Light
-    // {
-    //   id: 'sun_light',
-    //   type: 'directional-light',
-    //   lightParams: {
-    //     direction: [0, 0, -1],
-    //     color: [1, 1, 1],
-    //     intensity: 2.5,
-    //   },
-    // },
+    {
+      id: 'sun_light',
+      type: 'directional-light',
+      lightParams: {
+        direction: [0, 0, -1],
+        color: [1, 1, 1],
+        intensity: 0.9,
+      },
+    },
+
+    {
+      id: 'bulb',
+      type: 'point-light',
+      lightParams: {
+        position: [-2.33, 0, -3.77],
+        color: [1, 1, 1],
+        intensity: 1.0,
+      },
+    },
 
     {
       id: 'sun_light2',
@@ -55,7 +64,7 @@ export const DUMMY_SCENE_1: Scene = {
       lightParams: {
         direction: [-1, 0, 0],
         color: [1, 1, 1],
-        intensity: 0.5,
+        intensity: 1.5,
       },
     },
 
