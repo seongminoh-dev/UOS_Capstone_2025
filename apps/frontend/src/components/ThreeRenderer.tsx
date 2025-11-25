@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { ThreeSceneManager } from '../three-core/ThreeSceneManager';
+import { ThreeSceneAdapter } from '../adapters/ThreeSceneAdapter';
 import type { Scene, SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
 
 interface ThreeRendererProps {
@@ -129,9 +130,16 @@ export default function ThreeRenderer({
 
     async function loadSceneData() {
       try {
-        await managerRef.current!.loadScene(scene!);
+        // ✅ Use ThreeSceneAdapter to convert SceneFrontend → Three.js commands
+        const sceneFrontend = scene as SceneFrontend;
+        if (!sceneFrontend.room || !sceneFrontend.sunSettings) {
+          console.warn('[ThreeRenderer] Scene is not SceneFrontend, skipping load');
+          return;
+        }
+
+        await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
       } catch (error) {
-        console.error('Failed to load scene:', error);
+        console.error('[ThreeRenderer] Failed to load scene:', error);
         setError('Failed to load scene models');
       }
     }

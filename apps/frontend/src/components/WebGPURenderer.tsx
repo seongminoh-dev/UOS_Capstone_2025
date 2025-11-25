@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebGPUEngine } from '../graphics-core/service';
+import { SceneAdapter } from '../adapters/SceneAdapter';
+import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
 interface WebGPURendererProps {
   className?: string;
   width?: number;
   height?: number;
-  sceneId?: string;
+  scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
 }
 
@@ -16,7 +18,7 @@ export default function WebGPURenderer({
   className = '',
   width = 800,
   height = 600,
-  sceneId,
+  scene,
   onCameraUpdate,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -92,8 +94,8 @@ export default function WebGPURenderer({
           }
         };
 
-        // Initialize and start
-        await engine.initialize(canvasSize.width, canvasSize.height, sceneId);
+        // ✅ Initialize engine (no sceneId)
+        await engine.initialize(canvasSize.width, canvasSize.height);
 
         if (!isMounted) {
           engine.dispose();
@@ -152,21 +154,53 @@ export default function WebGPURenderer({
     resizeEngine();
   }, [canvasSize, MIN_WIDTH, MIN_HEIGHT]);
 
-  // sceneId 변경 시 Scene 전환
+  // ✅ Scene 변경 시 로드 (SceneAdapter 사용)
   useEffect(() => {
-    if (!sceneId || !engineRef.current) return;
+    if (!scene || !engineRef.current || !isInitialized) return;
 
-    async function switchScene() {
+    async function loadScene() {
       try {
-        await engineRef.current!.switchScene(sceneId!);
+        const engine = engineRef.current!;
+        const world = engine.getWorld();
+
+        // Scene이 SceneFrontend인지 확인
+        const sceneFrontend = scene as SceneFrontend;
+        if (!sceneFrontend.room || !sceneFrontend.sunSettings) {
+          console.warn('Scene is not SceneFrontend, skipping load');
+          return;
+        }
+
+        console.log(`Loading scene: ${scene.name}`);
+
+        // 1. Mesh 이름 추출
+        const meshNames = SceneAdapter.extractMeshNames(sceneFrontend);
+
+        // 2. Mesh 로드 (병렬)
+        await Promise.all(
+          meshNames.map(name => world.LoadRawMesh(name))
+        );
+
+        // 3. MeshPool에 등록
+        // (LoadRawMesh가 이미 MeshPool에 추가하므로 추가 작업 불필요)
+
+        // 4. SceneAdapter를 통해 World에 Scene 로드
+        SceneAdapter.loadSceneToWorld(sceneFrontend, world);
+
+        // 5. Renderer 재초기화
+        const renderer = engine.getRenderer();
+        if (renderer) {
+          await renderer.Initialize(world);
+        }
+
+        console.log(`Scene loaded successfully: ${scene.name}`);
       } catch (err) {
-        console.error('Error switching scene:', err);
-        setError(err instanceof Error ? err.message : 'Failed to switch scene');
+        console.error('Error loading scene:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load scene');
       }
     }
 
-    switchScene();
-  }, [sceneId]);
+    loadScene();
+  }, [scene, isInitialized]);
 
   // 키보드 단축키로 디버그 정보 토글 (백틱 키 또는 Ctrl+Shift+H)
   useEffect(() => {

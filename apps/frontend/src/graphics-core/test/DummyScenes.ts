@@ -14,20 +14,32 @@ import { getDefaultSunSettings } from '../../utils/SceneSerializer';
 export const DUMMY_SCENE_1: SceneFrontend = {
   id: 'dummy_scene_1',
   name: 'Test Room Scene',
-  description: 'Default test scene with TestScene, Window, and Directional Light',
-  assets: [
-    // TestScene Instance
-    {
-      id: 'scene_instance_0',
-      type: 'object',
-      meshName: 'Bedroom',
-      transform: {
-        position: [0, 0, 0],
-        rotation: [0, 0, 0], // Euler angles in degrees [x, y, z]
-        scale: [1, 1, 1],
-      },
-    },
+  description: 'Default test scene with Bedroom, Window, and Point Lights',
 
+  // ✅ Room 설정 (편집 불가능, assets에서 분리)
+  room: {
+    meshName: 'Bedroom',
+    locked: true,
+    transform: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
+    },
+  },
+
+  // ✅ 태양광 설정 (DirectionalLight 자동 생성)
+  sunSettings: getDefaultSunSettings(),
+
+  // ✅ 기본 카메라 위치
+  camera: {
+    position: [5, 5, 5],
+    target: [0, 1, 0],
+    fov: 45,
+  },
+
+  // ✅ 사용자 추가 가능한 Asset만 (가구 + Point/Rect Light)
+  assets: [
+    // Window Object
     {
       id: 'window_instance_0',
       type: 'object',
@@ -39,16 +51,7 @@ export const DUMMY_SCENE_1: SceneFrontend = {
       },
     },
 
-    {
-      id: 'sun_light',
-      type: 'directional-light',
-      lightParams: {
-        direction: [0, 0, -1],
-        color: [1, 1, 1],
-        intensity: 0.9,
-      },
-    },
-
+    // Point Lights
     {
       id: 'bulb',
       type: 'point-light',
@@ -56,16 +59,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         position: [-2.33, 0, -3.77],
         color: [1, 1, 1],
         intensity: 1.0,
-      },
-    },
-
-    {
-      id: 'sun_light2',
-      type: 'directional-light',
-      lightParams: {
-        direction: [-1, 0, 0],
-        color: [1, 1, 1],
-        intensity: 1.5,
       },
     },
 
@@ -129,21 +122,9 @@ export const DUMMY_SCENE_1: SceneFrontend = {
       },
     },
 
-    // {
-    //   id: 'rect1',
-    //   type: 'rect-light',
-    //   lightParams: {
-    //     position: [-2.33, 7, -3.77],
-    //     u: [0.3, 0, 0],
-    //     v: [0, 0, 0.3],
-    //     color: [1, 1, 1],
-    //     intensity: 6.0,
-    //   }
-    // },
-
+    // Note: DirectionalLight는 sunSettings에서 자동 생성됨
   ],
-  defaultRoom: 'Bedroom',
-  sunSettings: getDefaultSunSettings(),
+
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -154,52 +135,44 @@ export const DUMMY_SCENE_1: SceneFrontend = {
 export const DUMMY_SCENE_2: SceneFrontend = {
   id: 'dummy_scene_2',
   name: 'Room with Chair',
-  description: 'Test scene with furniture',
-  assets: [
-    // TestScene Instance
-    {
-      id: 'scene_instance_0',
-      type: 'object',
-      meshName: 'TestScene',
-      transform: {
-        position: [0, 0, 0],
-        rotation: [0, 0, 0], // Euler angles in degrees [x, y, z]
-        scale: [1, 1, 1],
-      },
+  description: 'Test scene with furniture and rect light',
+
+  // ✅ Room 설정
+  room: {
+    meshName: 'TestScene',
+    locked: true,
+    transform: {
+      position: [0, 0, 0],
+      rotation: [0, 0, 0],
+      scale: [1, 1, 1],
     },
-    //// PureWindow Instance
-    //{
-    //  id: 'window_instance_0',
-    //  type: 'object',
-    //  meshName: 'PureWindow',
-    //  transform: {
-    //    position: [0, 0, 0],
-    //    rotation: [0, 90, 0], // 90 degrees rotation around Y axis
-    //    scale: [1, 1, 1],
-    //  },
-    //},
-    // Chair Instance
+  },
+
+  // ✅ 태양광 설정
+  sunSettings: getDefaultSunSettings(),
+
+  // ✅ 기본 카메라 위치
+  camera: {
+    position: [4, 3, 4],
+    target: [0, 0.5, 0],
+    fov: 50,
+  },
+
+  // ✅ 사용자 추가 가능한 Asset만
+  assets: [
+    // Chair Object
     {
       id: 'chair_instance_0',
       type: 'object',
       meshName: 'Chair',
       transform: {
         position: [0, -90, 0],
-        rotation: [0, 0, 0], // Euler angles in degrees [x, y, z]
+        rotation: [0, 0, 0],
         scale: [0.02, 0.02, 0.02],
       },
     },
-    // Directional Light
-    {
-      id: 'sun_light',
-      type: 'directional-light',
-      lightParams: {
-        direction: [0, 0, -1],
-        color: [1, 1, 1],
-        intensity: 2.0,
-      },
-    },
-    // Rect Light (주석 해제된 버전)
+
+    // Rect Light
     {
       id: 'rect_light_0',
       type: 'rect-light',
@@ -211,9 +184,10 @@ export const DUMMY_SCENE_2: SceneFrontend = {
         intensity: 50,
       },
     },
+
+    // Note: DirectionalLight는 sunSettings에서 자동 생성됨
   ],
-  defaultRoom: 'TestScene',
-  sunSettings: getDefaultSunSettings(),
+
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

@@ -57,7 +57,7 @@ export default function LightingSimulator() {
               <WebGPURenderer
                 key={`${selectedScene.id}-${selectedScene.updatedAt || Date.now()}`}
                 className="webgpu-canvas"
-                sceneId={selectedScene.id as string}
+                scene={selectedScene}
               />
             )}
           </div>
