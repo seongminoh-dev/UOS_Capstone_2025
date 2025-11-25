@@ -2,29 +2,36 @@
  * Scene Store (Zustand)
  * - 게스트 모드: 메모리 내 Scene 관리 (새로고침 시 소실)
  * - 회원 모드: 서버 API와 동기화
+ * - SceneFrontend 사용 (defaultRoom, sunSettings 포함)
+ * - API 통신 시 자동 직렬화/역직렬화
  */
 
 import { create } from 'zustand';
-import type { Scene } from '../graphics-core/service/Scene';
+import type { SceneFrontend } from '../graphics-core/service/Scene';
 import * as sceneApi from '../lib/api/scene.api';
 import { useAuthStore } from './authStore';
+import {
+  serializeSceneForBackend,
+  deserializeSceneFromBackend,
+  getDefaultSunSettings,
+} from '../utils/SceneSerializer';
 
 interface SceneState {
   // 상태
-  scenes: Scene[]; // 현재 사용 가능한 Scene 목록
+  scenes: SceneFrontend[]; // 현재 사용 가능한 Scene 목록
   isLoading: boolean;
   error: string | null;
 
   // 게스트 모드용 메모리 저장소
-  guestScenes: Scene[];
+  guestScenes: SceneFrontend[];
   guestNextId: number;
 
   // Actions
   loadScenes: () => Promise<void>; // Scene 목록 로드 (게스트: 메모리, 회원: API)
-  createScene: (scene: Omit<Scene, 'id' | 'createdAt' | 'updatedAt' | 'username'>) => Promise<Scene>;
-  updateScene: (scene: Scene) => Promise<Scene>;
+  createScene: (scene: Omit<SceneFrontend, 'id' | 'createdAt' | 'updatedAt' | 'username'>) => Promise<SceneFrontend>;
+  updateScene: (scene: SceneFrontend) => Promise<SceneFrontend>;
   deleteScene: (sceneId: number | string) => Promise<void>;
-  getSceneById: (sceneId: number | string) => Scene | null;
+  getSceneById: (sceneId: number | string) => SceneFrontend | null;
 }
 
 export const useSceneStore = create<SceneState>((set, get) => ({
@@ -47,9 +54,10 @@ export const useSceneStore = create<SceneState>((set, get) => ({
         const { guestScenes } = get();
         set({ scenes: guestScenes, isLoading: false });
       } else {
-        // 회원 모드: API에서 로드
+        // 회원 모드: API에서 로드 후 역직렬화
         const username = authStore.user.username;
-        const scenes = await sceneApi.getScenesByUsername(username);
+        const backendScenes = await sceneApi.getScenesByUsername(username);
+        const scenes = backendScenes.map(deserializeSceneFromBackend);
         set({ scenes, isLoading: false });
       }
     } catch (error: any) {
@@ -68,12 +76,15 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       if (authStore.isGuest || !authStore.user) {
         // 게스트 모드: 메모리에 저장
         const { guestScenes, guestNextId } = get();
-        const newScene: Scene = {
+        const newScene: SceneFrontend = {
           ...sceneData,
           id: guestNextId,
           username: 'guest',
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
+          // 기본값 보장
+          defaultRoom: sceneData.defaultRoom || 'TestScene',
+          sunSettings: sceneData.sunSettings || getDefaultSunSettings(),
         };
 
         const updatedGuestScenes = [...guestScenes, newScene];
@@ -86,17 +97,25 @@ export const useSceneStore = create<SceneState>((set, get) => ({
 
         return newScene;
       } else {
-        // 회원 모드: API로 저장
+        // 회원 모드: API로 저장 (직렬화 후)
         const username = authStore.user.username;
-        const sceneToCreate: Scene = {
+        const frontendScene: SceneFrontend = {
           ...sceneData,
           id: 0, // 서버가 할당
           username,
           createdAt: '',
           updatedAt: '',
+          // 기본값 보장
+          defaultRoom: sceneData.defaultRoom || 'TestScene',
+          sunSettings: sceneData.sunSettings || getDefaultSunSettings(),
         };
 
-        const createdScene = await sceneApi.createScene(sceneToCreate, username);
+        // 백엔드 형식으로 직렬화
+        const backendScene = serializeSceneForBackend(frontendScene);
+        const createdBackendScene = await sceneApi.createScene(backendScene, username);
+
+        // 역직렬화하여 반환
+        const createdScene = deserializeSceneFromBackend(createdBackendScene);
         const { scenes } = get();
         set({ scenes: [...scenes, createdScene], isLoading: false });
 
@@ -119,14 +138,14 @@ export const useSceneStore = create<SceneState>((set, get) => ({
       if (authStore.isGuest || !authStore.user) {
         // 게스트 모드: 메모리 업데이트
         const { guestScenes } = get();
-        const updatedScene = {
+        const updatedScene: SceneFrontend = {
           ...scene,
           updatedAt: new Date().toISOString(),
         };
 
         // Scene이 이미 guestScenes에 있는지 확인
         const existingIndex = guestScenes.findIndex((s) => s.id === scene.id);
-        let updatedGuestScenes: Scene[];
+        let updatedGuestScenes: SceneFrontend[];
 
         if (existingIndex >= 0) {
           // 기존 Scene 업데이트
@@ -146,14 +165,19 @@ export const useSceneStore = create<SceneState>((set, get) => ({
 
         return updatedScene;
       } else {
-        // 회원 모드: API로 업데이트
+        // 회원 모드: API로 업데이트 (직렬화 후)
         const username = authStore.user.username;
-        const updatedScene = await sceneApi.updateScene(
+
+        // 백엔드 형식으로 직렬화
+        const backendScene = serializeSceneForBackend(scene);
+        const updatedBackendScene = await sceneApi.updateScene(
           scene.id as number,
-          scene,
+          backendScene,
           username
         );
 
+        // 역직렬화하여 반환
+        const updatedScene = deserializeSceneFromBackend(updatedBackendScene);
         const { scenes } = get();
         const updatedScenes = scenes.map((s) => (s.id === scene.id ? updatedScene : s));
         set({ scenes: updatedScenes, isLoading: false });

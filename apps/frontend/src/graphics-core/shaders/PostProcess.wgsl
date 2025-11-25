@@ -392,15 +392,14 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let UV_Prev         : vec2<f32> = GetPrevUV(UV_Unjitter);
 
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
-    let N               : f32   = f32( min( UniformBuffer.FrameCount, 256u ) );
+    let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
     let Alpha           : f32   = select(0.0, ( N ) / ( 1 + N ), bHistoryValid);
 
     let CurrentColor    : vec3<f32> = Encode( textureSampleLevel(RadianceTexture, LinearSampler, UV_Unjitter, 0.0).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
     let WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
     
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
-
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(CurrentColor, 1.0));
 
     return;
 }

@@ -1,4 +1,5 @@
-import type { Scene } from '../service/Scene';
+import type { SceneFrontend } from '../service/Scene';
+import { getDefaultSunSettings } from '../../utils/SceneSerializer';
 
 /**
  * Dummy Scene 데이터
@@ -10,7 +11,7 @@ import type { Scene } from '../service/Scene';
  * 현재 하드코딩된 정적 Scene을 Dummy Object로 변환
  * 기존 World.Initialize()의 내용을 Scene 형식으로 표현
  */
-export const DUMMY_SCENE_1: Scene = {
+export const DUMMY_SCENE_1: SceneFrontend = {
   id: 'dummy_scene_1',
   name: 'Test Room Scene',
   description: 'Default test scene with TestScene, Window, and Directional Light',
@@ -141,6 +142,8 @@ export const DUMMY_SCENE_1: Scene = {
     // },
 
   ],
+  defaultRoom: 'Bedroom',
+  sunSettings: getDefaultSunSettings(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -148,7 +151,7 @@ export const DUMMY_SCENE_1: Scene = {
 /**
  * 추가 Dummy Scene (의자 포함)
  */
-export const DUMMY_SCENE_2: Scene = {
+export const DUMMY_SCENE_2: SceneFrontend = {
   id: 'dummy_scene_2',
   name: 'Room with Chair',
   description: 'Test scene with furniture',
@@ -209,6 +212,8 @@ export const DUMMY_SCENE_2: Scene = {
       },
     },
   ],
+  defaultRoom: 'TestScene',
+  sunSettings: getDefaultSunSettings(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -217,4 +222,4 @@ export const DUMMY_SCENE_2: Scene = {
  * 사용 가능한 Dummy Scene 목록
  * TODO: 차후 Backend API로 대체
  */
-export const AVAILABLE_SCENES: Scene[] = [DUMMY_SCENE_1, DUMMY_SCENE_2];
+export const AVAILABLE_SCENES: SceneFrontend[] = [DUMMY_SCENE_1, DUMMY_SCENE_2];

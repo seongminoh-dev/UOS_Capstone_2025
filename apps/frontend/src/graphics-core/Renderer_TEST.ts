@@ -271,8 +271,8 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
     
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -499,8 +499,7 @@ export class Renderer
                 ]
             ),
     
-    
-            ComputePass.Create // Initialize
+            ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
                 ShaderCode_Temporal, 
@@ -529,7 +528,7 @@ export class Renderer
                 ]
             ),
 
-            ComputePass.Create // Initialize
+            ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
                 ShaderCode_Spatial, 
