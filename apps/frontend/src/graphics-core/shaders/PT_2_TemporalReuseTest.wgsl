@@ -388,7 +388,7 @@ fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
 
 fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
 {
-    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Roughness; }
 
     let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
     return TextureORM.g;
@@ -1070,7 +1070,7 @@ fn PathContribution(InPath : Path) -> vec3<f32>
     }
 
 
-    return f;
+    return contribution;
 }
 
 
@@ -1402,9 +1402,9 @@ fn DoHybridShift(
 
     // k 범위 체크
     if (k < 2u || k >= baseRes.length || prevRes.length <= k) {
+        result.length = 0;
         return result;
     }
-
     // prefix 부분의 rSeed는 이전 프레임 걸 사용
     for (var i : u32 = 0u; i < k; i++) {
         result.rSeed[i] = prevRes.rSeed[i];
@@ -1571,6 +1571,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 2. 하이브리드 시프트로 offset path 만들기
     var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);
+    if(!(shiftCompact.length > 0)){
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
     var offsetPath   : Path        = RegeneratePath(curPixel, shiftCompact);
     
     var validOffset = (offsetPath.length >= 2u && shiftCompact.k < offsetPath.length);

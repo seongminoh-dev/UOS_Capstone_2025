@@ -1402,6 +1402,7 @@ fn DoHybridShift(
 
     // k 범위 체크
     if (k < 2u || k >= baseRes.length || prevRes.length <= k) {
+        result.length = 0;
         return result;
     }
 
@@ -1598,6 +1599,9 @@ fn cs_main(@builtin(global_invocation_id) gid : vec3<u32>)
 
             // hybrid shift
             var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
+            if(!(shiftCompact.length > 0)){
+                continue;
+            }
             var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
 
             if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
