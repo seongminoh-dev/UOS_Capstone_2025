@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import type { Quat, Vec4, Vec3, Mat4 }  from 'wgpu-matrix';
 import      { quat, vec4, vec3, mat4 }  from 'wgpu-matrix';
 
-import      { GLTFLoader }                      from 'three/examples/jsm/loaders/GLTFLoader.js';
-import      { mergeGeometries }                 from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import      { GLTFLoader }                      from 'three/addons/loaders/GLTFLoader.js';
+import      { mergeGeometries }                 from 'three/addons/utils/BufferGeometryUtils.js';
 import      { computeBoundsTree, MeshBVH, SAH } from 'three-mesh-bvh';
 
 import      { Utils }                           from './Utils.ts';
@@ -13,7 +13,7 @@ import      { Light, DirectionalLight, PointLight, RectLight } from './Structs.t
 
 /**
  * Converts Euler angles in degrees to a quaternion
- * Uses ZYX rotation order (Yaw-Pitch-Roll)
+ * Uses XYZ rotation order (matches Three.js default)
  * @param eulerDegrees - Euler angles in degrees [x, y, z]
  * @returns Quaternion [x, y, z, w]
  */
@@ -31,9 +31,9 @@ function eulerDegreesToQuat(eulerDegrees: [number, number, number]): Quat
     const qy = quat.fromAxisAngle(vec3.fromValues(0, 1, 0), y);
     const qz = quat.fromAxisAngle(vec3.fromValues(0, 0, 1), z);
 
-    // Combine rotations: Z * Y * X (applied in reverse order)
-    let result = quat.multiply(qy, qx);
-    result = quat.multiply(qz, result);
+    // Combine rotations: X * Y * Z (matches Three.js XYZ order)
+    let result = quat.multiply(qx, qy);
+    result = quat.multiply(result, qz);
 
     return result;
 }
@@ -806,7 +806,16 @@ export class World
                 }
 
                 const position  : Vec3 = vec3.fromValues(...asset.transform.position);
-                const rotation  : Quat = quat.fromEuler(asset.transform.rotation[0], asset.transform.rotation[1], asset.transform.rotation[2], 'zyx');
+
+                // Convert degrees to radians (quat.fromEuler expects radians)
+                const DEG_TO_RAD = Math.PI / 180.0;
+                const rotX = asset.transform.rotation[0] * DEG_TO_RAD;
+                const rotY = asset.transform.rotation[1] * DEG_TO_RAD;
+                const rotZ = asset.transform.rotation[2] * DEG_TO_RAD;
+
+                // Three.js uses right-handed coordinate system, WebGPU might use left-handed
+                // Test with original values first
+                const rotation  : Quat = quat.fromEuler(rotX, rotY, rotZ, 'xyz');
                 const scale     : Vec3 = vec3.fromValues(...asset.transform.scale);
 
                 this.AddInstance(asset.id, asset.meshName, position, rotation, scale);
