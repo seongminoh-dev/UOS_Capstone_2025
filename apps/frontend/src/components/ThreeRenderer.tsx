@@ -124,6 +124,36 @@ export default function ThreeRenderer({
     }
   }, [onSelectionChange, onTransformChange, onLightParamsChange]);
 
+  // C키로 카메라 좌표 콘솔 출력
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'c' || e.key === 'C') {
+        // Input/Textarea에서는 무시
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        if (!managerRef.current) return;
+
+        const camera = managerRef.current.camera;
+        const position = camera.position;
+        const target3D = managerRef.current.controls?.target;
+
+        console.log('=== Camera Info ===');
+        console.log(`Position: [${position.x.toFixed(2)}, ${position.y.toFixed(2)}, ${position.z.toFixed(2)}]`);
+        if (target3D) {
+          console.log(`Target: [${target3D.x.toFixed(2)}, ${target3D.y.toFixed(2)}, ${target3D.z.toFixed(2)}]`);
+        }
+        console.log(`FOV: ${camera.fov}`);
+        console.log('==================');
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   // Scene 데이터 변경 시 모델 로드
   useEffect(() => {
     if (!managerRef.current || !scene) return;

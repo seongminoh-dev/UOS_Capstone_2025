@@ -9,7 +9,19 @@
  * 3. 자동으로 양쪽 렌더러에서 사용 가능
  */
 
-import type { AssetMetadata, AssetCategory, FurnitureSubCategory } from './AssetTypes';
+import type { AssetMetadata, AssetCategory, FurnitureSubCategory, RoomConfig } from './AssetTypes';
+
+/**
+ * 기본 Room 설정 (fallback)
+ */
+const DEFAULT_ROOM_CONFIG: RoomConfig = {
+  scale: [1, 1, 1],
+  camera: {
+    position: [5, 5, 5],
+    target: [0, 1, 0],
+    fov: 45,
+  },
+};
 
 /**
  * 전체 Asset Registry
@@ -17,53 +29,52 @@ import type { AssetMetadata, AssetCategory, FurnitureSubCategory } from './Asset
 export const ASSET_REGISTRY: AssetMetadata[] = [
   // ===== Room (방 구조) =====
   {
-    name: '테스트 룸',
+    name: '벽면이 없는 작은 방',
     meshName: 'TestScene',
     category: 'room',
     icon: '🏠',
     isRequired: true,
-    description: '기본 테스트 방',
+    description: '한쪽 벽면이 없는 작은 방입니다.',
+    roomConfig: {
+      scale: [1, 1, 1],
+      camera: {
+        position: [0.06, 2.12, 7.38],
+        target: [-0.1, -0.22, 0.06],
+        fov: 50,
+      },
+    },
   },
   {
-    name: '침실',
-    meshName: 'Bedroom',
-    category: 'room',
-    icon: '🛏️',
-    description: '침실 구조',
-  },
-  {
-    name: '침실 (편집용)',
+    name: '침실(안방)',
     meshName: 'BedroomEdit',
     category: 'room',
     icon: '🛏️',
-    description: '편집 가능한 침실',
+    description: '침대, 책상, 의자, 옷장을 포함하는 창문이 없는 방입니다.',
+    roomConfig: {
+      scale: [1, 1, 1],
+      camera: {
+        position: [6.83, 3.49, -0.33],
+        target: [0, 0, 0],
+        fov: 60,
+      },
+    },
   },
   {
     name: '욕실',
     meshName: 'Bathroom',
     category: 'room',
     icon: '🚿',
-    description: '욕실 구조',
+    description: '샤워기, 세면대를 포함하는 욕실 방입니다.',
+    roomConfig: {
+      scale: [1, 1, 1],
+      camera: {
+        position: [100, 100, 100],
+        target: [0, 0.5, 0],
+        fov: 50,
+      },
+    },
   },
-  {
-    name: '테스트 씬 1',
-    meshName: 'TestScene1',
-    category: 'room',
-    icon: '🏠',
-  },
-  {
-    name: '테스트 씬 2',
-    meshName: 'TestScene2',
-    category: 'room',
-    icon: '🏠',
-  },
-  {
-    name: '테스트 씬 3',
-    meshName: 'TestScene3',
-    category: 'room',
-    icon: '🏠',
-  },
-
+ 
   // ===== Furniture > Seating (앉는 가구) =====
   {
     name: '의자',
@@ -240,4 +251,13 @@ export function getSubCategoryDisplayName(subCategory: FurnitureSubCategory): st
     other: '기타',
   };
   return names[subCategory];
+}
+
+/**
+ * Room 설정 가져오기 (scale, camera 등)
+ * roomConfig가 없으면 기본값 반환
+ */
+export function getRoomConfig(meshName: string): RoomConfig {
+  const metadata = getAssetMetadata(meshName);
+  return metadata?.roomConfig || DEFAULT_ROOM_CONFIG;
 }

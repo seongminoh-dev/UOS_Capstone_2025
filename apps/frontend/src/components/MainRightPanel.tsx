@@ -12,6 +12,7 @@ import './MainRightPanel.css';
 import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
+import { getAssetMetadata } from '../assets/AssetRegistry';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { useAuthStore } from '../stores/authStore';
 import { isDummyScene } from '../utils/sceneId';
@@ -178,46 +179,14 @@ export default function MainRightPanel({
     setPendingNavigation(null);
   };
 
-  // Scene 생성 모달 상태
-  const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
-  const [newSceneName, setNewSceneName] = useState('');
-  const [newSceneDescription, setNewSceneDescription] = useState('');
-
   // Scene 정보 편집 상태
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [editingSceneName, setEditingSceneName] = useState('');
   const [editingSceneDescription, setEditingSceneDescription] = useState('');
 
-  // 새 Scene 만들기 - 모달 표시
+  // 새 Scene 만들기 - /edit 페이지로 이동 (createNew 모드)
   const handleCreateNewSceneRequest = () => {
-    setNewSceneName(`새 Scene ${scenes.length + 1}`);
-    setNewSceneDescription('');
-    setShowCreateSceneModal(true);
-  };
-
-  // 새 Scene 만들기 - 실제 생성
-  const handleCreateNewScene = () => {
-    if (!newSceneName.trim()) {
-      alert('Scene 이름을 입력해주세요.');
-      return;
-    }
-
-    // 첫 번째 DummyScene을 템플릿으로 사용
-    const template = DUMMY_SCENES[0];
-    if (!template) return;
-
-    const newScene: SceneFrontend = {
-      ...JSON.parse(JSON.stringify(template)),
-      id: `new_${Date.now()}`, // 임시 ID
-      name: newSceneName,
-      description: newSceneDescription,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-
-    setShowCreateSceneModal(false);
-    // /edit 페이지로 리다이렉트
-    navigate('/edit', { state: { scene: newScene } });
+    navigate('/edit', { state: { createNew: true } });
   };
 
   // "저장하고 적용" 버튼 핸들러
@@ -825,6 +794,25 @@ export default function MainRightPanel({
                     <span className="info-value">{currentScene.name}</span>
                   </div>
                   <div className="info-item">
+                    <span className="info-label">방</span>
+                    <span className="info-value">
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </span>
+                  </div>
+                  <div className="info-item">
                     <span className="info-label">설명</span>
                     <span className="info-value">
                       {currentScene.description || '(없음)'}
@@ -848,6 +836,36 @@ export default function MainRightPanel({
                       onChange={(e) => setEditingSceneName(e.target.value)}
                       placeholder="Scene 이름 입력"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">
+                      방
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </label>
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        backgroundColor: '#F9FAFB',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '6px',
+                        color: '#6B7280',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">설명</label>
@@ -1046,78 +1064,6 @@ export default function MainRightPanel({
                 style={{ backgroundColor: '#DC2626' }}
               >
                 삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Scene 생성 모달 */}
-      {showCreateSceneModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => setShowCreateSceneModal(false)}
-        >
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '500px' }}
-          >
-            <div className="modal-header">
-              <h2 className="modal-title">새 Scene 만들기</h2>
-              <button
-                className="modal-close"
-                onClick={() => setShowCreateSceneModal(false)}
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: '16px',
-                }}
-              >
-                <div className="form-group">
-                  <label className="form-label">Scene 이름 *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={newSceneName}
-                    onChange={(e) => setNewSceneName(e.target.value)}
-                    placeholder="Scene 이름을 입력하세요"
-                    autoFocus
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">설명</label>
-                  <textarea
-                    className="form-input"
-                    value={newSceneDescription}
-                    onChange={(e) => setNewSceneDescription(e.target.value)}
-                    placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
-                    rows={4}
-                    style={{ resize: 'vertical' }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-actions">
-              <button
-                className="modal-button modal-cancel"
-                onClick={() => setShowCreateSceneModal(false)}
-              >
-                취소
-              </button>
-              <button
-                className="modal-button modal-save"
-                onClick={handleCreateNewScene}
-              >
-                생성
               </button>
             </div>
           </div>

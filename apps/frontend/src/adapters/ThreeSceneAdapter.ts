@@ -78,9 +78,11 @@ export class ThreeSceneAdapter {
 
     // 5. ✅ 카메라 설정 적용 (있는 경우)
     if (scene.camera) {
-      // TODO: ThreeSceneManager에 setCamera 메서드 추가 필요
-      // manager.setCamera(scene.camera.position, scene.camera.target, scene.camera.fov);
-      console.log('[ThreeSceneAdapter] Camera settings found (not yet applied)');
+      manager.setCamera(
+        scene.camera.position,
+        scene.camera.target,
+        scene.camera.fov
+      );
     }
   }
 

@@ -14,6 +14,21 @@ export type AssetCategory = 'room' | 'furniture' | 'lighting' | 'decoration';
 export type FurnitureSubCategory = 'seating' | 'table' | 'storage' | 'bed' | 'other';
 
 /**
+ * Room 전용 설정 (scale, 카메라 위치 등)
+ */
+export interface RoomConfig {
+  /** Room 스케일 [x, y, z] */
+  scale: [number, number, number];
+
+  /** 기본 카메라 위치 */
+  camera: {
+    position: [number, number, number];
+    target: [number, number, number];
+    fov?: number;
+  };
+}
+
+/**
  * Asset 메타데이터
  */
 export interface AssetMetadata {
@@ -43,4 +58,7 @@ export interface AssetMetadata {
 
   /** 스타일 (선택) */
   style?: string;
+
+  /** Room 전용 설정 (category가 'room'일 때만 사용) */
+  roomConfig?: RoomConfig;
 }
