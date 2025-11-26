@@ -41,7 +41,13 @@ export default function EditPage() {
     loadScenes();
   }, [loadScenes]);
 
+  // 초기 로드 여부 추적
+  const [initialized, setInitialized] = useState(false);
+
   useEffect(() => {
+    // 이미 초기화되었으면 무시
+    if (initialized) return;
+
     // 전달받은 Scene 데이터 확인
     if (location.state?.scene) {
       const passedScene = location.state.scene as SceneFrontend;
@@ -49,12 +55,23 @@ export default function EditPage() {
       // 깊은 복사본으로 편집 시작
       setEditingScene(JSON.parse(JSON.stringify(passedScene)));
       setShowSceneSelectModal(false);
+      setShowCreateSceneModal(false);
       setIsDirty(false);
+      setInitialized(true);
+    } else if (location.state?.createNew) {
+      // 새 Scene 생성 모달 바로 표시
+      setNewSceneName(`새 Scene ${scenes.length + 1}`);
+      setNewSceneDescription('');
+      setSelectedRoomMesh(availableRooms[0]?.meshName || 'TestScene');
+      setShowSceneSelectModal(false);
+      setShowCreateSceneModal(true);
+      setInitialized(true);
     } else {
       // Scene이 없으면 선택 모달 표시
       setShowSceneSelectModal(true);
+      setInitialized(true);
     }
-  }, [location.state]);
+  }, [location.state, scenes.length, availableRooms, initialized]);
 
   // 브라우저 닫기 경고
   useEffect(() => {

@@ -17,53 +17,28 @@ import type { AssetMetadata, AssetCategory, FurnitureSubCategory } from './Asset
 export const ASSET_REGISTRY: AssetMetadata[] = [
   // ===== Room (방 구조) =====
   {
-    name: '테스트 룸',
+    name: '벽면이 없는 작은 방',
     meshName: 'TestScene',
     category: 'room',
     icon: '🏠',
     isRequired: true,
-    description: '기본 테스트 방',
+    description: '한쪽 벽면이 없는 작은 방입니다.',
   },
   {
-    name: '침실',
-    meshName: 'Bedroom',
-    category: 'room',
-    icon: '🛏️',
-    description: '침실 구조',
-  },
-  {
-    name: '침실 (편집용)',
+    name: '침실(안방)',
     meshName: 'BedroomEdit',
     category: 'room',
     icon: '🛏️',
-    description: '편집 가능한 침실',
+    description: '침대, 책상, 의자, 옷장을 포함하는 창문이 없는 방입니다.',
   },
   {
     name: '욕실',
     meshName: 'Bathroom',
     category: 'room',
     icon: '🚿',
-    description: '욕실 구조',
+    description: '샤워기, 세면대를 포함하는 욕실 방입니다.',
   },
-  {
-    name: '테스트 씬 1',
-    meshName: 'TestScene1',
-    category: 'room',
-    icon: '🏠',
-  },
-  {
-    name: '테스트 씬 2',
-    meshName: 'TestScene2',
-    category: 'room',
-    icon: '🏠',
-  },
-  {
-    name: '테스트 씬 3',
-    meshName: 'TestScene3',
-    category: 'room',
-    icon: '🏠',
-  },
-
+ 
   // ===== Furniture > Seating (앉는 가구) =====
   {
     name: '의자',
