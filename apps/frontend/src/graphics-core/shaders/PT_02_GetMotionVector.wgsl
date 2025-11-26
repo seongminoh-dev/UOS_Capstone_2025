@@ -366,10 +366,88 @@ fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<f32>
     return pi;
 }
 
+fn ProjectWorldToScreenPx(worldPos : vec3<f32>, vp : mat4x4<f32>) -> vec2<f32> {
+    let clip : vec4<f32> = vp * vec4<f32>(worldPos, 1.0);
+
+    // 카메라 뒤
+    if (clip.w <= 0.0) {
+        return vec2<f32>(-1.0, -1.0);
+    }
+
+    let ndc : vec3<f32> = clip.xyz / clip.w;
+
+    // NDC가 [-1,1] 밖이면 무효
+    if (any(ndc.xy < vec2<f32>(-1.0, -1.0)) ||
+        any(ndc.xy > vec2<f32>( 1.0,  1.0))) {
+        return vec2<f32>(-1.0, -1.0);
+    }
+
+    // NDC [-1,1] → [0,1] → 픽셀 좌표
+    let screen01 : vec2<f32> = ndc.xy * 0.5 + vec2<f32>(0.5, 0.5);
+    let screenPx : vec2<f32> = screen01 * vec2<f32>(UniformBuffer.Resolution_Source);
+
+    // clamp (1.0 경계 처리)
+    let res : vec2<f32> = vec2<f32>(UniformBuffer.Resolution_Source);
+    return clamp(screenPx, vec2<f32>(0.0, 0.0), res - vec2<f32>(1.0, 1.0));
+}
+
+fn ComputeMotionVector(curPixel : vec2<u32>) -> vec2<f32> {
+    let gbuf : vec4<f32> = textureLoad(G_Buffer, vec2<i32>(curPixel), 0);
+
+    // bit-packed valid/instance/material
+    let packed_r  : u32 = bitcast<u32>(gbuf.r);
+    let valid     : bool = (packed_r & 0x80000000u) != 0u;
+    if (!valid) {
+        return vec2<f32>(0.0, 0.0);
+    }
+
+    // barycentric
+    let alpha : f32 = gbuf.b;
+    let beta  : f32 = gbuf.a;
+    let gamma : f32 = 1.0 - alpha - beta;
+
+    // primitive ID (Pass1에서 bitcast<f32>(PrimitiveID)로 저장)
+    let primitiveID : u32 = bitcast<u32>(gbuf.g);
+
+    // instance ID (bit 16~30)
+    let instanceID : u32 = (packed_r >> 16u) & 0x7FFFu;
+
+    // 히트 포인트 월드 위치 복원
+    let tri        : Triangle = GetTriangleFromPrimitive(primitiveID, instanceID);
+    let hitPos     : vec3<f32> =
+          tri.Vertex_0 * alpha
+        + tri.Vertex_1 * beta
+        + tri.Vertex_2 * gamma;
+
+    // 이전 프레임 스크린 좌표 (prev VP, 지터 없음)
+    let prevPx : vec2<f32> = ProjectWorldToScreenPx(
+        hitPos,
+        UniformBuffer.ViewProjectionMatrix_Prev
+    );
+    if (any(prevPx < vec2<f32>(0.0))) {
+        return vec2<f32>(0.0, 0.0);
+    }
+
+    // 현재 프레임 스크린 좌표 (clean VP, 지터 없음)
+    let curPx : vec2<f32> = ProjectWorldToScreenPx(
+        hitPos,
+        UniformBuffer.ViewProjectionMatrix_Clean
+    );
+    if (any(curPx < vec2<f32>(0.0))) {
+        return vec2<f32>(0.0, 0.0);
+    }
+
+    // 지터는 VP에 안 들어간다고 했으니, 여기서는 따로 보정 안 함.
+    // 나중에 TAA 패스에서 jitter delta 로 처리.
+
+    // convention: 현재 - 이전
+    let mv : vec2<f32> = vec2<f32>(curPixel) - prevPx;
+
+    return mv;
+}
 
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
-
     let curPixel : vec2<u32> = ThreadID.xy;
 
     // 해상도 가드
@@ -378,26 +456,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>) {
         return;
     }
 
-    let prevPixel : vec2<f32> = GetPrevScreenPx(curPixel);
+    let mv : vec2<f32> = ComputeMotionVector(curPixel);
 
-    var mv_i : vec2<f32> = vec2<f32>(0, 0);
-
-    // prevPixel이 유효할 때만 모션 계산
-    if (all(prevPixel >= vec2<f32>(0))) {
-        let cur_i = vec2<f32>(curPixel);
-
-        // convention: prev - cur  또는  cur - prev 중 택 1
-        //mv_i = prevPixel - cur_i;
-        mv_i = cur_i - prevPixel;
-    }
-    let mv_f : vec2<f32> = vec2<f32>(mv_i); // i32 → f32 캐스팅
-    
     textureStore(
         MotionVectorTex,
         vec2<i32>(curPixel),
-        vec4<f32>(mv_f, 0.0, 0.0)
+        vec4<f32>(mv, 0.0, 0.0)
     );
-    
 }
-
-    
