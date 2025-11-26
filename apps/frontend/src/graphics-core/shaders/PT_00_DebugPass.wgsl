@@ -324,7 +324,7 @@ fn GetMetalness(InMaterial : Material, UV : vec2<f32>) -> f32
 
 fn GetRoughness(InMaterial : Material, UV : vec2<f32>) -> f32
 {
-    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Metalness; }
+    if ( InMaterial.TextureID_ORM < 0 ) { return InMaterial.Roughness; }
 
     let TextureORM : vec4<f32> = textureSampleLevel( TexturePool, TextureSampler, UV, InMaterial.TextureID_ORM, 0.0 );
     return TextureORM.g;

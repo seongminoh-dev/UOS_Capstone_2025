@@ -3,8 +3,8 @@ import * as THREE from 'three';
 import type { Quat, Vec4, Vec3, Mat4 }  from 'wgpu-matrix';
 import      { quat, vec4, vec3, mat4 }  from 'wgpu-matrix';
 
-import      { GLTFLoader }                      from 'three/examples/jsm/loaders/GLTFLoader.js';
-import      { mergeGeometries }                 from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import      { GLTFLoader }                      from 'three/addons/loaders/GLTFLoader.js';
+import      { mergeGeometries }                 from 'three/addons/utils/BufferGeometryUtils.js';
 import      { computeBoundsTree, MeshBVH, SAH } from 'three-mesh-bvh';
 
 import      { Utils }                           from './Utils.ts';
@@ -13,7 +13,7 @@ import      { Light, DirectionalLight, PointLight, RectLight } from './Structs.t
 
 /**
  * Converts Euler angles in degrees to a quaternion
- * Uses ZYX rotation order (Yaw-Pitch-Roll)
+ * Uses XYZ rotation order (matches Three.js default)
  * @param eulerDegrees - Euler angles in degrees [x, y, z]
  * @returns Quaternion [x, y, z, w]
  */
@@ -31,9 +31,9 @@ function eulerDegreesToQuat(eulerDegrees: [number, number, number]): Quat
     const qy = quat.fromAxisAngle(vec3.fromValues(0, 1, 0), y);
     const qz = quat.fromAxisAngle(vec3.fromValues(0, 0, 1), z);
 
-    // Combine rotations: Z * Y * X (applied in reverse order)
-    let result = quat.multiply(qy, qx);
-    result = quat.multiply(qz, result);
+    // Combine rotations: X * Y * Z (matches Three.js XYZ order)
+    let result = quat.multiply(qx, qy);
+    result = quat.multiply(result, qz);
 
     return result;
 }
@@ -782,77 +782,7 @@ export class World
         this.Lights = [];
     }
 
-    /**
-     * Scene 객체로부터 World를 구성
-     * TODO: 차후 Backend API에서 받은 Scene 데이터를 이용하여 동적으로 Scene을 로드
-     * @param scene - Scene 객체 (Backend CRUD 호환 구조)
-     */
-    public LoadFromScene(scene : any) : void
-    {
-        // 기존 데이터 초기화
-        this.InstancePool.Clear();
-        //this.Clear();
-
-        // Scene의 모든 Asset을 순회하며 World에 추가
-        for (const asset of scene.assets)
-        {
-            if (asset.type === 'object')
-            {
-                // Object Asset 처리
-                if (!asset.meshName || !asset.transform)
-                {
-                    console.warn(`Object asset ${asset.id} is missing meshName or transform`);
-                    continue;
-                }
-
-                const position  : Vec3 = vec3.fromValues(...asset.transform.position);
-                const rotation  : Quat = quat.fromEuler(asset.transform.rotation[0], asset.transform.rotation[1], asset.transform.rotation[2], 'zyx');
-                const scale     : Vec3 = vec3.fromValues(...asset.transform.scale);
-
-                this.AddInstance(asset.id, asset.meshName, position, rotation, scale);
-            }
-            else if (asset.type === 'directional-light')
-            {
-                // Directional Light 처리
-                if (!asset.lightParams) continue;
-                const params = asset.lightParams as any;
-
-                const direction : Vec3 = vec3.normalize(vec3.fromValues(...params.direction));
-                const color     : Vec3 = vec3.fromValues(...params.color);
-                const intensity : number = params.intensity;
-
-                this.AddDirectionalLight(direction, color, intensity);
-            }
-            else if (asset.type === 'point-light')
-            {
-                // Point Light 처리
-                if (!asset.lightParams) continue;
-                const params = asset.lightParams as any;
-
-                const position  : Vec3 = vec3.fromValues(...params.position);
-                const color     : Vec3 = vec3.fromValues(...params.color);
-                const intensity : number = params.intensity;
-
-                this.AddPointLight(position, color, intensity);
-            }
-            else if (asset.type === 'rect-light')
-            {
-                // Rect Light 처리
-                if (!asset.lightParams) continue;
-                const params = asset.lightParams as any;
-
-                const position  : Vec3 = vec3.fromValues(...params.position);
-                const u         : Vec3 = vec3.fromValues(...params.u);
-                const v         : Vec3 = vec3.fromValues(...params.v);
-                const color     : Vec3 = vec3.fromValues(...params.color);
-                const intensity : number = params.intensity;
-
-                this.AddRectLight(position, u, v, color, intensity);
-            }
-        }
-
-        console.log(`Loaded scene "${scene.name}" with ${scene.assets.length} assets`);
-    }
+    // Note: LoadFromScene() has been removed - use SceneAdapter instead
 
     public GetLightCDFBuffer() : ArrayBuffer
     {

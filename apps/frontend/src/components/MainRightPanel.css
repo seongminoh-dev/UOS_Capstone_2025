@@ -532,6 +532,41 @@
   background-color: #2B2B2B;
 }
 
+/* Scene Card Wrapper (삭제 버튼 포함) */
+.scene-card-wrapper {
+  position: relative;
+}
+
+.scene-delete-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background-color: rgba(255, 255, 255, 0.9);
+  color: #DC2626;
+  font-size: 16px;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  z-index: 10;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.scene-card-wrapper:hover .scene-delete-btn {
+  opacity: 1;
+}
+
+.scene-delete-btn:hover {
+  background-color: #FEE2E2;
+  transform: scale(1.1);
+}
+
 /* Responsive */
 @media (max-width: 1024px) {
   .main-right-panel {

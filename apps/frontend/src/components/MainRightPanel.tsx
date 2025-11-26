@@ -3,20 +3,23 @@
  * - Scene 선택 탭
  * - 조명/가구/정보 탭
  * - /edit 페이지와 일관된 디자인
+ * - SceneRepository (SSOT) 사용
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { Scene, SceneAsset } from '../graphics-core/service/Scene';
-import { AVAILABLE_SCENES } from '../graphics-core/test/DummyScenes';
+import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
+import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
-import { useSceneStore } from '../stores/sceneStore';
+import { getAssetMetadata } from '../assets/AssetRegistry';
+import { useSceneRepository } from '../stores/sceneRepository';
 import { useAuthStore } from '../stores/authStore';
+import { isDummyScene } from '../utils/sceneId';
 
 interface MainRightPanelProps {
-  selectedScene: Scene | null;
-  onSelectScene: (scene: Scene) => void;
+  selectedScene: SceneFrontend | null;
+  onSelectScene: (scene: SceneFrontend | null) => void;
   onSceneChange: () => void; // Scene 변경 감지
 }
 
@@ -31,7 +34,7 @@ export default function MainRightPanel({
   const [activeTab, setActiveTab] = useState<Tab>('lighting');
 
   // Zustand Stores
-  const { scenes, loadScenes, updateScene, createScene } = useSceneStore();
+  const { scenes, loadScenes, saveScene, deleteScene } = useSceneRepository();
   const { user, isGuest } = useAuthStore();
 
   // Instance 편집 모달
@@ -39,35 +42,65 @@ export default function MainRightPanel({
 
   // Save Confirm 모달
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
-  const [pendingNavigation, setPendingNavigation] = useState<Scene | null | 'edit'>(null);
+  const [pendingNavigation, setPendingNavigation] = useState<
+    SceneFrontend | null | 'edit'
+  >(null);
 
   // Scene 변경 감지 상태
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [currentScene, setCurrentScene] = useState<Scene | null>(null);
+  const [currentScene, setCurrentScene] = useState<SceneFrontend | null>(null);
 
-  // 태양 설정 상태
+  // 태양 설정 상태 (Scene의 sunSettings와 동기화)
   const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
-  const [sunTime, setSunTime] = useState(12); // 6~18시
-  const [season, setSeason] = useState('spring');
-  const [roomDirection, setRoomDirection] = useState('south');
+  const [sunTime, setSunTime] = useState(50); // 0-100 (Scene 형식)
+  const [season, setSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
+  const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
 
   // Scene 목록 로드 (초기화)
   useEffect(() => {
     loadScenes();
   }, [loadScenes]);
 
-  // Scene이 변경되면 상태 초기화
+  // Scene이 변경되면 상태 초기화 (sunSettings 동기화 포함)
   useEffect(() => {
     if (selectedScene) {
       setCurrentScene(JSON.parse(JSON.stringify(selectedScene))); // Deep copy
       setHasUnsavedChanges(false);
+
+      // sunSettings에서 UI 상태 초기화
+      const sun = selectedScene.sunSettings;
+      setTimeOfDay(sun.isDaytime ? 'day' : 'night');
+      setSunTime(sun.timeOfDay);
+      setSeason(sun.season);
+      setRoomDirection(sun.roomOrientation);
     }
   }, [selectedScene]);
 
-  // 변경 감지: 태양 설정
+  // 태양 설정 변경 시 currentScene.sunSettings 업데이트
   useEffect(() => {
     if (currentScene) {
-      setHasUnsavedChanges(true);
+      const updatedSunSettings = {
+        timeOfDay: sunTime,
+        isDaytime: timeOfDay === 'day',
+        season: season,
+        roomOrientation: roomDirection,
+      };
+
+      // 값이 실제로 변경되었는지 확인
+      const sun = currentScene.sunSettings;
+      const hasChanged =
+        sun.timeOfDay !== updatedSunSettings.timeOfDay ||
+        sun.isDaytime !== updatedSunSettings.isDaytime ||
+        sun.season !== updatedSunSettings.season ||
+        sun.roomOrientation !== updatedSunSettings.roomOrientation;
+
+      if (hasChanged) {
+        setCurrentScene({
+          ...currentScene,
+          sunSettings: updatedSunSettings,
+        });
+        setHasUnsavedChanges(true);
+      }
     }
   }, [timeOfDay, sunTime, season, roomDirection]);
 
@@ -86,12 +119,12 @@ export default function MainRightPanel({
   };
 
   // Scene 변경 핸들러 (확인 필요)
-  const handleSceneChangeRequest = (newScene: Scene | null) => {
+  const handleSceneChangeRequest = (newScene: SceneFrontend | null) => {
     if (hasUnsavedChanges) {
       setPendingNavigation(newScene);
       setShowSaveConfirm(true);
     } else {
-      onSelectScene(newScene as any);
+      onSelectScene(newScene);
     }
   };
 
@@ -110,15 +143,15 @@ export default function MainRightPanel({
     if (!currentScene) return;
 
     try {
-      // Scene 저장 (게스트: 메모리, 회원: API)
-      await updateScene(currentScene);
+      // Scene 저장 (SceneRepository 사용)
+      const saved = await saveScene(currentScene);
       setHasUnsavedChanges(false);
       setShowSaveConfirm(false);
 
       if (pendingNavigation === 'edit') {
-        navigate('/edit', { state: { scene: currentScene } });
+        navigate('/edit', { state: { scene: saved } });
       } else {
-        onSelectScene(pendingNavigation as any);
+        onSelectScene(pendingNavigation as SceneFrontend | null);
       }
       setPendingNavigation(null);
     } catch (error) {
@@ -135,7 +168,7 @@ export default function MainRightPanel({
     if (pendingNavigation === 'edit') {
       navigate('/edit', { state: { scene: selectedScene } });
     } else {
-      onSelectScene(pendingNavigation as any);
+      onSelectScene(pendingNavigation as SceneFrontend | null);
     }
     setPendingNavigation(null);
   };
@@ -146,44 +179,14 @@ export default function MainRightPanel({
     setPendingNavigation(null);
   };
 
-  // Scene 생성 모달 상태
-  const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
-  const [newSceneName, setNewSceneName] = useState('');
-  const [newSceneDescription, setNewSceneDescription] = useState('');
-
   // Scene 정보 편집 상태
   const [isEditingInfo, setIsEditingInfo] = useState(false);
   const [editingSceneName, setEditingSceneName] = useState('');
   const [editingSceneDescription, setEditingSceneDescription] = useState('');
 
-  // 새 Scene 만들기 - 모달 표시
+  // 새 Scene 만들기 - /edit 페이지로 이동 (createNew 모드)
   const handleCreateNewSceneRequest = () => {
-    setNewSceneName(`새 Scene ${scenes.length + 1}`);
-    setNewSceneDescription('');
-    setShowCreateSceneModal(true);
-  };
-
-  // 새 Scene 만들기 - 실제 생성
-  const handleCreateNewScene = async () => {
-    if (!newSceneName.trim()) {
-      alert('Scene 이름을 입력해주세요.');
-      return;
-    }
-
-    try {
-      // 기본 Scene 템플릿
-      const newScene = await createScene({
-        name: newSceneName,
-        description: newSceneDescription,
-        assets: AVAILABLE_SCENES[0]?.assets || [], // TestScene 기본값
-      });
-      setShowCreateSceneModal(false);
-      // /edit 페이지로 리다이렉트
-      navigate('/edit', { state: { scene: newScene } });
-    } catch (error) {
-      console.error('Failed to create scene:', error);
-      alert('Scene 생성에 실패했습니다.');
-    }
+    navigate('/edit', { state: { createNew: true } });
   };
 
   // "저장하고 적용" 버튼 핸들러
@@ -191,14 +194,13 @@ export default function MainRightPanel({
     if (!currentScene) return;
 
     try {
-      // Scene 저장 (게스트: 메모리, 회원: API)
-      const savedScene = await updateScene(currentScene);
+      // Scene 저장 (SceneRepository 사용)
+      const savedScene = await saveScene(currentScene);
 
       // 로컬 상태 초기화
       setHasUnsavedChanges(false);
 
       // 부모 컴포넌트에 저장된 Scene 전달 (렌더링 업데이트)
-      // 새로운 객체로 전달하여 React가 변경을 감지하도록
       onSelectScene({ ...savedScene });
 
       // 피드백
@@ -210,7 +212,9 @@ export default function MainRightPanel({
   };
 
   // Asset 삭제 핸들러
-  const [deletingAssetId, setDeletingAssetId] = useState<string | number | null>(null);
+  const [deletingAssetId, setDeletingAssetId] = useState<
+    string | number | null
+  >(null);
   const [dontShowDeleteConfirm, setDontShowDeleteConfirm] = useState(false);
 
   const handleDeleteAssetRequest = (assetId: string | number) => {
@@ -263,6 +267,59 @@ export default function MainRightPanel({
     setDontShowDeleteConfirm(false);
   };
 
+  // Scene 삭제 관련 상태
+  const [deletingSceneId, setDeletingSceneId] = useState<
+    number | string | null
+  >(null);
+  const [hiddenDummySceneIds, setHiddenDummySceneIds] = useState<
+    Set<string | number>
+  >(new Set());
+
+  // Scene 삭제 요청 핸들러
+  const handleDeleteSceneRequest = (
+    sceneId: number | string,
+    e?: React.MouseEvent
+  ) => {
+    if (e) {
+      e.stopPropagation();
+    }
+    setDeletingSceneId(sceneId);
+  };
+
+  // Scene 삭제 확인 핸들러
+  const handleConfirmDeleteScene = async () => {
+    if (!deletingSceneId) return;
+
+    try {
+      const isDeletingCurrentScene =
+        selectedScene && selectedScene.id === deletingSceneId;
+
+      // Dummy Scene인지 확인
+      if (isDummyScene(deletingSceneId)) {
+        // Dummy Scene은 로컬 상태로 숨김 처리 (삭제 불가)
+        setHiddenDummySceneIds((prev) => new Set(prev).add(deletingSceneId));
+      } else {
+        // 일반 Scene은 store에서 삭제
+        await deleteScene(deletingSceneId);
+      }
+
+      setDeletingSceneId(null);
+
+      // 렌더링 중인 씬 삭제 시 씬 선택 화면으로
+      if (isDeletingCurrentScene) {
+        onSelectScene(null);
+      }
+    } catch (error) {
+      console.error('Failed to delete scene:', error);
+      alert('Scene 삭제에 실패했습니다.');
+    }
+  };
+
+  // Scene 삭제 취소 핸들러
+  const handleCancelDeleteScene = () => {
+    setDeletingSceneId(null);
+  };
+
   // Scene 정보 편집 시작
   const handleStartEditingInfo = () => {
     if (!currentScene) return;
@@ -296,11 +353,9 @@ export default function MainRightPanel({
 
   // Scene이 선택되지 않았을 때 - Scene 목록 표시
   if (!selectedScene) {
-    // 회원 모드: API에서 가져온 Scene 목록
-    // 게스트 모드: 메모리 + Dummy Scene
-    const availableScenes = isGuest
-      ? [...scenes, ...AVAILABLE_SCENES] // 게스트: 메모리 + Dummy
-      : scenes; // 회원: API만
+    // SceneRepository에서 이미 Dummy + Local/Server Scene이 통합되어 있음
+    // 숨긴 DummyScene만 필터링
+    const availableScenes = scenes.filter((s) => !hiddenDummySceneIds.has(s.id));
 
     return (
       <div className="main-right-panel">
@@ -316,21 +371,29 @@ export default function MainRightPanel({
         <div className="panel-content">
           <div className="scene-list">
             {availableScenes.map((scene) => (
-              <button
-                key={scene.id}
-                className="scene-card"
-                onClick={() => onSelectScene(scene)}
-              >
-                <div className="scene-card-header">
-                  <h3>{scene.name}</h3>
-                  <span className="scene-asset-count">
-                    {scene.assets.length}개 Asset
-                  </span>
-                </div>
-                {scene.description && (
-                  <p className="scene-description">{scene.description}</p>
-                )}
-              </button>
+              <div key={scene.id} className="scene-card-wrapper">
+                <button
+                  className="scene-card"
+                  onClick={() => onSelectScene(scene)}
+                >
+                  <div className="scene-card-header">
+                    <h3>{scene.name}</h3>
+                    <span className="scene-asset-count">
+                      {scene.assets.length}개 Asset
+                    </span>
+                  </div>
+                  {scene.description && (
+                    <p className="scene-description">{scene.description}</p>
+                  )}
+                </button>
+                <button
+                  className="scene-delete-btn"
+                  onClick={(e) => handleDeleteSceneRequest(scene.id, e)}
+                  title="Scene 삭제"
+                >
+                  🗑️
+                </button>
+              </div>
             ))}
           </div>
 
@@ -343,6 +406,53 @@ export default function MainRightPanel({
             </button>
           </div>
         </div>
+
+        {/* Scene 삭제 확인 모달 */}
+        {deletingSceneId && (
+          <div className="modal-overlay" onClick={handleCancelDeleteScene}>
+            <div
+              className="modal-content"
+              onClick={(e) => e.stopPropagation()}
+              style={{ maxWidth: '400px' }}
+            >
+              <div className="modal-header">
+                <h2 className="modal-title">Scene 삭제</h2>
+                <button
+                  className="modal-close"
+                  onClick={handleCancelDeleteScene}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="modal-body" style={{ padding: '24px' }}>
+                <p style={{ margin: 0, lineHeight: '1.6' }}>
+                  이 Scene을 삭제하시겠습니까?
+                  <br />
+                  <span style={{ color: '#DC2626', fontSize: '13px' }}>
+                    이 작업은 되돌릴 수 없습니다.
+                  </span>
+                </p>
+              </div>
+
+              <div className="modal-actions">
+                <button
+                  className="modal-button modal-cancel"
+                  onClick={handleCancelDeleteScene}
+                >
+                  취소
+                </button>
+                <button
+                  className="modal-button modal-save"
+                  onClick={handleConfirmDeleteScene}
+                  style={{ backgroundColor: '#DC2626' }}
+                >
+                  삭제
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -357,13 +467,19 @@ export default function MainRightPanel({
   const testScene = objectAssets.find((a) => a.meshName === 'TestScene');
 
   // 태양은 특별한 DirectionalLight (id로 식별)
-  const sunLight = lightAssets.find((a) =>
-    a.type === 'directional-light' && (a.id === 'sun' || a.id === 'Sun' || a.id === 'sun_light')
+  const sunLight = lightAssets.find(
+    (a) =>
+      a.type === 'directional-light' &&
+      (a.id === 'sun' || a.id === 'Sun' || a.id === 'sun_light')
   );
 
   // 일반 DirectionalLight들 (태양 제외)
-  const directionalLights = lightAssets.filter((a) =>
-    a.type === 'directional-light' && a.id !== 'sun' && a.id !== 'Sun' && a.id !== 'sun_light'
+  const directionalLights = lightAssets.filter(
+    (a) =>
+      a.type === 'directional-light' &&
+      a.id !== 'sun' &&
+      a.id !== 'Sun' &&
+      a.id !== 'sun_light'
   );
 
   return (
@@ -382,19 +498,25 @@ export default function MainRightPanel({
         {/* Tab Navigation */}
         <div className="panel-tab-nav">
           <button
-            className={`panel-tab-button ${activeTab === 'lighting' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'lighting' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('lighting')}
           >
             조명
           </button>
           <button
-            className={`panel-tab-button ${activeTab === 'furniture' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'furniture' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('furniture')}
           >
             가구
           </button>
           <button
-            className={`panel-tab-button ${activeTab === 'info' ? 'active' : ''}`}
+            className={`panel-tab-button ${
+              activeTab === 'info' ? 'active' : ''
+            }`}
             onClick={() => setActiveTab('info')}
           >
             정보
@@ -415,13 +537,17 @@ export default function MainRightPanel({
                 <label className="form-label">시간대</label>
                 <div className="button-group">
                   <button
-                    className={`toggle-button ${timeOfDay === 'day' ? 'active' : ''}`}
+                    className={`toggle-button ${
+                      timeOfDay === 'day' ? 'active' : ''
+                    }`}
                     onClick={() => setTimeOfDay('day')}
                   >
                     낮
                   </button>
                   <button
-                    className={`toggle-button ${timeOfDay === 'night' ? 'active' : ''}`}
+                    className={`toggle-button ${
+                      timeOfDay === 'night' ? 'active' : ''
+                    }`}
                     onClick={() => setTimeOfDay('night')}
                   >
                     밤
@@ -429,22 +555,22 @@ export default function MainRightPanel({
                 </div>
               </div>
 
-              {/* 시간 */}
+              {/* 시간 (0-100 → 0-24시 변환하여 표시) */}
               <div className="form-group">
                 <label className="form-label">
-                  시간: {sunTime}시
+                  시간: {Math.round((sunTime / 100) * 24)}시
                 </label>
                 <input
                   type="range"
-                  min="6"
-                  max="18"
+                  min="0"
+                  max="100"
                   value={sunTime}
                   onChange={(e) => setSunTime(Number(e.target.value))}
                   className="range-slider"
                 />
                 <div className="range-labels">
-                  <span>6시 (일출)</span>
-                  <span>18시 (일몰)</span>
+                  <span>0시 (자정)</span>
+                  <span>24시 (자정)</span>
                 </div>
               </div>
 
@@ -453,7 +579,7 @@ export default function MainRightPanel({
                 <label className="form-label">계절</label>
                 <select
                   value={season}
-                  onChange={(e) => setSeason(e.target.value)}
+                  onChange={(e) => setSeason(e.target.value as 'spring' | 'summer' | 'autumn' | 'winter')}
                   className="form-select"
                 >
                   <option value="spring">봄</option>
@@ -468,7 +594,7 @@ export default function MainRightPanel({
                 <label className="form-label">방 방향</label>
                 <select
                   value={roomDirection}
-                  onChange={(e) => setRoomDirection(e.target.value)}
+                  onChange={(e) => setRoomDirection(e.target.value as 'north' | 'south' | 'east' | 'west')}
                   className="form-select"
                 >
                   <option value="east">동향</option>
@@ -520,7 +646,9 @@ export default function MainRightPanel({
 
               {/* Point Light & Rect Light */}
               {lightAssets
-                .filter((a) => a.type === 'point-light' || a.type === 'rect-light')
+                .filter(
+                  (a) => a.type === 'point-light' || a.type === 'rect-light'
+                )
                 .map((asset) => (
                   <div key={asset.id} className="asset-item clickable">
                     <div
@@ -532,7 +660,9 @@ export default function MainRightPanel({
                         {asset.type === 'point-light' ? '💡' : '🔲'}
                       </span>
                       <span className="asset-name">
-                        {asset.type === 'point-light' ? 'PointLight' : 'RectLight'}
+                        {asset.type === 'point-light'
+                          ? 'PointLight'
+                          : 'RectLight'}
                       </span>
                     </div>
                     <button
@@ -549,18 +679,20 @@ export default function MainRightPanel({
                 ))}
 
               {directionalLights.length === 0 &&
-                lightAssets.filter((a) => a.type === 'point-light' || a.type === 'rect-light').length === 0 && (
-                <div className="empty-state">
-                  추가 조명이 없습니다
-                  <br />
-                  <button
-                    className="link-button"
-                    onClick={handleEditPageRequest}
-                  >
-                    편집 페이지에서 추가하기
-                  </button>
-                </div>
-              )}
+                lightAssets.filter(
+                  (a) => a.type === 'point-light' || a.type === 'rect-light'
+                ).length === 0 && (
+                  <div className="empty-state">
+                    추가 조명이 없습니다
+                    <br />
+                    <button
+                      className="link-button"
+                      onClick={handleEditPageRequest}
+                    >
+                      편집 페이지에서 추가하기
+                    </button>
+                  </div>
+                )}
             </div>
           </div>
         )}
@@ -629,8 +761,17 @@ export default function MainRightPanel({
         {activeTab === 'info' && (
           <div className="tab-section">
             <div className="section-card">
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-                <h3 className="section-title" style={{ margin: 0 }}>Scene 정보</h3>
+              <div
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '16px',
+                }}
+              >
+                <h3 className="section-title" style={{ margin: 0 }}>
+                  Scene 정보
+                </h3>
                 {!isEditingInfo && (
                   <button
                     className="link-button"
@@ -653,12 +794,39 @@ export default function MainRightPanel({
                     <span className="info-value">{currentScene.name}</span>
                   </div>
                   <div className="info-item">
+                    <span className="info-label">방</span>
+                    <span className="info-value">
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </span>
+                  </div>
+                  <div className="info-item">
                     <span className="info-label">설명</span>
-                    <span className="info-value">{currentScene.description || '(없음)'}</span>
+                    <span className="info-value">
+                      {currentScene.description || '(없음)'}
+                    </span>
                   </div>
                 </div>
               ) : (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '16px',
+                  }}
+                >
                   <div className="form-group">
                     <label className="form-label">Scene 이름</label>
                     <input
@@ -670,11 +838,43 @@ export default function MainRightPanel({
                     />
                   </div>
                   <div className="form-group">
+                    <label className="form-label">
+                      방
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </label>
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        backgroundColor: '#F9FAFB',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '6px',
+                        color: '#6B7280',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                    </div>
+                  </div>
+                  <div className="form-group">
                     <label className="form-label">설명</label>
                     <textarea
                       className="form-input"
                       value={editingSceneDescription}
-                      onChange={(e) => setEditingSceneDescription(e.target.value)}
+                      onChange={(e) =>
+                        setEditingSceneDescription(e.target.value)
+                      }
                       placeholder="Scene 설명 입력"
                       rows={3}
                       style={{ resize: 'vertical' }}
@@ -705,7 +905,9 @@ export default function MainRightPanel({
               <div className="info-grid">
                 <div className="info-item">
                   <span className="info-label">총 Asset 수</span>
-                  <span className="info-value">{selectedScene.assets.length}개</span>
+                  <span className="info-value">
+                    {selectedScene.assets.length}개
+                  </span>
                 </div>
                 <div className="info-item">
                   <span className="info-label">오브젝트</span>
@@ -753,7 +955,7 @@ export default function MainRightPanel({
           onClick={handleSaveAndRender}
           style={{
             opacity: hasUnsavedChanges ? 1 : 0.5,
-            cursor: hasUnsavedChanges ? 'pointer' : 'not-allowed'
+            cursor: hasUnsavedChanges ? 'pointer' : 'not-allowed',
           }}
         >
           {hasUnsavedChanges ? '저장하고 적용' : '렌더링'}
@@ -868,60 +1070,59 @@ export default function MainRightPanel({
         </div>
       )}
 
-      {/* Scene 생성 모달 */}
-      {showCreateSceneModal && (
-        <div className="modal-overlay" onClick={() => setShowCreateSceneModal(false)}>
+      {/* Scene 삭제 확인 모달 */}
+      {deletingSceneId && (
+        <div className="modal-overlay" onClick={handleCancelDeleteScene}>
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '500px' }}
+            style={{ maxWidth: '450px' }}
           >
             <div className="modal-header">
-              <h2 className="modal-title">새 Scene 만들기</h2>
-              <button className="modal-close" onClick={() => setShowCreateSceneModal(false)}>
+              <h2 className="modal-title">Scene 삭제</h2>
+              <button className="modal-close" onClick={handleCancelDeleteScene}>
                 ✕
               </button>
             </div>
 
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Scene 이름 *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={newSceneName}
-                    onChange={(e) => setNewSceneName(e.target.value)}
-                    placeholder="Scene 이름을 입력하세요"
-                    autoFocus
-                  />
-                </div>
-                <div className="form-group">
-                  <label className="form-label">설명</label>
-                  <textarea
-                    className="form-input"
-                    value={newSceneDescription}
-                    onChange={(e) => setNewSceneDescription(e.target.value)}
-                    placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
-                    rows={4}
-                    style={{ resize: 'vertical' }}
-                  />
-                </div>
-              </div>
+            <div className="modal-body">
+              <p style={{ margin: 0, marginBottom: '16px', lineHeight: '1.6' }}>
+                이 Scene을 삭제하시겠습니까?
+                <br />
+                <span style={{ color: '#DC2626', fontSize: '13px' }}>
+                  이 작업은 되돌릴 수 없습니다.
+                </span>
+              </p>
+              {selectedScene && selectedScene.id === deletingSceneId && (
+                <p
+                  style={{
+                    margin: 0,
+                    padding: '12px',
+                    backgroundColor: '#FEF3C7',
+                    borderRadius: '6px',
+                    fontSize: '13px',
+                    color: '#92400E',
+                  }}
+                >
+                  현재 렌더링 중인 Scene입니다. 삭제 시 Scene 선택 화면으로
+                  이동합니다.
+                </p>
+              )}
             </div>
 
             <div className="modal-actions">
               <button
                 className="modal-button modal-cancel"
-                onClick={() => setShowCreateSceneModal(false)}
+                onClick={handleCancelDeleteScene}
               >
                 취소
               </button>
               <button
                 className="modal-button modal-save"
-                onClick={handleCreateNewScene}
+                onClick={handleConfirmDeleteScene}
+                style={{ backgroundColor: '#DC2626' }}
               >
-                생성
+                삭제
               </button>
             </div>
           </div>

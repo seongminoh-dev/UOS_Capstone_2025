@@ -1,8 +1,8 @@
 import * as THREE from 'three';
 import type { Vec3, Vec4, Mat4, Quat }          from 'wgpu-matrix';
 import      { vec3, quat, mat4, vec4 }          from 'wgpu-matrix';
-import      { GLTFLoader }                      from 'three/examples/jsm/loaders/GLTFLoader.js';
-import      { mergeGeometries }                 from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import      { GLTFLoader }                      from 'three/addons/loaders/GLTFLoader.js';
+import      { mergeGeometries }                 from 'three/addons/utils/BufferGeometryUtils.js';
 import      { computeBoundsTree, MeshBVH, SAH } from 'three-mesh-bvh';
 
 export class Light

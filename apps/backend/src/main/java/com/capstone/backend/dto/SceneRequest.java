@@ -27,6 +27,22 @@ public class SceneRequest {
     @Size(max = 255, message = "Thumbnail URL must be less than 255 characters")
     private String thumbnailUrl;
 
+    @Schema(description = "Room 설정 JSON (RoomSettings)",
+            example = "{\"meshName\":\"Bedroom\",\"locked\":true,\"transform\":{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}}",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "Room JSON is required")
+    private String room; // JSON string of RoomSettings
+
+    @Schema(description = "태양광 설정 JSON (SunSettings)",
+            example = "{\"timeOfDay\":50,\"isDaytime\":true,\"season\":\"summer\",\"roomOrientation\":\"south\"}",
+            requiredMode = Schema.RequiredMode.REQUIRED)
+    @NotBlank(message = "SunSettings JSON is required")
+    private String sunSettings; // JSON string of SunSettings
+
+    @Schema(description = "카메라 설정 JSON (CameraSettings, optional)",
+            example = "{\"position\":[5,5,5],\"target\":[0,1,0],\"fov\":45}")
+    private String camera; // JSON string of CameraSettings (nullable)
+
     @Schema(description = "Scene assets JSON 문자열 (SceneAsset[] 배열)",
             example = "[{\"id\":\"chair_0\",\"type\":\"object\",\"meshName\":\"Chair\",\"transform\":{\"position\":[0,0,0],\"rotation\":[0,0,0],\"scale\":[1,1,1]}}]",
             requiredMode = Schema.RequiredMode.REQUIRED)

@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebGPUEngine } from '../graphics-core/service';
+import { SceneAdapter } from '../adapters/SceneAdapter';
+import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
 interface WebGPURendererProps {
   className?: string;
   width?: number;
   height?: number;
-  sceneId?: string;
+  scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
 }
 
@@ -16,7 +18,7 @@ export default function WebGPURenderer({
   className = '',
   width = 800,
   height = 600,
-  sceneId,
+  scene,
   onCameraUpdate,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -27,6 +29,13 @@ export default function WebGPURenderer({
   const [canvasSize, setCanvasSize] = useState({ width, height });
   const [cameraPosition, setCameraPosition] = useState<{ x: number; y: number; z: number } | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true);
+  const [isTooSmall, setIsTooSmall] = useState<boolean>(false);
+  const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
+
+  // 최소 렌더링 크기
+  const MIN_WIDTH = 512;
+  const MIN_HEIGHT = 384;
 
   // 반응형 크기 처리 (ResizeObserver)
   useEffect(() => {
@@ -62,7 +71,7 @@ export default function WebGPURenderer({
     };
   }, []);
 
-  // 초기 렌더러 설정
+  // 초기 렌더러 설정 (mount 시 1회만 실행)
   useEffect(() => {
     let isMounted = true;
 
@@ -86,8 +95,8 @@ export default function WebGPURenderer({
           }
         };
 
-        // Initialize and start
-        await engine.initialize(canvasSize.width, canvasSize.height, sceneId);
+        // ✅ Initialize engine (no sceneId)
+        await engine.initialize(canvasSize.width, canvasSize.height);
 
         if (!isMounted) {
           engine.dispose();
@@ -95,7 +104,12 @@ export default function WebGPURenderer({
         }
 
         engineRef.current = engine;
-        engine.start();
+        // Note: engine.start()는 Scene 로드 후에 호출됨
+
+        // 초기화 완료
+        if (isMounted) {
+          setIsInitialized(true);
+        }
       } catch (err) {
         console.error('Error initializing WebGPU engine:', err);
         if (isMounted) {
@@ -109,16 +123,26 @@ export default function WebGPURenderer({
     // Cleanup
     return () => {
       isMounted = false;
+      setIsInitialized(false);
       if (engineRef.current) {
         engineRef.current.dispose();
         engineRef.current = null;
       }
     };
-  }, [canvasSize.width, canvasSize.height]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // ✅ mount 시 1회만 실행, canvasSize 변경은 resize useEffect가 처리
 
   // Canvas 크기 변경 시 리사이즈
   useEffect(() => {
     if (!engineRef.current) return;
+
+    // 최소 크기 체크
+    if (canvasSize.width < MIN_WIDTH || canvasSize.height < MIN_HEIGHT) {
+      setIsTooSmall(true);
+      return; // 너무 작으면 resize 호출하지 않음
+    }
+
+    setIsTooSmall(false);
 
     async function resizeEngine() {
       try {
@@ -129,23 +153,81 @@ export default function WebGPURenderer({
     }
 
     resizeEngine();
-  }, [canvasSize]);
+  }, [canvasSize, MIN_WIDTH, MIN_HEIGHT]);
 
-  // sceneId 변경 시 Scene 전환
+  // ✅ Scene 변경 시 로드 (SceneAdapter 사용)
   useEffect(() => {
-    if (!sceneId || !engineRef.current) return;
+    if (!scene || !engineRef.current || !isInitialized) return;
 
-    async function switchScene() {
+    async function loadScene() {
       try {
-        await engineRef.current!.switchScene(sceneId!);
+        const engine = engineRef.current!;
+        const world = engine.getWorld();
+
+        // Scene이 SceneFrontend인지 확인
+        const sceneFrontend = scene as SceneFrontend;
+        if (!sceneFrontend.room || !sceneFrontend.sunSettings) {
+          console.warn('Scene is not SceneFrontend, skipping load');
+          return;
+        }
+
+        console.log(`Loading scene: ${scene.name}`);
+
+        // 1. Mesh 이름 추출
+        const meshNames = SceneAdapter.extractMeshNames(sceneFrontend);
+
+        // 2. Mesh 로드 및 MeshPool에 등록
+        for (const meshName of meshNames) {
+          // 이미 등록된 Mesh는 스킵
+          if (world.MeshPool.GetID(meshName) !== -1) {
+            console.log(`Mesh already loaded: ${meshName}`);
+            continue;
+          }
+
+          try {
+            const rawMesh = await world.LoadRawMesh(meshName);
+            world.CreateMesh(meshName, rawMesh);
+            console.log(`Mesh loaded and registered: ${meshName}`);
+          } catch (err) {
+            console.warn(`Failed to load mesh: ${meshName}`, err);
+          }
+        }
+
+        // 3. SceneAdapter를 통해 World에 Scene 로드
+        SceneAdapter.loadSceneToWorld(sceneFrontend, world);
+
+        // 4. Renderer 재초기화
+        const renderer = engine.getRenderer();
+        if (renderer) {
+          await renderer.Initialize(world);
+        }
+
+        // 5. InputController에 카메라 설정
+        engine.setupInputController();
+
+        // 6. Scene의 카메라 설정 적용
+        const cameraSettings = SceneAdapter.getCameraSettings(sceneFrontend);
+        engine.setCamera(
+          cameraSettings.position,
+          cameraSettings.target,
+          cameraSettings.fov
+        );
+
+        // 7. 렌더 루프 시작 (이미 실행 중이면 무시됨)
+        engine.start();
+
+        // 8. Scene 로드 완료
+        setIsSceneLoaded(true);
+
+        console.log(`Scene loaded successfully: ${scene.name}`);
       } catch (err) {
-        console.error('Error switching scene:', err);
-        setError(err instanceof Error ? err.message : 'Failed to switch scene');
+        console.error('Error loading scene:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load scene');
       }
     }
 
-    switchScene();
-  }, [sceneId]);
+    loadScene();
+  }, [scene, isInitialized]);
 
   // 키보드 단축키로 디버그 정보 토글 (백틱 키 또는 Ctrl+Shift+H)
   useEffect(() => {
@@ -199,11 +281,97 @@ export default function WebGPURenderer({
         ref={canvasRef}
         width={canvasSize.width}
         height={canvasSize.height}
-        style={{ display: 'block', width: '100%', height: '100%', cursor: 'pointer' }}
+        style={{
+          display: 'block',
+          width: '100%',
+          height: '100%',
+          cursor: 'pointer',
+          filter: isTooSmall ? 'blur(3px)' : 'none',
+        }}
       />
 
+      {/* 크기 부족 경고 (중앙) */}
+      {isTooSmall && (
+        <div
+          style={{
+            position: 'absolute',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            backgroundColor: 'rgba(0, 0, 0, 0.9)',
+            color: '#ffaa00',
+            padding: '20px 30px',
+            borderRadius: '8px',
+            fontFamily: 'monospace',
+            fontSize: '14px',
+            textAlign: 'center',
+            border: '2px solid #ffaa00',
+            boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
+            zIndex: 100,
+          }}
+        >
+          <div style={{ fontSize: '24px', marginBottom: '10px' }}>⚠️</div>
+          <div style={{ fontWeight: 'bold', marginBottom: '8px' }}>화면이 너무 작습니다</div>
+          <div style={{ fontSize: '12px', color: '#ccc' }}>
+            최소 크기: {MIN_WIDTH} × {MIN_HEIGHT}
+          </div>
+          <div style={{ fontSize: '12px', color: '#ccc', marginTop: '4px' }}>
+            현재 크기: {canvasSize.width} × {canvasSize.height}
+          </div>
+          <div style={{ marginTop: '12px', fontSize: '13px', color: '#ffaa00' }}>
+            창을 키워주세요
+          </div>
+        </div>
+      )}
+
+      {/* 로딩 오버레이 (초기화 또는 Scene 로드 중) */}
+      {(!isInitialized || !isSceneLoaded) && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(26, 26, 26, 0.95)',
+            color: '#00aaff',
+            fontFamily: 'monospace',
+            zIndex: 200,
+          }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                width: '50px',
+                height: '50px',
+                border: '4px solid rgba(0, 170, 255, 0.2)',
+                borderTop: '4px solid #00aaff',
+                borderRadius: '50%',
+                margin: '0 auto 20px',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+              {!isInitialized ? 'WebGPU 초기화 중...' : 'Scene 로딩 중...'}
+            </div>
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+              잠시만 기다려주세요
+            </div>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      )}
+
       {/* Debug Info - FPS & Camera (우측 상단) */}
-      {showDebugInfo && (
+      {showDebugInfo && !isTooSmall && (
         <div
           style={{
             position: 'absolute',

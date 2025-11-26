@@ -29,6 +29,9 @@ public class SceneService {
                 .name(request.getName())
                 .description(request.getDescription())
                 .thumbnailUrl(request.getThumbnailUrl())
+                .room(request.getRoom())
+                .sunSettings(request.getSunSettings())
+                .camera(request.getCamera())
                 .assets(request.getAssets())
                 .user(user)
                 .build();
@@ -71,6 +74,9 @@ public class SceneService {
         scene.setName(request.getName());
         scene.setDescription(request.getDescription());
         scene.setThumbnailUrl(request.getThumbnailUrl());
+        scene.setRoom(request.getRoom());
+        scene.setSunSettings(request.getSunSettings());
+        scene.setCamera(request.getCamera());
         scene.setAssets(request.getAssets());
 
         Scene updatedScene = sceneRepository.save(scene);
@@ -96,6 +102,9 @@ public class SceneService {
                 .name(scene.getName())
                 .description(scene.getDescription())
                 .thumbnailUrl(scene.getThumbnailUrl())
+                .room(scene.getRoom())
+                .sunSettings(scene.getSunSettings())
+                .camera(scene.getCamera())
                 .assets(scene.getAssets())
                 .username(scene.getUser().getUsername())
                 .createdAt(scene.getCreatedAt())
