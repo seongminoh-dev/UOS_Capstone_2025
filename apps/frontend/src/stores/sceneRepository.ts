@@ -39,16 +39,72 @@ export type { SceneId };
 const LOCAL_STORAGE_KEY = 'local_scenes';
 
 /**
+ * Scene 데이터가 유효한 SceneFrontend 형식인지 검증
+ */
+function isValidSceneFrontend(scene: unknown): scene is SceneFrontend {
+  if (!scene || typeof scene !== 'object') return false;
+
+  const s = scene as Record<string, unknown>;
+
+  // 필수 필드 검증
+  if (!s.id || !s.name || !Array.isArray(s.assets)) return false;
+
+  // SceneFrontend 필수 필드 검증
+  if (!s.room || typeof s.room !== 'object') return false;
+  if (!s.sunSettings || typeof s.sunSettings !== 'object') return false;
+
+  // room 필수 필드 검증
+  const room = s.room as Record<string, unknown>;
+  if (!room.meshName || !room.transform) return false;
+
+  // sunSettings 필수 필드 검증
+  const sun = s.sunSettings as Record<string, unknown>;
+  if (typeof sun.timeOfDay !== 'number' || typeof sun.isDaytime !== 'boolean') return false;
+
+  return true;
+}
+
+/**
  * localStorage에서 LocalScenes 로드
+ * - 유효하지 않은 Scene은 필터링하여 제외
+ * - 손상된 데이터 발견 시 정리
  */
 function loadLocalScenes(): SceneFrontend[] {
   try {
     const stored = localStorage.getItem(LOCAL_STORAGE_KEY);
     if (stored) {
-      return JSON.parse(stored) as SceneFrontend[];
+      const parsed = JSON.parse(stored);
+
+      if (!Array.isArray(parsed)) {
+        console.warn('Invalid local_scenes format, clearing...');
+        localStorage.removeItem(LOCAL_STORAGE_KEY);
+        return [];
+      }
+
+      // 유효한 Scene만 필터링
+      const validScenes = parsed.filter((scene): scene is SceneFrontend => {
+        const isValid = isValidSceneFrontend(scene);
+        if (!isValid) {
+          console.warn('Invalid scene detected and filtered:', scene?.id || 'unknown');
+        }
+        return isValid;
+      });
+
+      // 필터링된 Scene이 있으면 localStorage 업데이트
+      if (validScenes.length !== parsed.length) {
+        console.log(`Cleaned ${parsed.length - validScenes.length} invalid scenes from localStorage`);
+        if (validScenes.length > 0) {
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(validScenes));
+        } else {
+          localStorage.removeItem(LOCAL_STORAGE_KEY);
+        }
+      }
+
+      return validScenes;
     }
   } catch (error) {
-    console.error('Failed to load local scenes:', error);
+    console.error('Failed to load local scenes, clearing corrupted data:', error);
+    localStorage.removeItem(LOCAL_STORAGE_KEY);
   }
   return [];
 }
