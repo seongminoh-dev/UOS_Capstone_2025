@@ -273,6 +273,9 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+    
+            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -499,11 +502,11 @@ export class Renderer
                 ]
             ),
     
-    
-            ComputePass.Create // Initialize
+
+            ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_Temporal_Test, 
+                ShaderCode_Temporal, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -514,6 +517,8 @@ export class Renderer
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
 
                 ],
                 [   // Read GPUSampler
@@ -528,7 +533,8 @@ export class Renderer
                 ]
             ),
 
-            ComputePass.Create // Initialize
+
+            ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
                 ShaderCode_Spatial, 
