@@ -26,6 +26,15 @@ public class SceneResponse {
     @Schema(description = "썸네일 URL", example = "https://example.com/thumbnail.jpg")
     private String thumbnailUrl;
 
+    @Schema(description = "Room 설정 JSON")
+    private String room; // JSON string of RoomSettings
+
+    @Schema(description = "태양광 설정 JSON")
+    private String sunSettings; // JSON string of SunSettings
+
+    @Schema(description = "카메라 설정 JSON")
+    private String camera; // JSON string of CameraSettings (nullable)
+
     @Schema(description = "Scene assets JSON 문자열")
     private String assets; // JSON string
 

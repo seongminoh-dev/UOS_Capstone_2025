@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebGPUEngine } from '../graphics-core/service';
+import { SceneAdapter } from '../adapters/SceneAdapter';
+import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
 interface WebGPURendererProps {
   className?: string;
   width?: number;
   height?: number;
-  sceneId?: string;
+  scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
 }
 
@@ -16,7 +18,7 @@ export default function WebGPURenderer({
   className = '',
   width = 800,
   height = 600,
-  sceneId,
+  scene,
   onCameraUpdate,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -29,6 +31,7 @@ export default function WebGPURenderer({
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true);
   const [isTooSmall, setIsTooSmall] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
+  const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
 
   // 최소 렌더링 크기
   const MIN_WIDTH = 512;
@@ -92,8 +95,8 @@ export default function WebGPURenderer({
           }
         };
 
-        // Initialize and start
-        await engine.initialize(canvasSize.width, canvasSize.height, sceneId);
+        // ✅ Initialize engine (no sceneId)
+        await engine.initialize(canvasSize.width, canvasSize.height);
 
         if (!isMounted) {
           engine.dispose();
@@ -101,7 +104,7 @@ export default function WebGPURenderer({
         }
 
         engineRef.current = engine;
-        engine.start();
+        // Note: engine.start()는 Scene 로드 후에 호출됨
 
         // 초기화 완료
         if (isMounted) {
@@ -152,21 +155,71 @@ export default function WebGPURenderer({
     resizeEngine();
   }, [canvasSize, MIN_WIDTH, MIN_HEIGHT]);
 
-  // sceneId 변경 시 Scene 전환
+  // ✅ Scene 변경 시 로드 (SceneAdapter 사용)
   useEffect(() => {
-    if (!sceneId || !engineRef.current) return;
+    if (!scene || !engineRef.current || !isInitialized) return;
 
-    async function switchScene() {
+    async function loadScene() {
       try {
-        await engineRef.current!.switchScene(sceneId!);
+        const engine = engineRef.current!;
+        const world = engine.getWorld();
+
+        // Scene이 SceneFrontend인지 확인
+        const sceneFrontend = scene as SceneFrontend;
+        if (!sceneFrontend.room || !sceneFrontend.sunSettings) {
+          console.warn('Scene is not SceneFrontend, skipping load');
+          return;
+        }
+
+        console.log(`Loading scene: ${scene.name}`);
+
+        // 1. Mesh 이름 추출
+        const meshNames = SceneAdapter.extractMeshNames(sceneFrontend);
+
+        // 2. Mesh 로드 및 MeshPool에 등록
+        for (const meshName of meshNames) {
+          // 이미 등록된 Mesh는 스킵
+          if (world.MeshPool.GetID(meshName) !== -1) {
+            console.log(`Mesh already loaded: ${meshName}`);
+            continue;
+          }
+
+          try {
+            const rawMesh = await world.LoadRawMesh(meshName);
+            world.CreateMesh(meshName, rawMesh);
+            console.log(`Mesh loaded and registered: ${meshName}`);
+          } catch (err) {
+            console.warn(`Failed to load mesh: ${meshName}`, err);
+          }
+        }
+
+        // 3. SceneAdapter를 통해 World에 Scene 로드
+        SceneAdapter.loadSceneToWorld(sceneFrontend, world);
+
+        // 4. Renderer 재초기화
+        const renderer = engine.getRenderer();
+        if (renderer) {
+          await renderer.Initialize(world);
+        }
+
+        // 5. InputController에 카메라 설정
+        engine.setupInputController();
+
+        // 6. 렌더 루프 시작 (이미 실행 중이면 무시됨)
+        engine.start();
+
+        // 7. Scene 로드 완료
+        setIsSceneLoaded(true);
+
+        console.log(`Scene loaded successfully: ${scene.name}`);
       } catch (err) {
-        console.error('Error switching scene:', err);
-        setError(err instanceof Error ? err.message : 'Failed to switch scene');
+        console.error('Error loading scene:', err);
+        setError(err instanceof Error ? err.message : 'Failed to load scene');
       }
     }
 
-    switchScene();
-  }, [sceneId]);
+    loadScene();
+  }, [scene, isInitialized]);
 
   // 키보드 단축키로 디버그 정보 토글 (백틱 키 또는 Ctrl+Shift+H)
   useEffect(() => {
@@ -263,8 +316,8 @@ export default function WebGPURenderer({
         </div>
       )}
 
-      {/* 로딩 오버레이 (초기화 중) */}
-      {!isInitialized && (
+      {/* 로딩 오버레이 (초기화 또는 Scene 로드 중) */}
+      {(!isInitialized || !isSceneLoaded) && (
         <div
           style={{
             position: 'absolute',
@@ -293,7 +346,9 @@ export default function WebGPURenderer({
                 animation: 'spin 1s linear infinite',
               }}
             />
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>WebGPU 초기화 중...</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
+              {!isInitialized ? 'WebGPU 초기화 중...' : 'Scene 로딩 중...'}
+            </div>
             <div style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
               잠시만 기다려주세요
             </div>

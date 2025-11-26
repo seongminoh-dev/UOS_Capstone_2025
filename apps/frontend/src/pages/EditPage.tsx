@@ -3,10 +3,12 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
 import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
-import { useSceneStore } from '../stores/sceneStore';
-import { AVAILABLE_SCENES } from '../graphics-core/test/DummyScenes';
+import { useSceneRepository } from '../stores/sceneRepository';
+import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
+import { isDummyScene } from '../utils/sceneId';
 import { getFurnitureBySubCategory, getAssetsByCategory, getAssetMetadata, isRequiredAsset } from '../assets/AssetRegistry';
 import type { FurnitureSubCategory } from '../assets/AssetTypes';
+import type { SceneId } from '../stores/sceneRepository';
 import './EditPage.css';
 
 export default function EditPage() {
@@ -14,12 +16,16 @@ export default function EditPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<'info' | 'objects' | 'lights'>('info');
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
-  const [scene, setScene] = useState<SceneFrontend | null>(null);
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
 
-  // Scene Store
-  const { updateScene, createScene, scenes, loadScenes } = useSceneStore();
+  // SceneRepository (단일 진실 공급원)
+  const { scenes, loadScenes, cloneForEdit, saveScene } = useSceneRepository();
+
+  // 편집 세션 상태
+  const [currentSceneId, setCurrentSceneId] = useState<SceneId | null>(null);
+  const [editingScene, setEditingScene] = useState<SceneFrontend | null>(null);
+  const [isDirty, setIsDirty] = useState(false);
 
   useEffect(() => {
     // Scene 목록 로드
@@ -29,102 +35,154 @@ export default function EditPage() {
   useEffect(() => {
     // 전달받은 Scene 데이터 확인
     if (location.state?.scene) {
-      setScene(location.state.scene as SceneFrontend);
+      const passedScene = location.state.scene as SceneFrontend;
+      setCurrentSceneId(passedScene.id);
+      // 깊은 복사본으로 편집 시작
+      setEditingScene(JSON.parse(JSON.stringify(passedScene)));
       setShowSceneSelectModal(false);
+      setIsDirty(false);
     } else {
       // Scene이 없으면 선택 모달 표시
       setShowSceneSelectModal(true);
     }
   }, [location.state]);
 
-  // 새 Scene 생성
-  const handleCreateNewScene = async () => {
-    try {
-      const newScene = await createScene({
-        name: `새 Scene ${scenes.length + 1}`,
-        description: '새로 생성된 Scene입니다.',
-        assets: AVAILABLE_SCENES[0]?.assets || [],
-        defaultRoom: AVAILABLE_SCENES[0]?.defaultRoom || 'TestScene',
-        sunSettings: AVAILABLE_SCENES[0]?.sunSettings,
-      });
-      setScene(newScene);
-      setShowSceneSelectModal(false);
-    } catch (error) {
-      console.error('Failed to create scene:', error);
-      alert('Scene 생성에 실패했습니다.');
-    }
+  // 브라우저 닫기 경고
+  useEffect(() => {
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (isDirty) {
+        e.preventDefault();
+        e.returnValue = '저장하지 않은 변경사항이 있습니다.';
+      }
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [isDirty]);
+
+  // 새 Scene 생성 (템플릿 기반)
+  const handleCreateNewScene = () => {
+    // 첫 번째 DummyScene을 템플릿으로 사용
+    const template = DUMMY_SCENES[0];
+    if (!template) return;
+
+    const newScene: SceneFrontend = {
+      ...JSON.parse(JSON.stringify(template)),
+      id: `new_${Date.now()}`, // 임시 ID (저장 시 변경됨)
+      name: `새 Scene ${scenes.length + 1}`,
+      description: '새로 생성된 Scene입니다.',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setCurrentSceneId(null); // 새 Scene은 아직 ID 없음
+    setEditingScene(newScene);
+    setShowSceneSelectModal(false);
+    setIsDirty(true); // 새로 만들었으므로 저장 필요
   };
 
   // Scene 목록에서 선택
   const handleSelectFromList = (selectedScene: SceneFrontend) => {
-    setScene(selectedScene);
+    if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 계속하시겠습니까?')) {
+      return;
+    }
+    setCurrentSceneId(selectedScene.id);
+    setEditingScene(cloneForEdit(selectedScene.id));
     setShowSceneSelectModal(false);
+    setIsDirty(false);
   };
 
-  const objectAssets = scene?.assets.filter((a) => a.type === 'object') || [];
-  const lightAssets = scene?.assets.filter((a) =>
+  const objectAssets = editingScene?.assets.filter((a) => a.type === 'object') || [];
+  const lightAssets = editingScene?.assets.filter((a) =>
     ['directional-light', 'point-light', 'rect-light'].includes(a.type)
   ) || [];
 
   // Scene 정보 업데이트 핸들러
   const handleSceneNameChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!scene) return;
-    setScene({ ...scene, name: e.target.value });
+    if (!editingScene) return;
+    setEditingScene({ ...editingScene, name: e.target.value });
+    setIsDirty(true);
   };
 
   const handleSceneDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (!scene) return;
-    setScene({ ...scene, description: e.target.value });
+    if (!editingScene) return;
+    setEditingScene({ ...editingScene, description: e.target.value });
+    setIsDirty(true);
   };
 
-  const handleDefaultRoomChange = (roomMeshName: string) => {
-    if (!scene) return;
-    setScene({ ...scene, defaultRoom: roomMeshName });
+  const handleRoomChange = (roomMeshName: string) => {
+    if (!editingScene) return;
+    setEditingScene({
+      ...editingScene,
+      room: { ...editingScene.room, meshName: roomMeshName },
+    });
+    setIsDirty(true);
   };
 
   // 태양광 설정 업데이트 핸들러
   const handleSunTimeChange = (value: number) => {
-    if (!scene) return;
-    setScene({
-      ...scene,
-      sunSettings: { ...scene.sunSettings, timeOfDay: value },
+    if (!editingScene) return;
+    setEditingScene({
+      ...editingScene,
+      sunSettings: { ...editingScene.sunSettings, timeOfDay: value },
     });
+    setIsDirty(true);
   };
 
   const handleDaytimeToggle = (isDaytime: boolean) => {
-    if (!scene) return;
-    setScene({
-      ...scene,
-      sunSettings: { ...scene.sunSettings, isDaytime },
+    if (!editingScene) return;
+    setEditingScene({
+      ...editingScene,
+      sunSettings: { ...editingScene.sunSettings, isDaytime },
     });
+    setIsDirty(true);
   };
 
   const handleSeasonChange = (season: 'spring' | 'summer' | 'autumn' | 'winter') => {
-    if (!scene) return;
-    setScene({
-      ...scene,
-      sunSettings: { ...scene.sunSettings, season },
+    if (!editingScene) return;
+    setEditingScene({
+      ...editingScene,
+      sunSettings: { ...editingScene.sunSettings, season },
     });
+    setIsDirty(true);
   };
 
   const handleRoomOrientationChange = (orientation: 'north' | 'south' | 'east' | 'west') => {
-    if (!scene) return;
-    setScene({
-      ...scene,
-      sunSettings: { ...scene.sunSettings, roomOrientation: orientation },
+    if (!editingScene) return;
+    setEditingScene({
+      ...editingScene,
+      sunSettings: { ...editingScene.sunSettings, roomOrientation: orientation },
     });
+    setIsDirty(true);
   };
 
   const handleCancel = () => {
+    if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 나가시겠습니까?')) {
+      return;
+    }
     navigate('/');
   };
 
   const handleSave = async () => {
-    if (!scene) return;
+    if (!editingScene) return;
 
     try {
-      // Scene 저장 (게스트: 메모리, 회원: API)
-      await updateScene(scene);
+      // SceneRepository로 저장 (DummyScene이면 새 Scene 생성됨)
+      const saved = await saveScene(editingScene);
+      setCurrentSceneId(saved.id);
+      setEditingScene(cloneForEdit(saved.id));
+      setIsDirty(false);
+      alert('저장되었습니다.');
+    } catch (error) {
+      console.error('Failed to save scene:', error);
+      alert('Scene 저장에 실패했습니다.');
+    }
+  };
+
+  const handleSaveAndExit = async () => {
+    if (!editingScene) return;
+
+    try {
+      await saveScene(editingScene);
       navigate('/');
     } catch (error) {
       console.error('Failed to save scene:', error);
@@ -142,34 +200,36 @@ export default function EditPage() {
   const handleTransformChange = (assetId: string | number, transform: Transform) => {
     console.log('[EditPage] Transform changed:', assetId, transform);
 
-    if (!scene) return;
+    if (!editingScene) return;
 
     // Scene의 asset Transform 업데이트
-    const updatedAssets = scene.assets.map((asset) => {
+    const updatedAssets = editingScene.assets.map((asset) => {
       if (asset.id === assetId) {
         return { ...asset, transform };
       }
       return asset;
     });
 
-    setScene({ ...scene, assets: updatedAssets });
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
   };
 
   // Light Params 변경 핸들러 (Gizmo로 Light 이동/회전 시)
   const handleLightParamsChange = (assetId: string | number, lightParams: PointLightParams | RectLightParams | DirectionalLightParams) => {
     console.log('[EditPage] Light params changed:', assetId, lightParams);
 
-    if (!scene) return;
+    if (!editingScene) return;
 
     // Scene의 asset lightParams 업데이트
-    const updatedAssets = scene.assets.map((asset) => {
+    const updatedAssets = editingScene.assets.map((asset) => {
       if (asset.id === assetId) {
         return { ...asset, lightParams };
       }
       return asset;
     });
 
-    setScene({ ...scene, assets: updatedAssets });
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
   };
 
   // 개별 Transform 속성 변경 핸들러
@@ -179,9 +239,9 @@ export default function EditPage() {
     axis: number,
     value: number
   ) => {
-    if (!scene) return;
+    if (!editingScene) return;
 
-    const updatedAssets = scene.assets.map((asset) => {
+    const updatedAssets = editingScene.assets.map((asset) => {
       if (asset.id === assetId && asset.transform) {
         const newTransform = { ...asset.transform };
         newTransform[property] = [...newTransform[property]] as [number, number, number];
@@ -191,17 +251,18 @@ export default function EditPage() {
       return asset;
     });
 
-    setScene({ ...scene, assets: updatedAssets });
-  }, [scene]);
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
+  }, [editingScene]);
 
   // Uniform Scale 변경 핸들러 (모든 축에 동일한 값 적용)
   const handleUniformScaleChange = useCallback((
     assetId: string | number,
     value: number
   ) => {
-    if (!scene) return;
+    if (!editingScene) return;
 
-    const updatedAssets = scene.assets.map((asset) => {
+    const updatedAssets = editingScene.assets.map((asset) => {
       if (asset.id === assetId && asset.transform) {
         const newTransform = { ...asset.transform };
         newTransform.scale = [value, value, value];
@@ -210,8 +271,9 @@ export default function EditPage() {
       return asset;
     });
 
-    setScene({ ...scene, assets: updatedAssets });
-  }, [scene]);
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
+  }, [editingScene]);
 
   // Light params 변경 핸들러
   const handleLightParamChange = useCallback((
@@ -219,9 +281,9 @@ export default function EditPage() {
     paramPath: string,
     value: number | [number, number, number]
   ) => {
-    if (!scene) return;
+    if (!editingScene) return;
 
-    const updatedAssets = scene.assets.map((asset) => {
+    const updatedAssets = editingScene.assets.map((asset) => {
       if (asset.id === assetId && asset.lightParams) {
         const newLightParams = { ...asset.lightParams };
 
@@ -243,12 +305,13 @@ export default function EditPage() {
       return asset;
     });
 
-    setScene({ ...scene, assets: updatedAssets });
-  }, [scene]);
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
+  }, [editingScene]);
 
   // 오브젝트 추가 핸들러
   const handleAddObject = (meshName: string) => {
-    if (!scene) return;
+    if (!editingScene) return;
 
     // 고유 ID 생성
     const newId = `${meshName.toLowerCase()}_${Date.now()}`;
@@ -266,17 +329,18 @@ export default function EditPage() {
     };
 
     // Scene에 추가
-    setScene({
-      ...scene,
-      assets: [...scene.assets, newAsset],
+    setEditingScene({
+      ...editingScene,
+      assets: [...editingScene.assets, newAsset],
     });
+    setIsDirty(true);
 
     console.log('[EditPage] Added object:', meshName, newId);
   };
 
   // 조명 추가 핸들러
   const handleAddLight = (lightType: 'directional-light' | 'point-light' | 'rect-light') => {
-    if (!scene) return;
+    if (!editingScene) return;
 
     const newId = `${lightType}_${Date.now()}`;
 
@@ -315,47 +379,50 @@ export default function EditPage() {
       };
     }
 
-    setScene({
-      ...scene,
-      assets: [...scene.assets, newLight],
+    setEditingScene({
+      ...editingScene,
+      assets: [...editingScene.assets, newLight],
     });
+    setIsDirty(true);
 
     console.log('[EditPage] Added light:', lightType, newId);
   };
 
   // 오브젝트 삭제 핸들러
   const handleDeleteObject = useCallback(() => {
-    if (!scene || !selectedAssetId) return;
+    if (!editingScene || !selectedAssetId) return;
 
-    // defaultRoom은 삭제 불가
-    const assetToDelete = scene.assets.find((a) => a.id === selectedAssetId);
-    if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === scene.defaultRoom) {
+    // room.meshName과 일치하는 오브젝트는 삭제 불가
+    const assetToDelete = editingScene.assets.find((a) => a.id === selectedAssetId);
+    if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === editingScene.room.meshName) {
       alert('기본 방은 삭제할 수 없습니다.');
       return;
     }
 
     // Scene에서 제거
-    const updatedAssets = scene.assets.filter((asset) => asset.id !== selectedAssetId);
-    setScene({ ...scene, assets: updatedAssets });
+    const updatedAssets = editingScene.assets.filter((asset) => asset.id !== selectedAssetId);
+    setEditingScene({ ...editingScene, assets: updatedAssets });
     setSelectedAssetId(null);
+    setIsDirty(true);
 
     console.log('[EditPage] Deleted object:', selectedAssetId);
-  }, [scene, selectedAssetId]);
+  }, [editingScene, selectedAssetId]);
 
   // 리스트에서 직접 Asset 삭제 핸들러
   const handleDeleteAssetById = useCallback((assetId: string) => {
-    if (!scene) return;
+    if (!editingScene) return;
 
-    // defaultRoom은 삭제 불가
-    const assetToDelete = scene.assets.find((a) => a.id === assetId);
-    if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === scene.defaultRoom) {
+    // room.meshName과 일치하는 오브젝트는 삭제 불가
+    const assetToDelete = editingScene.assets.find((a) => a.id === assetId);
+    if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === editingScene.room.meshName) {
       alert('기본 방은 삭제할 수 없습니다.');
       return;
     }
 
     // Scene에서 제거
-    const updatedAssets = scene.assets.filter((asset) => asset.id !== assetId);
-    setScene({ ...scene, assets: updatedAssets });
+    const updatedAssets = editingScene.assets.filter((asset) => asset.id !== assetId);
+    setEditingScene({ ...editingScene, assets: updatedAssets });
+    setIsDirty(true);
 
     // 삭제된 asset이 선택되어 있었다면 선택 해제
     if (selectedAssetId === assetId) {
@@ -363,7 +430,7 @@ export default function EditPage() {
     }
 
     console.log('[EditPage] Deleted asset from list:', assetId);
-  }, [scene, selectedAssetId]);
+  }, [editingScene, selectedAssetId]);
 
   // Delete/Backspace 키 이벤트 리스너
   useEffect(() => {
@@ -413,7 +480,7 @@ export default function EditPage() {
                   새 Scene 만들기
                 </button>
 
-                {(scenes.length > 0 || AVAILABLE_SCENES.length > 0) && (
+                {scenes.length > 0 && (
                   <>
                     <div style={{ textAlign: 'center', color: '#6B6B6B', margin: '8px 0' }}>
                       또는
@@ -423,7 +490,7 @@ export default function EditPage() {
                       <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
                         기존 Scene 불러오기
                       </h3>
-                      {[...scenes, ...AVAILABLE_SCENES].map((s) => (
+                      {scenes.map((s) => (
                         <button
                           key={s.id}
                           className="asset-item clickable"
@@ -451,15 +518,15 @@ export default function EditPage() {
           <div className="preview-canvas" style={{ position: 'relative' }}>
             <ThreeRenderer
               className="three-canvas"
-              scene={scene}
+              scene={editingScene}
               onSelectionChange={handleSelectionChange}
               onTransformChange={handleTransformChange}
               onLightParamsChange={handleLightParamsChange}
             />
 
             {/* Selected Asset Info Panel */}
-            {selectedAssetId && scene && (() => {
-              const selectedAsset = scene.assets.find((a) => a.id === selectedAssetId);
+            {selectedAssetId && editingScene && (() => {
+              const selectedAsset = editingScene.assets.find((a) => a.id === selectedAssetId);
               if (!selectedAsset) return null;
 
               const isObject = selectedAsset.type === 'object';
@@ -877,7 +944,7 @@ export default function EditPage() {
           {/* Right side - Edit Panel */}
           <div className="edit-panel">
             <div className="edit-panel-header">
-              <h1 className="edit-title">{scene?.name || 'Scene'} 편집</h1>
+              <h1 className="edit-title">{editingScene?.name || 'Scene'} 편집</h1>
               <p className="edit-subtitle">
                 가구와 조명을 배치하고 실시간으로 확인하세요
               </p>
@@ -915,7 +982,7 @@ export default function EditPage() {
                     <input
                       type="text"
                       className="form-input"
-                      value={scene?.name || ''}
+                      value={editingScene?.name || ''}
                       onChange={handleSceneNameChange}
                       placeholder="Scene 이름을 입력하세요"
                     />
@@ -925,7 +992,7 @@ export default function EditPage() {
                     <label className="form-label">설명</label>
                     <textarea
                       className="form-textarea"
-                      value={scene?.description || ''}
+                      value={editingScene?.description || ''}
                       onChange={handleSceneDescriptionChange}
                       placeholder="Scene 설명을 입력하세요"
                       rows={3}
@@ -943,12 +1010,12 @@ export default function EditPage() {
                     {getAssetsByCategory('room').map((room) => (
                       <button
                         key={room.meshName}
-                        className={`room-select-button ${scene?.defaultRoom === room.meshName ? 'active' : ''}`}
-                        onClick={() => handleDefaultRoomChange(room.meshName)}
+                        className={`room-select-button ${editingScene?.room?.meshName === room.meshName ? 'active' : ''}`}
+                        onClick={() => handleRoomChange(room.meshName)}
                       >
                         <span className="room-icon">{room.icon || '🏠'}</span>
                         <span className="room-name">{room.name}</span>
-                        {scene?.defaultRoom === room.meshName && (
+                        {editingScene?.room?.meshName === room.meshName && (
                           <span className="room-check">✓</span>
                         )}
                       </button>
@@ -1081,13 +1148,13 @@ export default function EditPage() {
                     <label className="form-label">시간대</label>
                     <div className="button-group">
                       <button
-                        className={`toggle-button ${scene?.sunSettings.isDaytime ? 'active' : ''}`}
+                        className={`toggle-button ${editingScene?.sunSettings.isDaytime ? 'active' : ''}`}
                         onClick={() => handleDaytimeToggle(true)}
                       >
                         낮
                       </button>
                       <button
-                        className={`toggle-button ${!scene?.sunSettings.isDaytime ? 'active' : ''}`}
+                        className={`toggle-button ${!editingScene?.sunSettings.isDaytime ? 'active' : ''}`}
                         onClick={() => handleDaytimeToggle(false)}
                       >
                         밤
@@ -1098,8 +1165,8 @@ export default function EditPage() {
                   {/* 시간 슬라이더 (6~18시, 낮에만 활성화) */}
                   <div className="form-group">
                     <label className="form-label">
-                      시간: {scene?.sunSettings.isDaytime
-                        ? `${Math.round(6 + (scene?.sunSettings.timeOfDay || 50) * 12 / 100)}시`
+                      시간: {editingScene?.sunSettings.isDaytime
+                        ? `${Math.round(6 + (editingScene?.sunSettings.timeOfDay || 50) * 12 / 100)}시`
                         : '(밤 시간대)'
                       }
                     </label>
@@ -1107,10 +1174,10 @@ export default function EditPage() {
                       type="range"
                       min="0"
                       max="100"
-                      value={scene?.sunSettings.timeOfDay || 50}
+                      value={editingScene?.sunSettings.timeOfDay || 50}
                       onChange={(e) => handleSunTimeChange(Number(e.target.value))}
                       className="range-slider"
-                      disabled={!scene?.sunSettings.isDaytime}
+                      disabled={!editingScene?.sunSettings.isDaytime}
                     />
                     <div className="range-labels">
                       <span>6시 (일출)</span>
@@ -1122,7 +1189,7 @@ export default function EditPage() {
                   <div className="form-group">
                     <label className="form-label">계절</label>
                     <select
-                      value={scene?.sunSettings.season || 'summer'}
+                      value={editingScene?.sunSettings.season || 'summer'}
                       onChange={(e) => handleSeasonChange(e.target.value as any)}
                       className="form-select"
                     >
@@ -1137,7 +1204,7 @@ export default function EditPage() {
                   <div className="form-group">
                     <label className="form-label">방 방향</label>
                     <select
-                      value={scene?.sunSettings.roomOrientation || 'south'}
+                      value={editingScene?.sunSettings.roomOrientation || 'south'}
                       onChange={(e) => handleRoomOrientationChange(e.target.value as any)}
                       className="form-select"
                     >
@@ -1238,8 +1305,16 @@ export default function EditPage() {
               <button className="action-button action-cancel" onClick={handleCancel}>
                 취소
               </button>
-              <button className="action-button action-save" onClick={handleSave}>
+              <button
+                className="action-button action-save"
+                onClick={handleSave}
+                disabled={!isDirty}
+                style={{ opacity: isDirty ? 1 : 0.5 }}
+              >
                 저장
+              </button>
+              <button className="action-button action-save" onClick={handleSaveAndExit}>
+                저장 후 나가기
               </button>
             </div>
           </div>

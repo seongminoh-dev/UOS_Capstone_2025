@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import './LightingSimulator.css';
-import Header from './components/Header';
-import WebGPURenderer from './components/WebGPURenderer';
-import MainRightPanel from './components/MainRightPanel';
-import type { Scene } from './graphics-core/service/Scene';
+import Header from '../components/Header';
+import WebGPURenderer from '../components/WebGPURenderer';
+import MainRightPanel from '../components/MainRightPanel';
+import type { Scene } from '../graphics-core/service/Scene';
 
 export default function LightingSimulator() {
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
@@ -57,7 +57,7 @@ export default function LightingSimulator() {
               <WebGPURenderer
                 key={`${selectedScene.id}-${selectedScene.updatedAt || Date.now()}`}
                 className="webgpu-canvas"
-                sceneId={selectedScene.id as string}
+                scene={selectedScene}
               />
             )}
           </div>

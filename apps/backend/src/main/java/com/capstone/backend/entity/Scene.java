@@ -36,6 +36,22 @@ public class Scene {
     @Column(length = 255)
     private String thumbnailUrl;
 
+    // Room 설정 (RoomSettings JSON)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb", nullable = false)
+    private String room;
+
+    // 태양광 설정 (SunSettings JSON)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb", nullable = false)
+    private String sunSettings;
+
+    // 카메라 설정 (CameraSettings JSON, nullable)
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(columnDefinition = "jsonb")
+    private String camera;
+
+    // Scene assets (SceneAsset[] JSON)
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(columnDefinition = "jsonb", nullable = false)
     private String assets;
