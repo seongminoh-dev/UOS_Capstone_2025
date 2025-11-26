@@ -9,9 +9,10 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
+import type { SceneFrontend, SceneAsset, RoomSettings } from '../graphics-core/service/Scene';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
+import { getAssetsByCategory, getAssetMetadata } from '../assets/AssetRegistry';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { useAuthStore } from '../stores/authStore';
 import { isDummyScene } from '../utils/sceneId';
@@ -182,6 +183,10 @@ export default function MainRightPanel({
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
   const [newSceneName, setNewSceneName] = useState('');
   const [newSceneDescription, setNewSceneDescription] = useState('');
+  const [selectedRoomMesh, setSelectedRoomMesh] = useState('');
+
+  // 사용 가능한 Room 목록 (AssetRegistry에서 가져옴)
+  const availableRooms = getAssetsByCategory('room');
 
   // Scene 정보 편집 상태
   const [isEditingInfo, setIsEditingInfo] = useState(false);
@@ -192,6 +197,8 @@ export default function MainRightPanel({
   const handleCreateNewSceneRequest = () => {
     setNewSceneName(`새 Scene ${scenes.length + 1}`);
     setNewSceneDescription('');
+    // 기본 Room 선택 (첫 번째 Room)
+    setSelectedRoomMesh(availableRooms[0]?.meshName || 'TestScene');
     setShowCreateSceneModal(true);
   };
 
@@ -202,15 +209,33 @@ export default function MainRightPanel({
       return;
     }
 
+    if (!selectedRoomMesh) {
+      alert('방을 선택해주세요.');
+      return;
+    }
+
     // 첫 번째 DummyScene을 템플릿으로 사용
     const template = DUMMY_SCENES[0];
     if (!template) return;
+
+    // 선택한 Room으로 RoomSettings 생성
+    const roomSettings: RoomSettings = {
+      meshName: selectedRoomMesh,
+      locked: true,
+      transform: {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    };
 
     const newScene: SceneFrontend = {
       ...JSON.parse(JSON.stringify(template)),
       id: `new_${Date.now()}`, // 임시 ID
       name: newSceneName,
       description: newSceneDescription,
+      room: roomSettings, // 선택한 Room 적용
+      assets: [], // 새 Scene은 빈 assets로 시작
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
@@ -825,6 +850,25 @@ export default function MainRightPanel({
                     <span className="info-value">{currentScene.name}</span>
                   </div>
                   <div className="info-item">
+                    <span className="info-label">방</span>
+                    <span className="info-value">
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </span>
+                  </div>
+                  <div className="info-item">
                     <span className="info-label">설명</span>
                     <span className="info-value">
                       {currentScene.description || '(없음)'}
@@ -848,6 +892,36 @@ export default function MainRightPanel({
                       onChange={(e) => setEditingSceneName(e.target.value)}
                       placeholder="Scene 이름 입력"
                     />
+                  </div>
+                  <div className="form-group">
+                    <label className="form-label">
+                      방
+                      <span style={{
+                        fontSize: '10px',
+                        color: '#9CA3AF',
+                        marginLeft: '6px',
+                        padding: '2px 6px',
+                        backgroundColor: '#F3F4F6',
+                        borderRadius: '4px'
+                      }}>
+                        변경 불가
+                      </span>
+                    </label>
+                    <div
+                      style={{
+                        padding: '10px 14px',
+                        backgroundColor: '#F9FAFB',
+                        border: '1px solid #E5E7EB',
+                        borderRadius: '6px',
+                        color: '#6B7280',
+                        fontSize: '14px',
+                      }}
+                    >
+                      {(() => {
+                        const roomMeta = getAssetMetadata(currentScene.room.meshName);
+                        return roomMeta ? `${roomMeta.icon} ${roomMeta.name}` : currentScene.room.meshName;
+                      })()}
+                    </div>
                   </div>
                   <div className="form-group">
                     <label className="form-label">설명</label>
@@ -1093,13 +1167,59 @@ export default function MainRightPanel({
                   />
                 </div>
                 <div className="form-group">
+                  <label className="form-label">방 선택 *</label>
+                  <p style={{ fontSize: '12px', color: '#6B6B6B', margin: '0 0 8px 0' }}>
+                    방은 Scene 생성 후 변경할 수 없습니다.
+                  </p>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '8px',
+                    }}
+                  >
+                    {availableRooms.map((room) => (
+                      <button
+                        key={room.meshName}
+                        type="button"
+                        onClick={() => setSelectedRoomMesh(room.meshName)}
+                        style={{
+                          padding: '12px',
+                          border: selectedRoomMesh === room.meshName
+                            ? '2px solid #2563EB'
+                            : '1px solid #E5E5E5',
+                          borderRadius: '8px',
+                          backgroundColor: selectedRoomMesh === room.meshName
+                            ? '#EFF6FF'
+                            : '#FFFFFF',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>
+                          {room.icon}
+                        </div>
+                        <div style={{ fontWeight: 500, fontSize: '14px' }}>
+                          {room.name}
+                        </div>
+                        {room.description && (
+                          <div style={{ fontSize: '12px', color: '#6B6B6B', marginTop: '2px' }}>
+                            {room.description}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+                <div className="form-group">
                   <label className="form-label">설명</label>
                   <textarea
                     className="form-input"
                     value={newSceneDescription}
                     onChange={(e) => setNewSceneDescription(e.target.value)}
                     placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
-                    rows={4}
+                    rows={3}
                     style={{ resize: 'vertical' }}
                   />
                 </div>

@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
-import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
+import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams, RoomSettings } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import { isDummyScene } from '../utils/sceneId';
@@ -18,6 +18,15 @@ export default function EditPage() {
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
+
+  // 새 Scene 생성 모달 상태
+  const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
+  const [newSceneName, setNewSceneName] = useState('');
+  const [newSceneDescription, setNewSceneDescription] = useState('');
+  const [selectedRoomMesh, setSelectedRoomMesh] = useState('');
+
+  // 사용 가능한 Room 목록
+  const availableRooms = getAssetsByCategory('room');
 
   // SceneRepository (단일 진실 공급원)
   const { scenes, loadScenes, cloneForEdit, saveScene } = useSceneRepository();
@@ -59,24 +68,56 @@ export default function EditPage() {
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [isDirty]);
 
-  // 새 Scene 생성 (템플릿 기반)
+  // 새 Scene 생성 모달 열기
+  const handleOpenCreateSceneModal = () => {
+    setNewSceneName(`새 Scene ${scenes.length + 1}`);
+    setNewSceneDescription('');
+    setSelectedRoomMesh(availableRooms[0]?.meshName || 'TestScene');
+    setShowSceneSelectModal(false);
+    setShowCreateSceneModal(true);
+  };
+
+  // 새 Scene 생성 (방 선택 포함)
   const handleCreateNewScene = () => {
+    if (!newSceneName.trim()) {
+      alert('Scene 이름을 입력해주세요.');
+      return;
+    }
+
+    if (!selectedRoomMesh) {
+      alert('방을 선택해주세요.');
+      return;
+    }
+
     // 첫 번째 DummyScene을 템플릿으로 사용
     const template = DUMMY_SCENES[0];
     if (!template) return;
 
+    // 선택한 Room으로 RoomSettings 생성
+    const roomSettings: RoomSettings = {
+      meshName: selectedRoomMesh,
+      locked: true,
+      transform: {
+        position: [0, 0, 0],
+        rotation: [0, 0, 0],
+        scale: [1, 1, 1],
+      },
+    };
+
     const newScene: SceneFrontend = {
       ...JSON.parse(JSON.stringify(template)),
       id: `new_${Date.now()}`, // 임시 ID (저장 시 변경됨)
-      name: `새 Scene ${scenes.length + 1}`,
-      description: '새로 생성된 Scene입니다.',
+      name: newSceneName,
+      description: newSceneDescription,
+      room: roomSettings, // 선택한 Room 적용
+      assets: [], // 새 Scene은 빈 assets로 시작
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
 
     setCurrentSceneId(null); // 새 Scene은 아직 ID 없음
     setEditingScene(newScene);
-    setShowSceneSelectModal(false);
+    setShowCreateSceneModal(false);
     setIsDirty(true); // 새로 만들었으므로 저장 필요
   };
 
@@ -106,15 +147,6 @@ export default function EditPage() {
   const handleSceneDescriptionChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (!editingScene) return;
     setEditingScene({ ...editingScene, description: e.target.value });
-    setIsDirty(true);
-  };
-
-  const handleRoomChange = (roomMeshName: string) => {
-    if (!editingScene) return;
-    setEditingScene({
-      ...editingScene,
-      room: { ...editingScene.room, meshName: roomMeshName },
-    });
     setIsDirty(true);
   };
 
@@ -474,7 +506,7 @@ export default function EditPage() {
               <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                 <button
                   className="modal-button modal-save"
-                  onClick={handleCreateNewScene}
+                  onClick={handleOpenCreateSceneModal}
                   style={{ width: '100%' }}
                 >
                   새 Scene 만들기
@@ -512,6 +544,119 @@ export default function EditPage() {
           </div>
         </div>
       )}
+
+      {/* 새 Scene 생성 모달 */}
+      {showCreateSceneModal && (
+        <div className="modal-overlay" onClick={() => navigate('/')}>
+          <div
+            className="modal-content"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: '550px' }}
+          >
+            <div className="modal-header">
+              <h2 className="modal-title">새 Scene 만들기</h2>
+              <button
+                className="modal-close"
+                onClick={() => navigate('/')}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="modal-body" style={{ padding: '24px' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <div className="form-group">
+                  <label className="form-label">Scene 이름 *</label>
+                  <input
+                    type="text"
+                    className="form-input"
+                    value={newSceneName}
+                    onChange={(e) => setNewSceneName(e.target.value)}
+                    placeholder="Scene 이름을 입력하세요"
+                    autoFocus
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">방 선택 *</label>
+                  <p style={{ fontSize: '12px', color: '#6B6B6B', margin: '0 0 8px 0' }}>
+                    방은 Scene 생성 후 변경할 수 없습니다.
+                  </p>
+                  <div
+                    style={{
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(2, 1fr)',
+                      gap: '8px',
+                      maxHeight: '250px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {availableRooms.map((room) => (
+                      <button
+                        key={room.meshName}
+                        type="button"
+                        onClick={() => setSelectedRoomMesh(room.meshName)}
+                        style={{
+                          padding: '12px',
+                          border: selectedRoomMesh === room.meshName
+                            ? '2px solid #2563EB'
+                            : '1px solid #E5E5E5',
+                          borderRadius: '8px',
+                          backgroundColor: selectedRoomMesh === room.meshName
+                            ? '#EFF6FF'
+                            : '#FFFFFF',
+                          cursor: 'pointer',
+                          textAlign: 'left',
+                          transition: 'all 0.2s',
+                        }}
+                      >
+                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>
+                          {room.icon}
+                        </div>
+                        <div style={{ fontWeight: 500, fontSize: '14px' }}>
+                          {room.name}
+                        </div>
+                        {room.description && (
+                          <div style={{ fontSize: '12px', color: '#6B6B6B', marginTop: '2px' }}>
+                            {room.description}
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">설명</label>
+                  <textarea
+                    className="form-textarea"
+                    value={newSceneDescription}
+                    onChange={(e) => setNewSceneDescription(e.target.value)}
+                    placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
+                    rows={3}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid #E5E5E5', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
+              <button
+                className="modal-button modal-cancel"
+                onClick={() => navigate('/')}
+              >
+                취소
+              </button>
+              <button
+                className="modal-button modal-save"
+                onClick={handleCreateNewScene}
+              >
+                생성
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="edit-container">
         <div className="edit-layout">
           {/* Left side - Three.js Canvas (미리보기) */}
@@ -1001,26 +1146,55 @@ export default function EditPage() {
 
                   <div className="divider"></div>
 
-                  <h3 className="section-title">기본 방 선택</h3>
-                  <p className="section-subtitle">
-                    Scene의 기본이 되는 방 구조를 선택하세요
+                  <h3 className="section-title">
+                    기본 방
+                    <span style={{
+                      fontSize: '11px',
+                      color: '#9CA3AF',
+                      marginLeft: '8px',
+                      padding: '2px 8px',
+                      backgroundColor: '#F3F4F6',
+                      borderRadius: '4px',
+                      fontWeight: 'normal',
+                    }}>
+                      변경 불가
+                    </span>
+                  </h3>
+                  <p className="section-subtitle" style={{ color: '#6B6B6B', fontSize: '13px' }}>
+                    방은 Scene 생성 시에만 선택할 수 있습니다.
                   </p>
 
-                  <div className="room-grid">
-                    {getAssetsByCategory('room').map((room) => (
-                      <button
-                        key={room.meshName}
-                        className={`room-select-button ${editingScene?.room?.meshName === room.meshName ? 'active' : ''}`}
-                        onClick={() => handleRoomChange(room.meshName)}
+                  {/* 현재 선택된 방 표시 (읽기 전용) */}
+                  {editingScene?.room && (() => {
+                    const currentRoomMeta = getAssetMetadata(editingScene.room.meshName);
+                    return (
+                      <div
+                        style={{
+                          padding: '16px',
+                          backgroundColor: '#F9FAFB',
+                          border: '1px solid #E5E7EB',
+                          borderRadius: '8px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '12px',
+                        }}
                       >
-                        <span className="room-icon">{room.icon || '🏠'}</span>
-                        <span className="room-name">{room.name}</span>
-                        {editingScene?.room?.meshName === room.meshName && (
-                          <span className="room-check">✓</span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                        <span style={{ fontSize: '28px' }}>
+                          {currentRoomMeta?.icon || '🏠'}
+                        </span>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: '15px', color: '#1F2937' }}>
+                            {currentRoomMeta?.name || editingScene.room.meshName}
+                          </div>
+                          {currentRoomMeta?.description && (
+                            <div style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>
+                              {currentRoomMeta.description}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })()}
                 </div>
               )}
 
