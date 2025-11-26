@@ -221,4 +221,44 @@ export class WebGPUEngine {
             this.inputController.setCamera(this.renderer.GetCamera());
         }
     }
+
+    /**
+     * 카메라 위치 설정
+     */
+    public setCamera(
+        position: [number, number, number],
+        target: [number, number, number],
+        fov?: number
+    ): void {
+        if (!this.renderer) return;
+
+        const camera = this.renderer.GetCamera();
+
+        // 카메라 위치 설정
+        camera.SetLocationFromXYZ(position[0], position[1], position[2]);
+
+        // target을 향해 카메라 방향 설정 (yaw, pitch 계산)
+        const dx = target[0] - position[0];
+        const dy = target[1] - position[1];
+        const dz = target[2] - position[2];
+
+        // Yaw: XZ 평면에서의 각도 (Y축 회전) - radian to degree
+        const yawRad = Math.atan2(dx, dz);
+        const yawDeg = (yawRad * 180) / Math.PI;
+
+        // Pitch: 수직 각도 - radian to degree
+        const horizontalDist = Math.sqrt(dx * dx + dz * dz);
+        const pitchRad = Math.atan2(dy, horizontalDist);
+        const pitchDeg = (pitchRad * 180) / Math.PI;
+
+        camera.SetYaw(yawDeg);
+        camera.SetPitch(pitchDeg);
+
+        // FOV 설정 (TODO: Camera에 SetFOV 메서드 필요시 추가)
+        // if (fov !== undefined) {
+        //     camera.SetFOV(fov);
+        // }
+
+        console.log(`[WebGPUEngine] Camera set: position=[${position}], target=[${target}]`);
+    }
 }

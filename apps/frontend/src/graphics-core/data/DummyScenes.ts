@@ -16,14 +16,10 @@ const DEFAULT_SUN_SETTINGS: SunSettings = {
  * - ID prefix: dummy_
  */
 
-/**
- * 현재 하드코딩된 정적 Scene을 Dummy Object로 변환
- * 기존 World.Initialize()의 내용을 Scene 형식으로 표현
- */
 export const DUMMY_SCENE_1: SceneFrontend = {
   id: 'dummy_scene_1',
-  name: 'Test Room Scene',
-  description: 'Default test scene with Bedroom, Window, and Point Lights',
+  name: '안방(기본)',
+  description: '침대와, 옷장, 책상의 기본 가구와 조명을 포함한 방입니다.',
 
   // ✅ Room 설정 (편집 불가능, assets에서 분리)
   room: {
@@ -41,9 +37,9 @@ export const DUMMY_SCENE_1: SceneFrontend = {
 
   // ✅ 기본 카메라 위치
   camera: {
-    position: [5, 5, 5],
-    target: [0, 1, 0],
-    fov: 45,
+    position: [6.83, 3.49, -0.33],
+    target: [0, 0, 0],
+    fov: 60,
   },
 
   // ✅ 사용자 추가 가능한 Asset만 (가구 + Point/Rect Light)
@@ -143,8 +139,8 @@ export const DUMMY_SCENE_1: SceneFrontend = {
  */
 export const DUMMY_SCENE_2: SceneFrontend = {
   id: 'dummy_scene_2',
-  name: 'Room with Chair',
-  description: 'Test scene with furniture and rect light',
+  name: '작은방(기본)',
+  description: '한쪽 벽이 없는 작은 방입니다.',
 
   // ✅ Room 설정
   room: {
@@ -162,8 +158,8 @@ export const DUMMY_SCENE_2: SceneFrontend = {
 
   // ✅ 기본 카메라 위치
   camera: {
-    position: [4, 3, 4],
-    target: [0, 0.5, 0],
+    position: [0.06, 2.12, 7.38],
+    target: [-0.1, -0.22, 0.06],
     fov: 50,
   },
 

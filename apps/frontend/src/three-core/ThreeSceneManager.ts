@@ -448,6 +448,28 @@ export class ThreeSceneManager {
   }
 
   /**
+   * 카메라 설정 적용
+   */
+  setCamera(
+    position: [number, number, number],
+    target: [number, number, number],
+    fov?: number
+  ): void {
+    this.camera.position.set(position[0], position[1], position[2]);
+
+    if (fov !== undefined) {
+      this.camera.fov = fov;
+      this.camera.updateProjectionMatrix();
+    }
+
+    // OrbitControls target 설정
+    this.controls.target.set(target[0], target[1], target[2]);
+    this.controls.update();
+
+    console.log(`[ThreeSceneManager] Camera set: position=[${position}], target=[${target}], fov=${fov || this.camera.fov}`);
+  }
+
+  /**
    * 헬퍼 표시/숨김
    */
   setHelpersVisible(visible: boolean): void {

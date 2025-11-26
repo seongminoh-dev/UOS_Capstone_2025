@@ -6,7 +6,7 @@ import type { SceneFrontend, Transform, PointLightParams, RectLightParams, Direc
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import { isDummyScene } from '../utils/sceneId';
-import { getFurnitureBySubCategory, getAssetsByCategory, getAssetMetadata, isRequiredAsset } from '../assets/AssetRegistry';
+import { getFurnitureBySubCategory, getAssetsByCategory, getAssetMetadata, isRequiredAsset, getRoomConfig } from '../assets/AssetRegistry';
 import type { FurnitureSubCategory } from '../assets/AssetTypes';
 import type { SceneId } from '../stores/sceneRepository';
 import './EditPage.css';
@@ -110,6 +110,9 @@ export default function EditPage() {
     const template = DUMMY_SCENES[0];
     if (!template) return;
 
+    // Room별 설정 가져오기 (scale, camera)
+    const roomConfig = getRoomConfig(selectedRoomMesh);
+
     // 선택한 Room으로 RoomSettings 생성
     const roomSettings: RoomSettings = {
       meshName: selectedRoomMesh,
@@ -117,7 +120,7 @@ export default function EditPage() {
       transform: {
         position: [0, 0, 0],
         rotation: [0, 0, 0],
-        scale: [1, 1, 1],
+        scale: roomConfig.scale, // Room별 scale 적용
       },
     };
 
@@ -127,6 +130,11 @@ export default function EditPage() {
       name: newSceneName,
       description: newSceneDescription,
       room: roomSettings, // 선택한 Room 적용
+      camera: { // Room별 카메라 설정 적용
+        position: roomConfig.camera.position,
+        target: roomConfig.camera.target,
+        fov: roomConfig.camera.fov,
+      },
       assets: [], // 새 Scene은 빈 assets로 시작
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

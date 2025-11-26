@@ -205,10 +205,18 @@ export default function WebGPURenderer({
         // 5. InputController에 카메라 설정
         engine.setupInputController();
 
-        // 6. 렌더 루프 시작 (이미 실행 중이면 무시됨)
+        // 6. Scene의 카메라 설정 적용
+        const cameraSettings = SceneAdapter.getCameraSettings(sceneFrontend);
+        engine.setCamera(
+          cameraSettings.position,
+          cameraSettings.target,
+          cameraSettings.fov
+        );
+
+        // 7. 렌더 루프 시작 (이미 실행 중이면 무시됨)
         engine.start();
 
-        // 7. Scene 로드 완료
+        // 8. Scene 로드 완료
         setIsSceneLoaded(true);
 
         console.log(`Scene loaded successfully: ${scene.name}`);
