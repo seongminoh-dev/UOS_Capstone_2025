@@ -12,6 +12,7 @@ import {
   isDummyScene,
   isLocalScene,
   isServerScene,
+  isNewScene,
   generateLocalId,
   type SceneId,
 } from '../utils/sceneId';
@@ -96,6 +97,7 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
   /**
    * Scene 저장
    * - DummyScene 수정 시 → 새 Scene 생성 (ID 변경)
+   * - NewScene (new_* prefix) → 새 Scene 생성
    * - LocalScene → localStorage 저장
    * - ServerScene → API 호출
    */
@@ -103,8 +105,8 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
     const authStore = useAuthStore.getState();
     const isLoggedIn = !authStore.isGuest && authStore.user !== null;
 
-    // DummyScene 수정 시 새 Scene으로 분기
-    if (isDummyScene(scene.id)) {
+    // DummyScene 또는 NewScene 수정 시 새 Scene으로 분기
+    if (isDummyScene(scene.id) || isNewScene(scene.id)) {
       if (isLoggedIn) {
         // 회원: 새 ServerScene 생성
         const username = authStore.user!.username;

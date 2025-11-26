@@ -36,6 +36,15 @@ export function isServerScene(id: SceneId): boolean {
 }
 
 /**
+ * NewScene 여부 확인 (아직 저장되지 않은 새 Scene)
+ * @param id Scene ID
+ * @returns new_ prefix로 시작하면 true
+ */
+export function isNewScene(id: SceneId): boolean {
+  return typeof id === 'string' && id.startsWith('new_');
+}
+
+/**
  * LocalScene ID 생성
  * @returns local_${timestamp} 형식의 고유 ID
  */
