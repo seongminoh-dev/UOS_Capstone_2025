@@ -131,6 +131,14 @@ export class SceneAdapter {
       // Note: directional-light는 sunSettings에서 자동 생성되므로 여기서 제외
     }
 
+    // 5. ✅ 조명이 0개면 dummy light 추가 (렌더러 크래시 방지)
+    if (world.Lights.length === 0) {
+      const dummyDirection: Vec3 = vec3.fromValues(0, -1, 0);
+      const dummyColor: Vec3 = vec3.fromValues(0, 0, 0);
+      world.AddDirectionalLight(dummyDirection, dummyColor, 0.0);
+      console.log('No lights in scene - added dummy light to prevent renderer crash');
+    }
+
     console.log(`Scene loaded: ${scene.name}`);
     console.log(`- Room: 1`);
     console.log(`- Sun: ${sunParams ? '1 (DirectionalLight)' : '0 (night)'}`);
