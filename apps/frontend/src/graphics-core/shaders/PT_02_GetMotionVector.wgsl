@@ -441,7 +441,7 @@ fn ComputeMotionVector(curPixel : vec2<u32>) -> vec2<f32> {
     // 나중에 TAA 패스에서 jitter delta 로 처리.
 
     // convention: 현재 - 이전
-    let mv : vec2<f32> = vec2<f32>(curPixel) - prevPx;
+    let mv : vec2<f32> = curPx-prevPx;
 
     return mv;
 }
