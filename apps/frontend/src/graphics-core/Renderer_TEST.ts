@@ -17,9 +17,6 @@ import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw'
 
 import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
 
-
-import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
-
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
