@@ -1,10 +1,19 @@
-import type { SceneFrontend } from '../service/Scene';
-import { getDefaultSunSettings } from '../../utils/SceneSerializer';
+import type { SceneFrontend, SunSettings } from '../service/Scene';
+
+/**
+ * 기본 태양광 설정
+ */
+const DEFAULT_SUN_SETTINGS: SunSettings = {
+  timeOfDay: 50, // 정오
+  isDaytime: true, // 낮
+  season: 'summer',
+  roomOrientation: 'south',
+};
 
 /**
  * Dummy Scene 데이터
- * TODO: 차후 Backend API에서 Scene 데이터를 가져오도록 수정 필요
- * TODO: Scene 편집 UI 구현 후 사용자가 Scene을 생성/수정할 수 있도록 구현
+ * - 읽기 전용 (수정 시 새 Scene으로 분기)
+ * - ID prefix: dummy_
  */
 
 /**
@@ -28,7 +37,7 @@ export const DUMMY_SCENE_1: SceneFrontend = {
   },
 
   // ✅ 태양광 설정 (DirectionalLight 자동 생성)
-  sunSettings: getDefaultSunSettings(),
+  sunSettings: { ...DEFAULT_SUN_SETTINGS },
 
   // ✅ 기본 카메라 위치
   camera: {
@@ -149,7 +158,7 @@ export const DUMMY_SCENE_2: SceneFrontend = {
   },
 
   // ✅ 태양광 설정
-  sunSettings: getDefaultSunSettings(),
+  sunSettings: { ...DEFAULT_SUN_SETTINGS },
 
   // ✅ 기본 카메라 위치
   camera: {
@@ -193,7 +202,11 @@ export const DUMMY_SCENE_2: SceneFrontend = {
 };
 
 /**
- * 사용 가능한 Dummy Scene 목록
- * TODO: 차후 Backend API로 대체
+ * Dummy Scene 목록 (SceneRepository에서 사용)
  */
-export const AVAILABLE_SCENES: SceneFrontend[] = [DUMMY_SCENE_1, DUMMY_SCENE_2];
+export const DUMMY_SCENES: SceneFrontend[] = [DUMMY_SCENE_1, DUMMY_SCENE_2];
+
+/**
+ * @deprecated DUMMY_SCENES 사용
+ */
+export const AVAILABLE_SCENES: SceneFrontend[] = DUMMY_SCENES;

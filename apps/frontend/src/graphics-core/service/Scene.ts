@@ -118,8 +118,6 @@ export interface SceneListItem {
  * - sunSettings: 필수 태양광 설정
  * - camera: 선택적 카메라 설정
  * - assets: 가구 + 추가 조명만 포함 (태양광 제외)
- *
- * 백엔드 저장 시: SceneSerializer로 기존 Scene 형식으로 변환
  */
 export interface SceneFrontend extends Scene {
   room: RoomSettings;         // 필수: 기본 방 설정 (locked)

@@ -3,20 +3,22 @@
  * - Scene 선택 탭
  * - 조명/가구/정보 탭
  * - /edit 페이지와 일관된 디자인
+ * - SceneRepository (SSOT) 사용
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { Scene, SceneAsset } from '../graphics-core/service/Scene';
-import { AVAILABLE_SCENES } from '../graphics-core/test/DummyScenes';
+import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
+import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
-import { useSceneStore } from '../stores/sceneStore';
+import { useSceneRepository } from '../stores/sceneRepository';
 import { useAuthStore } from '../stores/authStore';
+import { isDummyScene } from '../utils/sceneId';
 
 interface MainRightPanelProps {
-  selectedScene: Scene | null;
-  onSelectScene: (scene: Scene) => void;
+  selectedScene: SceneFrontend | null;
+  onSelectScene: (scene: SceneFrontend | null) => void;
   onSceneChange: () => void; // Scene 변경 감지
 }
 
@@ -31,8 +33,7 @@ export default function MainRightPanel({
   const [activeTab, setActiveTab] = useState<Tab>('lighting');
 
   // Zustand Stores
-  const { scenes, loadScenes, updateScene, createScene, deleteScene } =
-    useSceneStore();
+  const { scenes, loadScenes, saveScene, deleteScene } = useSceneRepository();
   const { user, isGuest } = useAuthStore();
 
   // Instance 편집 모달
@@ -41,12 +42,12 @@ export default function MainRightPanel({
   // Save Confirm 모달
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [pendingNavigation, setPendingNavigation] = useState<
-    Scene | null | 'edit'
+    SceneFrontend | null | 'edit'
   >(null);
 
   // Scene 변경 감지 상태
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
-  const [currentScene, setCurrentScene] = useState<Scene | null>(null);
+  const [currentScene, setCurrentScene] = useState<SceneFrontend | null>(null);
 
   // 태양 설정 상태
   const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
@@ -89,12 +90,12 @@ export default function MainRightPanel({
   };
 
   // Scene 변경 핸들러 (확인 필요)
-  const handleSceneChangeRequest = (newScene: Scene | null) => {
+  const handleSceneChangeRequest = (newScene: SceneFrontend | null) => {
     if (hasUnsavedChanges) {
       setPendingNavigation(newScene);
       setShowSaveConfirm(true);
     } else {
-      onSelectScene(newScene as any);
+      onSelectScene(newScene);
     }
   };
 
@@ -113,15 +114,15 @@ export default function MainRightPanel({
     if (!currentScene) return;
 
     try {
-      // Scene 저장 (게스트: 메모리, 회원: API)
-      await updateScene(currentScene);
+      // Scene 저장 (SceneRepository 사용)
+      const saved = await saveScene(currentScene);
       setHasUnsavedChanges(false);
       setShowSaveConfirm(false);
 
       if (pendingNavigation === 'edit') {
-        navigate('/edit', { state: { scene: currentScene } });
+        navigate('/edit', { state: { scene: saved } });
       } else {
-        onSelectScene(pendingNavigation as any);
+        onSelectScene(pendingNavigation as SceneFrontend | null);
       }
       setPendingNavigation(null);
     } catch (error) {
@@ -138,7 +139,7 @@ export default function MainRightPanel({
     if (pendingNavigation === 'edit') {
       navigate('/edit', { state: { scene: selectedScene } });
     } else {
-      onSelectScene(pendingNavigation as any);
+      onSelectScene(pendingNavigation as SceneFrontend | null);
     }
     setPendingNavigation(null);
   };
@@ -167,26 +168,28 @@ export default function MainRightPanel({
   };
 
   // 새 Scene 만들기 - 실제 생성
-  const handleCreateNewScene = async () => {
+  const handleCreateNewScene = () => {
     if (!newSceneName.trim()) {
       alert('Scene 이름을 입력해주세요.');
       return;
     }
 
-    try {
-      // 기본 Scene 템플릿
-      const newScene = await createScene({
-        name: newSceneName,
-        description: newSceneDescription,
-        assets: AVAILABLE_SCENES[0]?.assets || [], // TestScene 기본값
-      });
-      setShowCreateSceneModal(false);
-      // /edit 페이지로 리다이렉트
-      navigate('/edit', { state: { scene: newScene } });
-    } catch (error) {
-      console.error('Failed to create scene:', error);
-      alert('Scene 생성에 실패했습니다.');
-    }
+    // 첫 번째 DummyScene을 템플릿으로 사용
+    const template = DUMMY_SCENES[0];
+    if (!template) return;
+
+    const newScene: SceneFrontend = {
+      ...JSON.parse(JSON.stringify(template)),
+      id: `new_${Date.now()}`, // 임시 ID
+      name: newSceneName,
+      description: newSceneDescription,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+
+    setShowCreateSceneModal(false);
+    // /edit 페이지로 리다이렉트
+    navigate('/edit', { state: { scene: newScene } });
   };
 
   // "저장하고 적용" 버튼 핸들러
@@ -194,14 +197,13 @@ export default function MainRightPanel({
     if (!currentScene) return;
 
     try {
-      // Scene 저장 (게스트: 메모리, 회원: API)
-      const savedScene = await updateScene(currentScene);
+      // Scene 저장 (SceneRepository 사용)
+      const savedScene = await saveScene(currentScene);
 
       // 로컬 상태 초기화
       setHasUnsavedChanges(false);
 
       // 부모 컴포넌트에 저장된 Scene 전달 (렌더링 업데이트)
-      // 새로운 객체로 전달하여 React가 변경을 감지하도록
       onSelectScene({ ...savedScene });
 
       // 피드백
@@ -296,12 +298,8 @@ export default function MainRightPanel({
         selectedScene && selectedScene.id === deletingSceneId;
 
       // Dummy Scene인지 확인
-      const isDummyScene = AVAILABLE_SCENES.some(
-        (s) => s.id === deletingSceneId
-      );
-
-      if (isDummyScene) {
-        // Dummy Scene은 로컬 상태로 숨김 처리
+      if (isDummyScene(deletingSceneId)) {
+        // Dummy Scene은 로컬 상태로 숨김 처리 (삭제 불가)
         setHiddenDummySceneIds((prev) => new Set(prev).add(deletingSceneId));
       } else {
         // 일반 Scene은 store에서 삭제
@@ -312,7 +310,7 @@ export default function MainRightPanel({
 
       // 렌더링 중인 씬 삭제 시 씬 선택 화면으로
       if (isDeletingCurrentScene) {
-        onSelectScene(null as any);
+        onSelectScene(null);
       }
     } catch (error) {
       console.error('Failed to delete scene:', error);
@@ -358,14 +356,9 @@ export default function MainRightPanel({
 
   // Scene이 선택되지 않았을 때 - Scene 목록 표시
   if (!selectedScene) {
-    // 회원 모드: API에서 가져온 Scene 목록
-    // 게스트 모드: 메모리 + Dummy Scene
-    const availableScenes = isGuest
-      ? [
-          ...scenes,
-          ...AVAILABLE_SCENES.filter((s) => !hiddenDummySceneIds.has(s.id)),
-        ] // 게스트: 메모리 + Dummy (숨긴 것 제외)
-      : scenes; // 회원: API만
+    // SceneRepository에서 이미 Dummy + Local/Server Scene이 통합되어 있음
+    // 숨긴 DummyScene만 필터링
+    const availableScenes = scenes.filter((s) => !hiddenDummySceneIds.has(s.id));
 
     return (
       <div className="main-right-panel">

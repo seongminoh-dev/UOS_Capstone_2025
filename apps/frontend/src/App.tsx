@@ -1,6 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
-import LightingSimulator from './LightingSimulator';
+import LightingSimulator from './pages/LightingSimulator';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import EditPage from './pages/EditPage';

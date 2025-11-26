@@ -73,11 +73,7 @@ export class WebGPUEngine {
         this.renderer = new Renderer(this.adapter, this.device, this.canvas);
 
         // Note: Scene loading is now handled externally by WebGPURenderer
-        // Initialize renderer with empty World
-        await this.renderer.Initialize(this.world);
-
-        // Setup input controller with camera
-        this.inputController.setCamera(this.renderer.GetCamera());
+        // Renderer.Initialize()는 Scene 로드 후에 호출됨
 
         console.log('WebGPU Engine initialized successfully');
     }
@@ -214,5 +210,15 @@ export class WebGPUEngine {
      */
     public getWorld(): World {
         return this.world;
+    }
+
+    /**
+     * InputController에 카메라를 설정합니다.
+     * Renderer.Initialize() 이후 호출해야 합니다.
+     */
+    public setupInputController(): void {
+        if (this.renderer) {
+            this.inputController.setCamera(this.renderer.GetCamera());
+        }
     }
 }
