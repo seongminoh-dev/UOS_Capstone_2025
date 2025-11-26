@@ -18,6 +18,9 @@ import type { Vec3, Quat } from 'wgpu-matrix';
 import { vec3, quat } from 'wgpu-matrix';
 import { calculateSunLightParams } from '../utils/SunCalculator';
 
+// WebGPU용 태양빛 강도 배율
+const SUN_INTENSITY_MULTIPLIER = 15;
+
 /**
  * Euler angles (degrees) → Quaternion 변환
  */
@@ -62,10 +65,10 @@ export class SceneAdapter {
     if (sunParams) {
       const direction: Vec3 = vec3.normalize(vec3.fromValues(...sunParams.direction));
       const color: Vec3 = vec3.fromValues(...sunParams.color);
-      const intensity: number = sunParams.intensity;
+      const intensity: number = sunParams.intensity * SUN_INTENSITY_MULTIPLIER;
 
       world.AddDirectionalLight(direction, color, intensity);
-      console.log(`Sun loaded: timeOfDay=${scene.sunSettings.timeOfDay}, isDaytime=${scene.sunSettings.isDaytime}`);
+      console.log(`Sun loaded: intensity=${sunParams.intensity} * ${SUN_INTENSITY_MULTIPLIER} = ${intensity}`);
     } else {
       console.log('Sun is below horizon (night mode)');
     }

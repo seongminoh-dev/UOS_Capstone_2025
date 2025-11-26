@@ -14,7 +14,6 @@
 
 import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
 import type { ThreeSceneManager } from '../three-core/ThreeSceneManager';
-import { calculateSunLightParams } from '../utils/SunCalculator';
 
 export class ThreeSceneAdapter {
   /**
@@ -42,30 +41,9 @@ export class ThreeSceneAdapter {
       console.error(`[ThreeSceneAdapter] Failed to load room: ${scene.room.meshName}`, error);
     }
 
-    // 3. ✅ Sun → DirectionalLight 자동 변환
-    const sunParams = calculateSunLightParams(
-      scene.sunSettings.timeOfDay,
-      scene.sunSettings.isDaytime,
-      scene.sunSettings.season,
-      scene.sunSettings.roomOrientation
-    );
-
-    if (sunParams) {
-      const sunAsset: SceneAsset = {
-        id: 'sun',
-        type: 'directional-light',
-        lightParams: {
-          direction: sunParams.direction,
-          color: sunParams.color,
-          intensity: sunParams.intensity,
-        },
-      };
-
-      manager.loadLightAsset(sunAsset);
-      console.log(`[ThreeSceneAdapter] Sun loaded: timeOfDay=${scene.sunSettings.timeOfDay}, isDaytime=${scene.sunSettings.isDaytime}`);
-    } else {
-      console.log('[ThreeSceneAdapter] Sun is below horizon (night mode)');
-    }
+    // 3. ❌ Sun → DirectionalLight 비활성화 (Three.js에서는 너무 밝음)
+    // WebGPU Renderer에서만 태양빛 렌더링
+    console.log('[ThreeSceneAdapter] Sun light disabled for Three.js renderer');
 
     // 4. ✅ Assets 로드 (Objects + Point/Rect Lights만)
     let objectCount = 0;
@@ -94,7 +72,7 @@ export class ThreeSceneAdapter {
 
     console.log(`[ThreeSceneAdapter] Scene loaded: ${scene.name}`);
     console.log(`- Room: 1`);
-    console.log(`- Sun: ${sunParams ? '1 (DirectionalLight)' : '0 (night)'}`)
+    console.log(`- Sun: disabled (Three.js)`);
     console.log(`- Objects: ${objectCount}`);
     console.log(`- Lights: ${lightCount}`);
 

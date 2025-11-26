@@ -49,29 +49,57 @@ export default function MainRightPanel({
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
   const [currentScene, setCurrentScene] = useState<SceneFrontend | null>(null);
 
-  // 태양 설정 상태
+  // 태양 설정 상태 (Scene의 sunSettings와 동기화)
   const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
-  const [sunTime, setSunTime] = useState(12); // 6~18시
-  const [season, setSeason] = useState('spring');
-  const [roomDirection, setRoomDirection] = useState('south');
+  const [sunTime, setSunTime] = useState(50); // 0-100 (Scene 형식)
+  const [season, setSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
+  const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
 
   // Scene 목록 로드 (초기화)
   useEffect(() => {
     loadScenes();
   }, [loadScenes]);
 
-  // Scene이 변경되면 상태 초기화
+  // Scene이 변경되면 상태 초기화 (sunSettings 동기화 포함)
   useEffect(() => {
     if (selectedScene) {
       setCurrentScene(JSON.parse(JSON.stringify(selectedScene))); // Deep copy
       setHasUnsavedChanges(false);
+
+      // sunSettings에서 UI 상태 초기화
+      const sun = selectedScene.sunSettings;
+      setTimeOfDay(sun.isDaytime ? 'day' : 'night');
+      setSunTime(sun.timeOfDay);
+      setSeason(sun.season);
+      setRoomDirection(sun.roomOrientation);
     }
   }, [selectedScene]);
 
-  // 변경 감지: 태양 설정
+  // 태양 설정 변경 시 currentScene.sunSettings 업데이트
   useEffect(() => {
     if (currentScene) {
-      setHasUnsavedChanges(true);
+      const updatedSunSettings = {
+        timeOfDay: sunTime,
+        isDaytime: timeOfDay === 'day',
+        season: season,
+        roomOrientation: roomDirection,
+      };
+
+      // 값이 실제로 변경되었는지 확인
+      const sun = currentScene.sunSettings;
+      const hasChanged =
+        sun.timeOfDay !== updatedSunSettings.timeOfDay ||
+        sun.isDaytime !== updatedSunSettings.isDaytime ||
+        sun.season !== updatedSunSettings.season ||
+        sun.roomOrientation !== updatedSunSettings.roomOrientation;
+
+      if (hasChanged) {
+        setCurrentScene({
+          ...currentScene,
+          sunSettings: updatedSunSettings,
+        });
+        setHasUnsavedChanges(true);
+      }
     }
   }, [timeOfDay, sunTime, season, roomDirection]);
 
@@ -558,20 +586,22 @@ export default function MainRightPanel({
                 </div>
               </div>
 
-              {/* 시간 */}
+              {/* 시간 (0-100 → 0-24시 변환하여 표시) */}
               <div className="form-group">
-                <label className="form-label">시간: {sunTime}시</label>
+                <label className="form-label">
+                  시간: {Math.round((sunTime / 100) * 24)}시
+                </label>
                 <input
                   type="range"
-                  min="6"
-                  max="18"
+                  min="0"
+                  max="100"
                   value={sunTime}
                   onChange={(e) => setSunTime(Number(e.target.value))}
                   className="range-slider"
                 />
                 <div className="range-labels">
-                  <span>6시 (일출)</span>
-                  <span>18시 (일몰)</span>
+                  <span>0시 (자정)</span>
+                  <span>24시 (자정)</span>
                 </div>
               </div>
 
@@ -580,7 +610,7 @@ export default function MainRightPanel({
                 <label className="form-label">계절</label>
                 <select
                   value={season}
-                  onChange={(e) => setSeason(e.target.value)}
+                  onChange={(e) => setSeason(e.target.value as 'spring' | 'summer' | 'autumn' | 'winter')}
                   className="form-select"
                 >
                   <option value="spring">봄</option>
@@ -595,7 +625,7 @@ export default function MainRightPanel({
                 <label className="form-label">방 방향</label>
                 <select
                   value={roomDirection}
-                  onChange={(e) => setRoomDirection(e.target.value)}
+                  onChange={(e) => setRoomDirection(e.target.value as 'north' | 'south' | 'east' | 'west')}
                   className="form-select"
                 >
                   <option value="east">동향</option>
