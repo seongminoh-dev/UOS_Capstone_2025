@@ -53,7 +53,6 @@ export default function MainRightPanel({
   const [currentScene, setCurrentScene] = useState<SceneFrontend | null>(null);
 
   // 태양 설정 상태 (Scene의 sunSettings와 동기화)
-  const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
   const [sunTime, setSunTime] = useState(50); // 0-100 (Scene 형식)
   const [season, setSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
@@ -73,7 +72,6 @@ export default function MainRightPanel({
 
       // sunSettings에서 UI 상태 초기화
       const sun = selectedScene.sunSettings;
-      setTimeOfDay(sun.isDaytime ? 'day' : 'night');
       setSunTime(sun.timeOfDay);
       setSeason(sun.season);
       setRoomDirection(sun.roomOrientation);
@@ -87,7 +85,7 @@ export default function MainRightPanel({
     if (currentScene) {
       const updatedSunSettings: SunSettings = {
         timeOfDay: sunTime,
-        isDaytime: timeOfDay === 'day',
+        isDaytime: true, // 항상 true - 시간 슬라이더로 자동 낮/밤 전환
         season: season,
         roomOrientation: roomDirection,
         skyMode: skyMode,
@@ -98,7 +96,6 @@ export default function MainRightPanel({
       const sun = currentScene.sunSettings;
       const hasChanged =
         sun.timeOfDay !== updatedSunSettings.timeOfDay ||
-        sun.isDaytime !== updatedSunSettings.isDaytime ||
         sun.season !== updatedSunSettings.season ||
         sun.roomOrientation !== updatedSunSettings.roomOrientation ||
         sun.skyMode !== updatedSunSettings.skyMode ||
@@ -117,7 +114,7 @@ export default function MainRightPanel({
         }
       }
     }
-  }, [timeOfDay, sunTime, season, roomDirection, skyMode, envIndirectMult, onSunSettingsChange]);
+  }, [sunTime, season, roomDirection, skyMode, envIndirectMult, onSunSettingsChange]);
 
   // Asset 저장 핸들러
   const handleSaveAsset = (updatedAsset: SceneAsset) => {
@@ -555,29 +552,6 @@ export default function MainRightPanel({
             <div className="section-card">
               <h3 className="section-title">태양 설정</h3>
 
-              {/* 시간대 */}
-              <div className="form-group">
-                <label className="form-label">시간대</label>
-                <div className="button-group">
-                  <button
-                    className={`toggle-button ${
-                      timeOfDay === 'day' ? 'active' : ''
-                    }`}
-                    onClick={() => setTimeOfDay('day')}
-                  >
-                    낮
-                  </button>
-                  <button
-                    className={`toggle-button ${
-                      timeOfDay === 'night' ? 'active' : ''
-                    }`}
-                    onClick={() => setTimeOfDay('night')}
-                  >
-                    밤
-                  </button>
-                </div>
-              </div>
-
               {/* 시간 (20분 단위로 세밀하게 조절) */}
               <div className="form-group">
                 <label className="form-label">
@@ -629,13 +603,13 @@ export default function MainRightPanel({
               </div>
             </div>
 
-            {/* 환경 설정 */}
+            {/* 하늘 설정 */}
             <div className="section-card">
-              <h3 className="section-title">환경 설정</h3>
+              <h3 className="section-title">하늘 설정</h3>
 
-              {/* 하늘 설정 */}
+              {/* 품질 */}
               <div className="form-group">
-                <label className="form-label">하늘 설정</label>
+                <label className="form-label">품질</label>
                 <div className="button-group">
                   <button
                     className={`toggle-button ${skyMode === 2 ? 'active' : ''}`}
@@ -658,11 +632,14 @@ export default function MainRightPanel({
                 </div>
               </div>
 
-              {/* 환경 간접광 */}
+              {/* 하늘빛 반사 */}
               <div className="form-group">
                 <label className="form-label">
-                  환경 간접광: {envIndirectMult}%
+                  하늘빛 반사: {envIndirectMult}%
                 </label>
+                <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '4px 0 8px 0' }}>
+                  실내에 비치는 하늘색 조명의 강도
+                </p>
                 <input
                   type="range"
                   min="0"
@@ -674,7 +651,7 @@ export default function MainRightPanel({
                 />
                 <div className="range-labels">
                   <span>0% (없음)</span>
-                  <span>100% (물리 기반)</span>
+                  <span>100% (자연스러움)</span>
                 </div>
               </div>
             </div>
