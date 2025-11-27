@@ -386,6 +386,49 @@ export class World
         return;
     }
 
+    /**
+     * 첫 번째 DirectionalLight(태양)를 업데이트합니다.
+     * 기존 DirectionalLight를 새로운 값으로 교체합니다.
+     * DirectionalLight가 없으면 새로 추가합니다.
+     */
+    public UpdateDirectionalLight
+    (
+        Direction   : Vec3,
+        Color       : Vec3,
+        Intensity   : number,
+    ) : void
+    {
+        // DirectionalLight 타입은 LightType = 0
+        // Light 배열에서 첫 번째 DirectionalLight를 찾아 교체
+        const newLight = new DirectionalLight(Direction, Color, Intensity);
+
+        let found = false;
+        for (let i = 0; i < this.Lights.length; i++) {
+            // DirectionalLight를 찾으면 교체
+            if (this.Lights[i] instanceof DirectionalLight) {
+                this.Lights[i] = newLight;
+                found = true;
+                break;
+            }
+        }
+
+        // DirectionalLight가 없으면 배열 맨 앞에 추가
+        if (!found) {
+            this.Lights.unshift(newLight);
+        }
+
+        return;
+    }
+
+    /**
+     * 모든 DirectionalLight를 제거합니다 (밤 모드용).
+     */
+    public RemoveDirectionalLights() : void
+    {
+        this.Lights = this.Lights.filter(light => !(light instanceof DirectionalLight));
+        return;
+    }
+
 
 
 

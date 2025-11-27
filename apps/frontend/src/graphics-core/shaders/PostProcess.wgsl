@@ -4,32 +4,47 @@
 
 struct Uniform
 {
-    Resolution_Source               : vec2<u32>,
-    Resolution_Target               : vec2<u32>,
+    Resolution_Source                       : vec2<u32>,
+    Resolution_Target                       : vec2<u32>,
 
-    ViewProjectionMatrix_Inverse    : mat4x4<f32>,
-    ViewProjectionMatrix_Clean      : mat4x4<f32>,
-    ViewProjectionMatrix_Prev       : mat4x4<f32>,
+    ViewProjectionMatrix_Jittered_Inverse   : mat4x4<f32>,
+    ViewProjectionMatrix                    : mat4x4<f32>,
+    ViewProjectionMatrix_Inverse            : mat4x4<f32>,
+    ViewProjectionMatrix_Prev               : mat4x4<f32>,
 
-    CameraWorldPosition             : vec3<f32>,
-    FrameIndex                      : u32,
+    CameraWorldPosition                     : vec3<f32>,
+    FrameIndex                              : u32,
 
-    Offset_MeshDescriptorBuffer     : u32,
-    Offset_MaterialIDBuffer         : u32,
-    Offset_MaterialBuffer           : u32,
-    Offset_LightBuffer              : u32,
+    Offset_MeshDescriptorBuffer             : u32,
+    Offset_MaterialIDBuffer                 : u32,
+    Offset_MaterialBuffer                   : u32,
+    Offset_LightBuffer                      : u32,
 
-    Offset_LightsCDFBuffer          : u32,
-    Offset_IndexBuffer              : u32,
-    Offset_SubBlasRootArrayBuffer   : u32,
-    Offset_BlasBuffer               : u32,
+    Offset_LightsCDFBuffer                  : u32,
+    Offset_IndexBuffer                      : u32,
+    Offset_SubBlasRootArrayBuffer           : u32,
+    Offset_BlasBuffer                       : u32,
 
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
-    Jitter                          : vec2<f32>,
+    InstanceCount                           : u32,
+    LightSourceCount                        : u32,
+    Jitter                                  : vec2<f32>,
 
-    FrameCount                      : u32,
+    Padding_0                               : vec3<u32>,
+    FrameCount                              : u32,
+
+    EnvSkyColor                             : vec3<f32>,
+    EnvMode                                 : u32,
+
+    EnvHorizonColor                         : vec3<f32>,
+    EnvSunIntensity                         : f32,
+
+    EnvGroundColor                          : vec3<f32>,
+    EnvIntensity                            : f32,
+
+    EnvSunDirection                         : vec3<f32>,
+    EnvIndirectMult                         : f32,
 };
+
 
 struct Instance
 {

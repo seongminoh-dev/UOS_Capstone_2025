@@ -4,31 +4,45 @@
 
 struct Uniform
 {
-    Resolution_Source               : vec2<u32>,
-    Resolution_Target               : vec2<u32>,
+    Resolution_Source                       : vec2<u32>,
+    Resolution_Target                       : vec2<u32>,
 
-    ViewProjectionMatrix_Inverse    : mat4x4<f32>,
-    ViewProjectionMatrix_Clean      : mat4x4<f32>,
-    ViewProjectionMatrix_Prev       : mat4x4<f32>,
+    ViewProjectionMatrix_Jittered_Inverse   : mat4x4<f32>,
+    ViewProjectionMatrix                    : mat4x4<f32>,
+    ViewProjectionMatrix_Inverse            : mat4x4<f32>,
+    ViewProjectionMatrix_Prev               : mat4x4<f32>,
 
-    CameraWorldPosition             : vec3<f32>,
-    FrameIndex                      : u32,
+    CameraWorldPosition                     : vec3<f32>,
+    FrameIndex                              : u32,
 
-    Offset_MeshDescriptorBuffer     : u32,
-    Offset_MaterialIDBuffer         : u32,
-    Offset_MaterialBuffer           : u32,
-    Offset_LightBuffer              : u32,
+    Offset_MeshDescriptorBuffer             : u32,
+    Offset_MaterialIDBuffer                 : u32,
+    Offset_MaterialBuffer                   : u32,
+    Offset_LightBuffer                      : u32,
 
-    Offset_LightsCDFBuffer          : u32,
-    Offset_IndexBuffer              : u32,
-    Offset_SubBlasRootArrayBuffer   : u32,
-    Offset_BlasBuffer               : u32,
+    Offset_LightsCDFBuffer                  : u32,
+    Offset_IndexBuffer                      : u32,
+    Offset_SubBlasRootArrayBuffer           : u32,
+    Offset_BlasBuffer                       : u32,
 
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
-    Jitter                          : vec2<f32>,
+    InstanceCount                           : u32,
+    LightSourceCount                        : u32,
+    Jitter                                  : vec2<f32>,
 
-    FrameCount                      : u32,
+    Padding_0                               : vec3<u32>,
+    FrameCount                              : u32,
+
+    EnvSkyColor                             : vec3<f32>,
+    EnvMode                                 : u32,
+
+    EnvHorizonColor                         : vec3<f32>,
+    EnvSunIntensity                         : f32,
+
+    EnvGroundColor                          : vec3<f32>,
+    EnvIntensity                            : f32,
+
+    EnvSunDirection                         : vec3<f32>,
+    EnvIndirectMult                         : f32,
 };
 
 struct Instance
@@ -219,11 +233,82 @@ const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
 
-const ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
 const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
+
+//==========================================================================
+// Procedural Sky (물리 기반 환경광)
+//==========================================================================
+
+fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
+{
+    // Uniform에서 환경 파라미터 가져오기
+    let skyColor     = UniformBuffer.EnvSkyColor;
+    let horizonColor = UniformBuffer.EnvHorizonColor.xyz;
+    let groundColor  = UniformBuffer.EnvGroundColor.xyz;
+    let sunDir       = UniformBuffer.EnvSunDirection;
+    let sunIntensity = UniformBuffer.EnvSunIntensity;
+    let envIntensity = UniformBuffer.EnvIntensity;
+
+    // 시선 방향의 수직 성분 (y = 1: 천정, y = 0: 지평선, y = -1: 지면)
+    let cosTheta = rayDir.y;
+
+    // === 하늘/지면 구분 ===
+    if (cosTheta < 0.0) {
+        // 지면 방향: 지면 반사색 반환
+        let groundFactor = clamp(-cosTheta, 0.0, 1.0);
+        return groundColor * envIntensity * (0.5 + groundFactor * 0.5);
+    }
+
+    // === Rayleigh 산란 근사 ===
+    // 천정(cosTheta=1)에서 skyColor, 지평선(cosTheta=0)에서 horizonColor
+    let heightFactor = pow(cosTheta, 0.4); // 비선형 보간 (지평선 근처에서 더 넓게)
+    var skyResult = mix(horizonColor, skyColor, heightFactor);
+
+    // === Mie 산란 근사 (태양 광채/aureole) ===
+    if (sunIntensity > 0.0) {
+        let cosSun = dot(rayDir, -sunDir); // 태양 방향과의 각도
+
+        // 태양 디스크 (매우 밝은 중심)
+        let sunDisk = smoothstep(0.9995, 0.9999, cosSun) * 50.0;
+
+        // 태양 주변 광채 (Mie forward scattering)
+        let aureole = pow(max(cosSun, 0.0), 64.0) * 2.0;
+
+        // 태양빛 색상 (색온도 기반 - Uniform에서 계산된 값 사용)
+        // 여기서는 단순히 따뜻한 흰색 사용
+        let sunColor = vec3<f32>(1.0, 0.95, 0.9);
+
+        skyResult += sunColor * (sunDisk + aureole) * sunIntensity;
+    }
+
+    return skyResult * envIntensity;
+}
+
+// 기본 회색 환경색 (없음 모드용)
+const DEFAULT_ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
+
+fn GetEnvironmentColor(rayDir : vec3<f32>) -> vec3<f32>
+{
+    var EnvColor : vec3<f32>;
+
+    switch ( UniformBuffer.EnvMode )
+    {
+        case 0u : { EnvColor = DEFAULT_ENV_COLOR; }
+        case 1u : { EnvColor = UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity; }
+        case default : { EnvColor = SampleProceduralSky(rayDir); }
+    }
+
+    return EnvColor;
+}
+
+// 간접광용 환경색 (EnvIndirectMult 적용)
+fn GetEnvironmentColorIndirect(rayDir : vec3<f32>) -> vec3<f32>
+{
+    return GetEnvironmentColor(rayDir) * UniformBuffer.EnvIndirectMult;
+}
 
 //==========================================================================
 // Enums
@@ -792,7 +877,7 @@ fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
     OutLightSample.Type         = LIGHT_ENV;
     OutLightSample.Direction    = -L;
     OutLightSample.LightID      = -1;
-    OutLightSample.Emittance    = ENV_COLOR;
+    OutLightSample.Emittance    = GetEnvironmentColorIndirect(L);
 
     OutLightSample.PDF          = PDF_BSDF(X, V, L);
 
@@ -804,7 +889,7 @@ fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
     let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
     let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
 
-    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
+    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Jittered_Inverse);
 }
 
 fn Get_X1(ThreadID : vec2<u32>) -> CompactSurface
@@ -1542,11 +1627,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         {
             PathTree.XL = CreateEnvLight(X, V, L);
 
-            let PathContribution : vec3<f32> = f * ENV_COLOR;
+            let PathContribution : vec3<f32> = f * GetEnvironmentColorIndirect(L);
             let P_hat : f32 = Luminance( PathContribution );
 
             let PathPDF : f32 = p;
-            
+
             let RIS : f32 = P_hat / PathPDF;
 
             UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);

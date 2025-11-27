@@ -108,6 +108,16 @@ export class Renderer
     private FrameCount  : number;
     private Prev_VPMat  : Mat4;
 
+    // Environment Parameters (물리 기반 하늘/환경광)
+    private EnvSkyColor         : [number, number, number];
+    private EnvHorizonColor     : [number, number, number];
+    private EnvGroundColor      : [number, number, number];
+    private EnvSunDirection     : [number, number, number];
+    private EnvSunIntensity     : number;
+    private EnvIntensity        : number;
+    private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+    private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
+
     // ★ 추가: N 프레임마다 캡처 (0이면 비활성화)
     public CaptureInterval = 0;
 
@@ -155,6 +165,16 @@ export class Renderer
             this.FrameID            = 0;
             this.FrameCount         = 0;
             this.Prev_VPMat         = mat4.create();
+
+            // 환경 파라미터 기본값 (정오 맑은 하늘)
+            this.EnvSkyColor        = [0.15, 0.35, 0.65];
+            this.EnvHorizonColor    = [0.5, 0.6, 0.75];
+            this.EnvGroundColor     = [0.1, 0.15, 0.1];
+            this.EnvSunDirection    = [0, -1, 0];
+            this.EnvSunIntensity    = 1.0;
+            this.EnvIntensity       = 1.0;
+            this.EnvMode            = 2; // 기본값: 고품질 하늘
+            this.EnvIndirectMult    = 0.5; // 기본값: 50% 간접광
         }
 
     }
@@ -165,13 +185,98 @@ export class Renderer
         return this.Camera;
     }
 
-    public ResetFrameCount() : void 
-    { 
-        this.FrameCount = 0; 
+    public ResetFrameCount() : void
+    {
+        this.FrameCount = 0;
         return;
     }
 
+    /**
+     * Light 데이터만 동적으로 업데이트합니다 (전체 재초기화 없이)
+     * Scene 버퍼의 Light 영역과 LightCDF 영역만 업데이트합니다.
+     */
+    public UpdateLights(InWorld: World): void
+    {
+        // 1. Light 데이터 직렬화
+        const SerializedLightArray: Uint32Array[] = [];
+        for (const LightToSerialize of InWorld.Lights) {
+            const LightSerialized: Uint32Array = LightToSerialize.Serialize();
+            SerializedLightArray.push(LightSerialized);
+        }
 
+        // Merge Light Arrays
+        let LightRawData: Uint32Array;
+        if (SerializedLightArray.length > 0) {
+            const totalLength = SerializedLightArray.reduce((sum, arr) => sum + arr.length, 0);
+            LightRawData = new Uint32Array(totalLength);
+            let offset = 0;
+            for (const arr of SerializedLightArray) {
+                LightRawData.set(arr, offset);
+                offset += arr.length;
+            }
+        } else {
+            LightRawData = new Uint32Array(0);
+        }
+
+        // 2. Light CDF 데이터 생성
+        const LightsCDFArrayBuffer: ArrayBuffer = InWorld.GetLightCDFBuffer();
+        const LightsCDFRawData = new Uint32Array(LightsCDFArrayBuffer);
+
+        // 3. Scene 버퍼의 Light 영역 업데이트
+        const lightOffset = this.Offsets[EDataOffsetIndex.Light];
+        const lightByteOffset = lightOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightByteOffset,
+            LightRawData.buffer
+        );
+
+        // 4. Scene 버퍼의 LightCDF 영역 업데이트
+        const lightsCDFOffset = this.Offsets[EDataOffsetIndex.LightsCDF];
+        const lightsCDFByteOffset = lightsCDFOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightsCDFByteOffset,
+            LightsCDFRawData.buffer
+        );
+
+        // 5. World 참조 업데이트 및 프레임 카운트 리셋
+        this.World = InWorld;
+        this.ResetFrameCount();
+
+        return;
+    }
+
+    /**
+     * 환경 파라미터를 업데이트합니다 (Procedural Sky용).
+     * GPU Uniform 버퍼는 Update()에서 자동으로 반영됩니다.
+     * @param envMode - 0: 없음(회색), 1: 일반 하늘, 2: 고품질 하늘
+     * @param envIndirectMult - 환경 간접광 강도 (0.0~1.0)
+     */
+    public UpdateEnvironment(
+        skyColor: [number, number, number],
+        horizonColor: [number, number, number],
+        groundColor: [number, number, number],
+        sunDirection: [number, number, number],
+        sunIntensity: number,
+        environmentIntensity: number,
+        envMode: number = 2,
+        envIndirectMult: number = 0.5
+    ): void {
+        this.EnvSkyColor = skyColor;
+        this.EnvHorizonColor = horizonColor;
+        this.EnvGroundColor = groundColor;
+        this.EnvSunDirection = sunDirection;
+        this.EnvSunIntensity = sunIntensity;
+        this.EnvIntensity = environmentIntensity;
+        this.EnvMode = envMode;
+        this.EnvIndirectMult = envIndirectMult;
+
+        // 환경이 바뀌면 경로 추적 누적 리셋
+        this.ResetFrameCount();
+
+        return;
+    }
 
     public async Initialize(InWorld : World) : Promise<void>
     {
@@ -207,13 +312,15 @@ export class Renderer
         const ViewMatrix                = this.Camera.GetViewMatrix();
         const ProjectionMatrix          = this.Camera.GetProjectionMatrix();
         const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(ProjectionMatrix, this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
-        
+
         const ViewProjection            = mat4.multiply(ProjectionMatrix, ViewMatrix);
-        const ViewProjection_Jittered   = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
-        const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
+        const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 72;
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
+        const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
+
+        const ELEMENT_COUNT = 104;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -223,32 +330,53 @@ export class Renderer
             Uint32View[1] = this.Canvas.height / 2;
             Uint32View[2] = this.Canvas.width;
             Uint32View[3] = this.Canvas.height;
-            
-            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
+
+            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Jittered_Inverse?.[iter]!;
             for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Prev[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Inverse[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[52 + iter] = ViewProjection_Prev[iter]!;
 
-            Float32View[52] = CameraLocation[0];
-            Float32View[53] = CameraLocation[1];
-            Float32View[54] = CameraLocation[2];
-            Uint32View [55] = this.FrameID;
+            Float32View[68] = CameraLocation[0];
+            Float32View[69] = CameraLocation[1];
+            Float32View[70] = CameraLocation[2];
+            Uint32View [71] = this.FrameID;
 
-            Uint32View [56] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View [57] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View [58] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View [59] = this.Offsets[EDataOffsetIndex.Light];
+            Uint32View [72] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [73] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [74] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [75] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View [60] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View [61] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View [62] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View [63] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [76] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [77] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [78] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [79] = this.Offsets[EDataOffsetIndex.Blas];
 
-            Uint32View [64] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View [65] = this.World.Lights.length;
-            Float32View[66] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
+            Uint32View [80] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [81] = this.World.Lights.length;
+            Float32View[82] = (Jitter_X * 2) / this.Canvas.width;
+            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height;
 
-            Uint32View [68] = this.FrameCount;
+            Uint32View [87] = this.FrameCount;
+
+            Float32View[88] = this.EnvSkyColor[0];
+            Float32View[89] = this.EnvSkyColor[1];
+            Float32View[90] = this.EnvSkyColor[2];
+            Uint32View [91] = this.EnvMode;
+
+            Float32View[92] = this.EnvHorizonColor[0];
+            Float32View[93] = this.EnvHorizonColor[1];
+            Float32View[94] = this.EnvHorizonColor[2];
+            Float32View[95] = this.EnvSunIntensity;
+
+            Float32View[96] = this.EnvGroundColor[0];
+            Float32View[97] = this.EnvGroundColor[1];
+            Float32View[98] = this.EnvGroundColor[2];
+            Float32View[99] = this.EnvIntensity;
+
+            Float32View[100] = this.EnvSunDirection[0];
+            Float32View[101] = this.EnvSunDirection[1];
+            Float32View[102] = this.EnvSunDirection[2];
+            Float32View[103] = this.EnvIndirectMult;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -273,8 +401,8 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
     
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            // this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            // this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -402,7 +530,7 @@ export class Renderer
 
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 512, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 1024, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
         this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
         this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);

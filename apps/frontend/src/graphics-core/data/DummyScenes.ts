@@ -23,7 +23,7 @@ export const DUMMY_SCENE_1: SceneFrontend = {
 
   // ✅ Room 설정 (편집 불가능, assets에서 분리)
   room: {
-    meshName: 'Bedroom',
+    meshName: 'BedroomEdit',
     locked: true,
     transform: {
       position: [0, 0, 0],
