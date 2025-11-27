@@ -2,7 +2,7 @@ import { vec3 } from 'wgpu-matrix';
 import type { Vec3 } from 'wgpu-matrix';
 import { World } from '../World';
 import { InputController } from '../InputController';
-import { calculateSunLightParams } from '../../utils/SunCalculator';
+import { calculateSunLightParams, calculateEnvironmentParams } from '../../utils/SunCalculator';
 import type { SunSettings } from './Scene';
 
 // Renderer Renderer_TEST
@@ -303,7 +303,32 @@ export class WebGPUEngine {
             console.log('[WebGPUEngine] Sun removed (night mode)');
         }
 
-        // GPU 버퍼 업데이트
+        // GPU Light 버퍼 업데이트
         this.renderer.UpdateLights(this.world);
+
+        // 환경 파라미터 계산 및 업데이트 (Procedural Sky)
+        const envParams = calculateEnvironmentParams(
+            sunSettings.timeOfDay,
+            sunSettings.isDaytime,
+            sunSettings.season,
+            sunSettings.roomOrientation
+        );
+
+        // skyMode: 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+        const skyMode = sunSettings.skyMode ?? 2;
+        const envIndirectMult = sunSettings.envIndirectMultiplier ?? 0.5;
+
+        this.renderer.UpdateEnvironment(
+            envParams.skyColor,
+            envParams.horizonColor,
+            envParams.groundColor,
+            envParams.sunDirection,
+            envParams.sunIntensity,
+            envParams.environmentIntensity,
+            skyMode,
+            envIndirectMult
+        );
+        const modeNames = ['없음', '일반', '고품질'];
+        console.log(`[WebGPUEngine] Environment: mode=${modeNames[skyMode]}, indirect=${(envIndirectMult * 100).toFixed(0)}%`);
     }
 }

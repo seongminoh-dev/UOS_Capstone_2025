@@ -108,6 +108,16 @@ export class Renderer
     private FrameCount  : number;
     private Prev_VPMat  : Mat4;
 
+    // Environment Parameters (물리 기반 하늘/환경광)
+    private EnvSkyColor         : [number, number, number];
+    private EnvHorizonColor     : [number, number, number];
+    private EnvGroundColor      : [number, number, number];
+    private EnvSunDirection     : [number, number, number];
+    private EnvSunIntensity     : number;
+    private EnvIntensity        : number;
+    private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+    private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
+
 
     constructor
     (
@@ -153,6 +163,16 @@ export class Renderer
             this.FrameID            = 0;
             this.FrameCount         = 0;
             this.Prev_VPMat         = mat4.create();
+
+            // 환경 파라미터 기본값 (정오 맑은 하늘)
+            this.EnvSkyColor        = [0.15, 0.35, 0.65];
+            this.EnvHorizonColor    = [0.5, 0.6, 0.75];
+            this.EnvGroundColor     = [0.1, 0.15, 0.1];
+            this.EnvSunDirection    = [0, -1, 0];
+            this.EnvSunIntensity    = 1.0;
+            this.EnvIntensity       = 1.0;
+            this.EnvMode            = 2; // 기본값: 고품질 하늘
+            this.EnvIndirectMult    = 0.5; // 기본값: 50% 간접광
         }
 
     }
@@ -225,7 +245,36 @@ export class Renderer
         return;
     }
 
+    /**
+     * 환경 파라미터를 업데이트합니다 (Procedural Sky용).
+     * GPU Uniform 버퍼는 Update()에서 자동으로 반영됩니다.
+     * @param envMode - 0: 없음(회색), 1: 일반 하늘, 2: 고품질 하늘
+     * @param envIndirectMult - 환경 간접광 강도 (0.0~1.0)
+     */
+    public UpdateEnvironment(
+        skyColor: [number, number, number],
+        horizonColor: [number, number, number],
+        groundColor: [number, number, number],
+        sunDirection: [number, number, number],
+        sunIntensity: number,
+        environmentIntensity: number,
+        envMode: number = 2,
+        envIndirectMult: number = 0.5
+    ): void {
+        this.EnvSkyColor = skyColor;
+        this.EnvHorizonColor = horizonColor;
+        this.EnvGroundColor = groundColor;
+        this.EnvSunDirection = sunDirection;
+        this.EnvSunIntensity = sunIntensity;
+        this.EnvIntensity = environmentIntensity;
+        this.EnvMode = envMode;
+        this.EnvIndirectMult = envIndirectMult;
 
+        // 환경이 바뀌면 경로 추적 누적 리셋
+        this.ResetFrameCount();
+
+        return;
+    }
 
     public async Initialize(InWorld : World) : Promise<void>
     {
@@ -267,7 +316,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 72;
+        const ELEMENT_COUNT = 92; // 68 + 4 (padding) + 20 (환경 파라미터)
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -277,7 +326,7 @@ export class Renderer
             Uint32View[1] = this.Canvas.height / 2;
             Uint32View[2] = this.Canvas.width;
             Uint32View[3] = this.Canvas.height;
-            
+
             for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
             for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
             for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Prev[iter]!;
@@ -303,6 +352,46 @@ export class Renderer
             Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
 
             Uint32View [68] = this.FrameCount;
+            // [69-71] = padding (_padding0, _padding1, _padding2) - 셰이더 정렬 맞추기
+            Float32View[69] = 0.0;
+            Float32View[70] = 0.0;
+            Float32View[71] = 0.0;
+
+            // === 환경 파라미터 (Procedural Sky) ===
+            // [72-74] Sky Color (천정 색상)
+            Float32View[72] = this.EnvSkyColor[0];
+            Float32View[73] = this.EnvSkyColor[1];
+            Float32View[74] = this.EnvSkyColor[2];
+            // [75] = _padding3
+            Float32View[75] = 0.0;
+
+            // [76-79] Horizon Color (지평선 색상, vec4)
+            Float32View[76] = this.EnvHorizonColor[0];
+            Float32View[77] = this.EnvHorizonColor[1];
+            Float32View[78] = this.EnvHorizonColor[2];
+            Float32View[79] = 0.0; // w = padding
+
+            // [80-83] Ground Color (지면 반사색, vec4)
+            Float32View[80] = this.EnvGroundColor[0];
+            Float32View[81] = this.EnvGroundColor[1];
+            Float32View[82] = this.EnvGroundColor[2];
+            Float32View[83] = 0.0; // w = padding
+
+            // [84-86] Sun Direction (태양 방향, vec3)
+            Float32View[84] = this.EnvSunDirection[0];
+            Float32View[85] = this.EnvSunDirection[1];
+            Float32View[86] = this.EnvSunDirection[2];
+
+            // [87] Sun Intensity, [88] Environment Intensity
+            Float32View[87] = this.EnvSunIntensity;
+            Float32View[88] = this.EnvIntensity;
+
+            // [89] EnvIndirectMult, [90] padding
+            Float32View[89] = this.EnvIndirectMult;
+            Float32View[90] = 0.0; // padding
+
+            // [91] EnvMode (0=없음, 1=일반, 2=고품질)
+            Uint32View[91] = this.EnvMode;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);

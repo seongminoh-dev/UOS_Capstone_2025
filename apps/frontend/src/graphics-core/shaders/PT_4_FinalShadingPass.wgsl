@@ -29,6 +29,21 @@ struct Uniform
     Jitter                          : vec2<f32>,
 
     FrameCount                      : u32,
+    _padding0                       : f32,
+    _padding1                       : f32,
+    _padding2                       : f32,
+
+    // === 환경 파라미터 (Procedural Sky) ===
+    EnvSkyColor                     : vec3<f32>,
+    _padding3                       : f32,
+    EnvHorizonColor                 : vec4<f32>,   // w = padding
+    EnvGroundColor                  : vec4<f32>,   // w = padding
+    EnvSunDirection                 : vec3<f32>,
+    EnvSunIntensity                 : f32,
+    EnvIntensity                    : f32,
+    EnvIndirectMult                 : f32,         // 환경 간접광 강도 (0.0~1.0)
+    _padding5                       : f32,
+    EnvMode                         : u32,         // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
 };
 
 struct Instance
@@ -220,11 +235,91 @@ const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
 
-const ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
 const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
+
+//==========================================================================
+// Procedural Sky (물리 기반 환경광)
+//==========================================================================
+
+/**
+ * 물리 기반 Procedural Sky 색상을 계산합니다.
+ * Rayleigh/Mie 산란을 근사하여 하늘색을 계산합니다.
+ *
+ * @param rayDir - 시선 방향 (정규화됨)
+ * @return 하늘 색상 (HDR)
+ */
+fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
+{
+    // Uniform에서 환경 파라미터 가져오기
+    let skyColor     = UniformBuffer.EnvSkyColor;
+    let horizonColor = UniformBuffer.EnvHorizonColor.xyz;
+    let groundColor  = UniformBuffer.EnvGroundColor.xyz;
+    let sunDir       = UniformBuffer.EnvSunDirection;
+    let sunIntensity = UniformBuffer.EnvSunIntensity;
+    let envIntensity = UniformBuffer.EnvIntensity;
+
+    // 시선 방향의 수직 성분 (y = 1: 천정, y = 0: 지평선, y = -1: 지면)
+    let cosTheta = rayDir.y;
+
+    // === 하늘/지면 구분 ===
+    if (cosTheta < 0.0) {
+        // 지면 방향: 지면 반사색 반환
+        let groundFactor = clamp(-cosTheta, 0.0, 1.0);
+        return groundColor * envIntensity * (0.5 + groundFactor * 0.5);
+    }
+
+    // === Rayleigh 산란 근사 ===
+    // 천정(cosTheta=1)에서 skyColor, 지평선(cosTheta=0)에서 horizonColor
+    let heightFactor = pow(cosTheta, 0.4); // 비선형 보간 (지평선 근처에서 더 넓게)
+    var skyResult = mix(horizonColor, skyColor, heightFactor);
+
+    // === Mie 산란 근사 (태양 광채/aureole) ===
+    if (sunIntensity > 0.0) {
+        let cosSun = dot(rayDir, -sunDir); // 태양 방향과의 각도
+
+        // 태양 디스크 (매우 밝은 중심)
+        let sunDisk = smoothstep(0.9995, 0.9999, cosSun) * 50.0;
+
+        // 태양 주변 광채 (Mie forward scattering)
+        let aureole = pow(max(cosSun, 0.0), 64.0) * 2.0;
+
+        // 태양빛 색상 (색온도 기반 - Uniform에서 계산된 값 사용)
+        // 여기서는 단순히 따뜻한 흰색 사용
+        let sunColor = vec3<f32>(1.0, 0.95, 0.9);
+
+        skyResult += sunColor * (sunDisk + aureole) * sunIntensity;
+    }
+
+    return skyResult * envIntensity;
+}
+
+// 기본 회색 환경색 (없음 모드용)
+const DEFAULT_ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
+
+// ENV_COLOR를 Procedural Sky로 대체하는 헬퍼 함수
+fn GetEnvironmentColor(rayDir : vec3<f32>) -> vec3<f32>
+{
+    // EnvMode: 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+    if (UniformBuffer.EnvMode == 0u) {
+        // 없음: 시간대 관계없이 기본 회색
+        return DEFAULT_ENV_COLOR;
+    }
+    if (UniformBuffer.EnvMode == 1u) {
+        // 일반 하늘: 시간대 기반 단색 (그라데이션 없음)
+        return UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity;
+    }
+    // 고품질 하늘: 물리 기반 Procedural Sky
+    return SampleProceduralSky(rayDir);
+}
+
+// 간접광용 환경색 (EnvIndirectMult 적용)
+fn GetEnvironmentColorIndirect(rayDir : vec3<f32>) -> vec3<f32>
+{
+    return GetEnvironmentColor(rayDir) * UniformBuffer.EnvIndirectMult;
+}
 
 //==========================================================================
 // Enums
@@ -792,7 +887,7 @@ fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
     OutLightSample.Type         = LIGHT_ENV;
     OutLightSample.Direction    = -L;
     OutLightSample.LightID      = -1;
-    OutLightSample.Emittance    = ENV_COLOR;
+    OutLightSample.Emittance    = GetEnvironmentColorIndirect(L);
 
     OutLightSample.PDF          = PDF_BSDF(X, V, L);
 
@@ -1457,7 +1552,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if ( !Get_X1(ThreadID.xy).IsValidSurface )
     {
-        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(ENV_COLOR, 1.0));
+        // 카메라에서 픽셀 방향으로의 레이 계산
+        let rayDir = normalize(Get_X0(ThreadID.xy) - UniformBuffer.CameraWorldPosition);
+        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(GetEnvironmentColor(rayDir), 1.0));
         return;
     }
 

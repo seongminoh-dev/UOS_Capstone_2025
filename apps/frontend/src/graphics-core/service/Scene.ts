@@ -36,12 +36,17 @@ export interface RoomSettings {
   ambientOcclusion?: number;         // AO 강도 (0.0~1.0)
 }
 
+// 하늘 모드
+export type SkyMode = 0 | 1 | 2;  // 0=없음(회색), 1=일반 하늘, 2=고품질 하늘
+
 // 태양광 설정
 export interface SunSettings {
   timeOfDay: number;              // 0~100 (0=자정, 50=정오, 100=자정)
   isDaytime: boolean;             // 낮/밤 토글
   season: Season;                 // 계절
   roomOrientation: RoomOrientation; // 방 방향
+  skyMode: SkyMode;               // 0=없음, 1=일반 하늘, 2=고품질 하늘
+  envIndirectMultiplier: number;  // 환경 간접광 강도 (0.0~1.0)
 }
 
 // 카메라 설정

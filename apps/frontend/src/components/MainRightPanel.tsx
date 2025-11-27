@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { SceneFrontend, SceneAsset, SunSettings } from '../graphics-core/service/Scene';
+import type { SceneFrontend, SceneAsset, SunSettings, SkyMode } from '../graphics-core/service/Scene';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
@@ -57,6 +57,8 @@ export default function MainRightPanel({
   const [sunTime, setSunTime] = useState(50); // 0-100 (Scene 형식)
   const [season, setSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
+  const [skyMode, setSkyMode] = useState<0 | 1 | 2>(2); // 하늘 모드: 0=없음, 1=일반, 2=고품질
+  const [envIndirectMult, setEnvIndirectMult] = useState(50); // 환경 간접광 강도 (0-100%)
 
   // Scene 목록 로드 (초기화)
   useEffect(() => {
@@ -75,6 +77,8 @@ export default function MainRightPanel({
       setSunTime(sun.timeOfDay);
       setSeason(sun.season);
       setRoomDirection(sun.roomOrientation);
+      setSkyMode(sun.skyMode ?? 2); // 기본값: 고품질 하늘
+      setEnvIndirectMult(Math.round((sun.envIndirectMultiplier ?? 0.5) * 100)); // 기본값: 50%
     }
   }, [selectedScene]);
 
@@ -86,6 +90,8 @@ export default function MainRightPanel({
         isDaytime: timeOfDay === 'day',
         season: season,
         roomOrientation: roomDirection,
+        skyMode: skyMode,
+        envIndirectMultiplier: envIndirectMult / 100, // 0-100 → 0.0-1.0
       };
 
       // 값이 실제로 변경되었는지 확인
@@ -94,7 +100,9 @@ export default function MainRightPanel({
         sun.timeOfDay !== updatedSunSettings.timeOfDay ||
         sun.isDaytime !== updatedSunSettings.isDaytime ||
         sun.season !== updatedSunSettings.season ||
-        sun.roomOrientation !== updatedSunSettings.roomOrientation;
+        sun.roomOrientation !== updatedSunSettings.roomOrientation ||
+        sun.skyMode !== updatedSunSettings.skyMode ||
+        sun.envIndirectMultiplier !== updatedSunSettings.envIndirectMultiplier;
 
       if (hasChanged) {
         setCurrentScene({
@@ -109,7 +117,7 @@ export default function MainRightPanel({
         }
       }
     }
-  }, [timeOfDay, sunTime, season, roomDirection, onSunSettingsChange]);
+  }, [timeOfDay, sunTime, season, roomDirection, skyMode, envIndirectMult, onSunSettingsChange]);
 
   // Asset 저장 핸들러
   const handleSaveAsset = (updatedAsset: SceneAsset) => {
@@ -618,6 +626,56 @@ export default function MainRightPanel({
                   <option value="south">남향</option>
                   <option value="north">북향</option>
                 </select>
+              </div>
+            </div>
+
+            {/* 환경 설정 */}
+            <div className="section-card">
+              <h3 className="section-title">환경 설정</h3>
+
+              {/* 하늘 설정 */}
+              <div className="form-group">
+                <label className="form-label">하늘 설정</label>
+                <div className="button-group">
+                  <button
+                    className={`toggle-button ${skyMode === 2 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(2)}
+                  >
+                    고품질
+                  </button>
+                  <button
+                    className={`toggle-button ${skyMode === 1 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(1)}
+                  >
+                    일반
+                  </button>
+                  <button
+                    className={`toggle-button ${skyMode === 0 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(0)}
+                  >
+                    없음
+                  </button>
+                </div>
+              </div>
+
+              {/* 환경 간접광 */}
+              <div className="form-group">
+                <label className="form-label">
+                  환경 간접광: {envIndirectMult}%
+                </label>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={envIndirectMult}
+                  onChange={(e) => setEnvIndirectMult(Number(e.target.value))}
+                  className="range-slider"
+                />
+                <div className="range-labels">
+                  <span>0% (없음)</span>
+                  <span>100% (물리 기반)</span>
+                </div>
               </div>
             </div>
           </div>
