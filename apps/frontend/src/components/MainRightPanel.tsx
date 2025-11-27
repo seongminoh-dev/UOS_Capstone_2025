@@ -1,21 +1,18 @@
 /**
- * 메인 화면 Right Panel (개편)
- * - Scene 선택 탭
- * - 조명/가구/정보 탭
+ * MainRightPanel - Editor 모드 우측 패널
+ * - 환경/가구/조명/정보 탭
+ * - Scene이 선택된 상태에서만 표시됨
+ * - Scene 목록은 WorkspaceView로 이동됨
  * - /edit 페이지와 일관된 디자인
- * - SceneRepository (SSOT) 사용
  */
 
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
 import type { SceneFrontend, SceneAsset, SunSettings, SkyMode } from '../graphics-core/service/Scene';
-import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
 import { useSceneRepository } from '../stores/sceneRepository';
-import { useAuthStore } from '../stores/authStore';
-import { isDummyScene } from '../utils/sceneId';
 
 interface MainRightPanelProps {
   selectedScene: SceneFrontend | null;
@@ -36,8 +33,7 @@ export default function MainRightPanel({
   const [activeTab, setActiveTab] = useState<Tab>('environment');
 
   // Zustand Stores
-  const { scenes, loadScenes, saveScene, deleteScene } = useSceneRepository();
-  const { user, isGuest } = useAuthStore();
+  const { saveScene } = useSceneRepository();
 
   // Instance 편집 모달
   const [editingAsset, setEditingAsset] = useState<SceneAsset | null>(null);
@@ -62,11 +58,6 @@ export default function MainRightPanel({
   // 하루 애니메이션 상태
   const [isAnimating, setIsAnimating] = useState(false);
   const [animationSpeed, setAnimationSpeed] = useState(1); // 1 = 10초에 하루, 2 = 5초에 하루
-
-  // Scene 목록 로드 (초기화)
-  useEffect(() => {
-    loadScenes();
-  }, [loadScenes]);
 
   // Scene이 변경되면 상태 초기화 (sunSettings 동기화 포함)
   useEffect(() => {
@@ -297,59 +288,6 @@ export default function MainRightPanel({
     setDontShowDeleteConfirm(false);
   };
 
-  // Scene 삭제 관련 상태
-  const [deletingSceneId, setDeletingSceneId] = useState<
-    number | string | null
-  >(null);
-  const [hiddenDummySceneIds, setHiddenDummySceneIds] = useState<
-    Set<string | number>
-  >(new Set());
-
-  // Scene 삭제 요청 핸들러
-  const handleDeleteSceneRequest = (
-    sceneId: number | string,
-    e?: React.MouseEvent
-  ) => {
-    if (e) {
-      e.stopPropagation();
-    }
-    setDeletingSceneId(sceneId);
-  };
-
-  // Scene 삭제 확인 핸들러
-  const handleConfirmDeleteScene = async () => {
-    if (!deletingSceneId) return;
-
-    try {
-      const isDeletingCurrentScene =
-        selectedScene && selectedScene.id === deletingSceneId;
-
-      // Dummy Scene인지 확인
-      if (isDummyScene(deletingSceneId)) {
-        // Dummy Scene은 로컬 상태로 숨김 처리 (삭제 불가)
-        setHiddenDummySceneIds((prev) => new Set(prev).add(deletingSceneId));
-      } else {
-        // 일반 Scene은 store에서 삭제
-        await deleteScene(deletingSceneId);
-      }
-
-      setDeletingSceneId(null);
-
-      // 렌더링 중인 씬 삭제 시 씬 선택 화면으로
-      if (isDeletingCurrentScene) {
-        onSelectScene(null);
-      }
-    } catch (error) {
-      console.error('Failed to delete scene:', error);
-      alert('Scene 삭제에 실패했습니다.');
-    }
-  };
-
-  // Scene 삭제 취소 핸들러
-  const handleCancelDeleteScene = () => {
-    setDeletingSceneId(null);
-  };
-
   // Scene 정보 편집 시작
   const handleStartEditingInfo = () => {
     if (!currentScene) return;
@@ -381,110 +319,10 @@ export default function MainRightPanel({
     setIsEditingInfo(false);
   };
 
-  // Scene이 선택되지 않았을 때 - Scene 목록 표시
+  // Scene이 선택되지 않았을 때 - WorkspaceView가 대신 표시됨
+  // MainRightPanel은 Editor 모드에서만 사용
   if (!selectedScene) {
-    // SceneRepository에서 이미 Dummy + Local/Server Scene이 통합되어 있음
-    // 숨긴 DummyScene만 필터링
-    const availableScenes = scenes.filter((s) => !hiddenDummySceneIds.has(s.id));
-
-    return (
-      <div className="main-right-panel">
-        <div className="panel-header">
-          <h1 className="panel-title">Scene 선택</h1>
-          <p className="panel-subtitle">
-            {isGuest
-              ? '게스트 모드 - 저장된 Scene은 세션이 종료되면 사라집니다'
-              : '렌더링할 Scene을 선택하세요'}
-          </p>
-        </div>
-
-        <div className="panel-content">
-          <div className="scene-list">
-            {availableScenes.map((scene) => (
-              <div key={scene.id} className="scene-card-wrapper">
-                <button
-                  className="scene-card"
-                  onClick={() => onSelectScene(scene)}
-                >
-                  <div className="scene-card-header">
-                    <h3>{scene.name}</h3>
-                    <span className="scene-asset-count">
-                      {scene.assets.length}개 Asset
-                    </span>
-                  </div>
-                  {scene.description && (
-                    <p className="scene-description">{scene.description}</p>
-                  )}
-                </button>
-                <button
-                  className="scene-delete-btn"
-                  onClick={(e) => handleDeleteSceneRequest(scene.id, e)}
-                  title="Scene 삭제"
-                >
-                  🗑️
-                </button>
-              </div>
-            ))}
-          </div>
-
-          <div className="scene-actions">
-            <button
-              className="action-button action-primary"
-              onClick={handleCreateNewSceneRequest}
-            >
-              새 Scene 만들기
-            </button>
-          </div>
-        </div>
-
-        {/* Scene 삭제 확인 모달 */}
-        {deletingSceneId && (
-          <div className="modal-overlay" onClick={handleCancelDeleteScene}>
-            <div
-              className="modal-content"
-              onClick={(e) => e.stopPropagation()}
-              style={{ maxWidth: '400px' }}
-            >
-              <div className="modal-header">
-                <h2 className="modal-title">Scene 삭제</h2>
-                <button
-                  className="modal-close"
-                  onClick={handleCancelDeleteScene}
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="modal-body" style={{ padding: '24px' }}>
-                <p style={{ margin: 0, lineHeight: '1.6' }}>
-                  이 Scene을 삭제하시겠습니까?
-                  <br />
-                  <span style={{ color: '#DC2626', fontSize: '13px' }}>
-                    이 작업은 되돌릴 수 없습니다.
-                  </span>
-                </p>
-              </div>
-
-              <div className="modal-actions">
-                <button
-                  className="modal-button modal-cancel"
-                  onClick={handleCancelDeleteScene}
-                >
-                  취소
-                </button>
-                <button
-                  className="modal-button modal-save"
-                  onClick={handleConfirmDeleteScene}
-                  style={{ backgroundColor: '#DC2626' }}
-                >
-                  삭제
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    );
+    return null;
   }
 
   // Scene이 선택되었을 때 - 조명/가구/정보 탭
@@ -532,32 +370,40 @@ export default function MainRightPanel({
               activeTab === 'environment' ? 'active' : ''
             }`}
             onClick={() => setActiveTab('environment')}
+            title="환경 설정"
           >
-            환경
+            <span className="tab-icon">☀️</span>
+            <span className="tab-label">환경</span>
           </button>
           <button
             className={`panel-tab-button ${
               activeTab === 'furniture' ? 'active' : ''
             }`}
             onClick={() => setActiveTab('furniture')}
+            title="가구 관리"
           >
-            가구
+            <span className="tab-icon">🛋️</span>
+            <span className="tab-label">가구</span>
           </button>
           <button
             className={`panel-tab-button ${
               activeTab === 'lighting' ? 'active' : ''
             }`}
             onClick={() => setActiveTab('lighting')}
+            title="조명 설정"
           >
-            조명
+            <span className="tab-icon">💡</span>
+            <span className="tab-label">조명</span>
           </button>
           <button
             className={`panel-tab-button ${
               activeTab === 'info' ? 'active' : ''
             }`}
             onClick={() => setActiveTab('info')}
+            title="씬 정보"
           >
-            정보
+            <span className="tab-icon">ℹ️</span>
+            <span className="tab-label">정보</span>
           </button>
         </div>
       </div>
@@ -1182,64 +1028,6 @@ export default function MainRightPanel({
         </div>
       )}
 
-      {/* Scene 삭제 확인 모달 */}
-      {deletingSceneId && (
-        <div className="modal-overlay" onClick={handleCancelDeleteScene}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '450px' }}
-          >
-            <div className="modal-header">
-              <h2 className="modal-title">Scene 삭제</h2>
-              <button className="modal-close" onClick={handleCancelDeleteScene}>
-                ✕
-              </button>
-            </div>
-
-            <div className="modal-body">
-              <p style={{ margin: 0, marginBottom: '16px', lineHeight: '1.6' }}>
-                이 Scene을 삭제하시겠습니까?
-                <br />
-                <span style={{ color: '#DC2626', fontSize: '13px' }}>
-                  이 작업은 되돌릴 수 없습니다.
-                </span>
-              </p>
-              {selectedScene && selectedScene.id === deletingSceneId && (
-                <p
-                  style={{
-                    margin: 0,
-                    padding: '12px',
-                    backgroundColor: '#FEF3C7',
-                    borderRadius: '6px',
-                    fontSize: '13px',
-                    color: '#92400E',
-                  }}
-                >
-                  현재 렌더링 중인 Scene입니다. 삭제 시 Scene 선택 화면으로
-                  이동합니다.
-                </p>
-              )}
-            </div>
-
-            <div className="modal-actions">
-              <button
-                className="modal-button modal-cancel"
-                onClick={handleCancelDeleteScene}
-              >
-                취소
-              </button>
-              <button
-                className="modal-button modal-save"
-                onClick={handleConfirmDeleteScene}
-                style={{ backgroundColor: '#DC2626' }}
-              >
-                삭제
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
