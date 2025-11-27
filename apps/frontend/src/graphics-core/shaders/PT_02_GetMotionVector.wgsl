@@ -445,7 +445,7 @@ fn ComputeMotionVector(curPixel : vec2<u32>) -> vec2<f32> {
     // 현재 프레임 스크린 좌표 (clean VP, 지터 없음)
     let curPx : vec2<f32> = ProjectWorldToScreenPx(
         hitPos,
-        UniformBuffer.ViewProjectionMatrix_Clean
+        UniformBuffer.ViewProjectionMatrix
     );
     if (any(curPx < vec2<f32>(0.0))) {
         return vec2<f32>(0.0, 0.0);
