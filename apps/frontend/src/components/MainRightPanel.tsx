@@ -59,6 +59,10 @@ export default function MainRightPanel({
   const [skyMode, setSkyMode] = useState<0 | 1 | 2>(2); // 하늘 모드: 0=없음, 1=일반, 2=고품질
   const [envIndirectMult, setEnvIndirectMult] = useState(50); // 환경 간접광 강도 (0-100%)
 
+  // 하루 애니메이션 상태
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(1); // 1 = 10초에 하루, 2 = 5초에 하루
+
   // Scene 목록 로드 (초기화)
   useEffect(() => {
     loadScenes();
@@ -115,6 +119,20 @@ export default function MainRightPanel({
       }
     }
   }, [sunTime, season, roomDirection, skyMode, envIndirectMult, onSunSettingsChange]);
+
+  // 하루 애니메이션 효과
+  useEffect(() => {
+    if (!isAnimating) return;
+
+    const interval = setInterval(() => {
+      setSunTime((prev) => {
+        const next = prev + (animationSpeed * 0.5); // 0.5%씩 증가 (속도에 따라)
+        return next >= 100 ? 0 : next; // 100 도달 시 0으로 리셋
+      });
+    }, 50); // 50ms 간격
+
+    return () => clearInterval(interval);
+  }, [isAnimating, animationSpeed]);
 
   // Asset 저장 핸들러
   const handleSaveAsset = (updatedAsset: SceneAsset) => {
@@ -554,16 +572,55 @@ export default function MainRightPanel({
 
               {/* 시간 (20분 단위로 세밀하게 조절) */}
               <div className="form-group">
-                <label className="form-label">
-                  시간: {Math.floor((sunTime / 100) * 24)}시
-                </label>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label" style={{ margin: 0 }}>
+                    시간: {Math.floor((sunTime / 100) * 24)}시
+                  </label>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <button
+                      onClick={() => setIsAnimating(!isAnimating)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        border: '1px solid #E5E7EB',
+                        backgroundColor: isAnimating ? '#3B82F6' : '#F9FAFB',
+                        color: isAnimating ? '#fff' : '#374151',
+                        cursor: 'pointer',
+                      }}
+                      title={isAnimating ? '정지' : '하루 재생'}
+                    >
+                      {isAnimating ? '⏹ 정지' : '▶ 재생'}
+                    </button>
+                    {isAnimating && (
+                      <select
+                        value={animationSpeed}
+                        onChange={(e) => setAnimationSpeed(Number(e.target.value))}
+                        style={{
+                          padding: '4px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid #E5E7EB',
+                        }}
+                      >
+                        <option value={0.5}>0.5x</option>
+                        <option value={1}>1x</option>
+                        <option value={2}>2x</option>
+                        <option value={4}>4x</option>
+                      </select>
+                    )}
+                  </div>
+                </div>
                 <input
                   type="range"
                   min="0"
                   max="1440"
                   step="20"
                   value={Math.round(sunTime / 100 * 1440)}
-                  onChange={(e) => setSunTime(Number(e.target.value) / 1440 * 100)}
+                  onChange={(e) => {
+                    setIsAnimating(false); // 수동 조작 시 애니메이션 정지
+                    setSunTime(Number(e.target.value) / 1440 * 100);
+                  }}
                   className="range-slider"
                 />
                 <div className="range-labels">
