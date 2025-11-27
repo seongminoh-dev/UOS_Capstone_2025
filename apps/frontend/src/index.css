@@ -1,60 +1,196 @@
+/**
+ * ============================================
+ * Global Styles - 전역 스타일
+ * ============================================
+ *
+ * 이 파일은 애플리케이션 전체에 적용되는 기본 스타일을 정의합니다.
+ * CSS Variables는 variables.css에서 import됩니다.
+ */
+
+/* Design System Variables */
+@import './styles/variables.css';
+
+/* Common Component Styles */
+@import './styles/common.css';
+
+/* ============================================
+ * Reset & Base Styles
+ * ============================================ */
+
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
-  font-weight: 400;
-
   color-scheme: light;
-  color: rgba(0, 0, 0, 0.87);
-  background-color: #ffffff;
-
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-a {
-  font-weight: 500;
-  color: #646cff;
-  text-decoration: inherit;
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
 }
-a:hover {
-  color: #535bf2;
+
+html {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
 }
 
 body {
   margin: 0;
   padding: 0;
   min-width: 320px;
+  font-weight: var(--font-normal);
+}
+
+/* ============================================
+ * Typography
+ * ============================================ */
+
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: var(--font-semibold);
+  line-height: var(--leading-tight);
 }
 
 h1 {
-  font-size: 3.2em;
-  line-height: 1.1;
+  font-size: var(--text-3xl);
 }
 
-button {
-  border-radius: 8px;
-  border: 1px solid transparent;
-  padding: 0.6em 1.2em;
-  font-size: 1em;
-  font-weight: 500;
-  font-family: inherit;
-  background-color: #1a1a1a;
-  cursor: pointer;
-  transition: border-color 0.25s;
+h2 {
+  font-size: var(--text-2xl);
 }
-button:hover {
-  border-color: #646cff;
+
+h3 {
+  font-size: var(--text-xl);
 }
-button:focus,
-button:focus-visible {
-  outline: 4px auto -webkit-focus-ring-color;
+
+h4 {
+  font-size: var(--text-lg);
+}
+
+p {
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* ============================================
+ * Links
+ * ============================================ */
+
+a {
+  color: var(--accent-primary);
+  font-weight: var(--font-medium);
+  text-decoration: none;
+  transition: color var(--transition-base);
 }
 
 a:hover {
-  color: #747bff;
+  color: var(--accent-primary-hover);
 }
+
+/* ============================================
+ * Buttons (Base Reset)
+ * ============================================ */
+
 button {
-  background-color: #f9f9f9;
+  font-family: inherit;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  line-height: 1;
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  transition: all var(--transition-base);
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+button:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+/* ============================================
+ * Form Elements (Base Reset)
+ * ============================================ */
+
+input,
+textarea,
+select {
+  font-family: inherit;
+  font-size: var(--text-base);
+  line-height: var(--leading-normal);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: border-color var(--transition-base), box-shadow var(--transition-base);
+}
+
+input:focus,
+textarea:focus,
+select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled {
+  background-color: var(--bg-muted);
+  cursor: not-allowed;
+}
+
+/* Remove number input spinners */
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ============================================
+ * Utility Classes
+ * ============================================ */
+
+/* Screen Reader Only */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* ============================================
+ * App Root
+ * ============================================ */
+
+#root {
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0;
+  text-align: left;
 }

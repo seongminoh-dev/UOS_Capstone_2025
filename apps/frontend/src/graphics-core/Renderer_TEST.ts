@@ -118,6 +118,8 @@ export class Renderer
     private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
     private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
 
+    // ★ 추가: N 프레임마다 캡처 (0이면 비활성화)
+    public CaptureInterval = 0;
 
     constructor
     (
@@ -453,6 +455,15 @@ export class Renderer
 
         // Submit Encoder
         this.Device.queue.submit( [ CommandEncoder.finish() ] );
+
+        // ★ 추가: CaptureInterval 간격으로 캔버스 PNG 저장
+        if (this.CaptureInterval > 0 && (this.FrameCount % this.CaptureInterval === 0))
+        {
+            const a = document.createElement('a');
+            a.href = this.Canvas.toDataURL('image/png');
+            a.download = `frame_${this.FrameCount}.png`;
+            a.click();
+        }
 
         return;
     }

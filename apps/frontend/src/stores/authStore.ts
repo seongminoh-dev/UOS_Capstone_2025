@@ -8,7 +8,6 @@
 import { create } from 'zustand';
 import * as authApi from '../api/auth.api';
 import type { User, LoginRequest, SignupRequest } from '../api/auth.api';
-import { useSceneRepository } from './sceneRepository';
 
 // ============================================
 // 상태 타입 정의
@@ -73,15 +72,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         error: null,
       });
 
-      // 로그인 성공 후 LocalScenes → Server 동기화
-      try {
-        await useSceneRepository.getState().syncLocalToServer();
-        // 동기화 후 Scene 목록 다시 로드
-        await useSceneRepository.getState().loadScenes();
-      } catch (syncError) {
-        console.error('Failed to sync local scenes:', syncError);
-        // 동기화 실패해도 로그인은 성공 처리
-      }
+      // Note: Scene 동기화는 호출하는 컴포넌트(LoginPage)에서 처리
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '로그인에 실패했습니다.';
       set({
@@ -121,15 +112,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         error: null,
       });
 
-      // 회원가입 성공 후 LocalScenes → Server 동기화
-      try {
-        await useSceneRepository.getState().syncLocalToServer();
-        // 동기화 후 Scene 목록 다시 로드
-        await useSceneRepository.getState().loadScenes();
-      } catch (syncError) {
-        console.error('Failed to sync local scenes:', syncError);
-        // 동기화 실패해도 회원가입은 성공 처리
-      }
+      // Note: Scene 동기화는 호출하는 컴포넌트(SignupPage)에서 처리
     } catch (error: any) {
       const errorMessage = error.response?.data?.message || '회원가입에 실패했습니다.';
       set({

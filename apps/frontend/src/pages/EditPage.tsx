@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
+import ErrorBoundary from '../components/ErrorBoundary';
 import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams, RoomSettings } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
@@ -18,6 +19,12 @@ export default function EditPage() {
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
+  const [rendererKey, setRendererKey] = useState(0);
+
+  // ErrorBoundary 리셋 시 렌더러 재마운트를 위한 키 증가
+  const handleErrorReset = useCallback(() => {
+    setRendererKey((prev) => prev + 1);
+  }, []);
 
   // 새 Scene 생성 모달 상태
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
@@ -216,7 +223,7 @@ export default function EditPage() {
     if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 나가시겠습니까?')) {
       return;
     }
-    navigate('/');
+    navigate('/simulator');
   };
 
   const handleSave = async () => {
@@ -240,7 +247,7 @@ export default function EditPage() {
 
     try {
       await saveScene(editingScene);
-      navigate('/');
+      navigate('/simulator');
     } catch (error) {
       console.error('Failed to save scene:', error);
       alert('Scene 저장에 실패했습니다.');
@@ -518,7 +525,7 @@ export default function EditPage() {
           <div className="modal-content" style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2 className="modal-title">Scene 선택</h2>
-              <button className="modal-close" onClick={() => navigate('/')}>
+              <button className="modal-close" onClick={() => navigate('/simulator')}>
                 ✕
               </button>
             </div>
@@ -572,7 +579,7 @@ export default function EditPage() {
 
       {/* 새 Scene 생성 모달 */}
       {showCreateSceneModal && (
-        <div className="modal-overlay" onClick={() => navigate('/')}>
+        <div className="modal-overlay" onClick={() => navigate('/simulator')}>
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
@@ -582,7 +589,7 @@ export default function EditPage() {
               <h2 className="modal-title">새 Scene 만들기</h2>
               <button
                 className="modal-close"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/simulator')}
               >
                 ✕
               </button>
@@ -667,7 +674,7 @@ export default function EditPage() {
             <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid #E5E5E5', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button
                 className="modal-button modal-cancel"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/simulator')}
               >
                 취소
               </button>
@@ -686,13 +693,19 @@ export default function EditPage() {
         <div className="edit-layout">
           {/* Left side - Three.js Canvas (미리보기) */}
           <div className="preview-canvas" style={{ position: 'relative' }}>
-            <ThreeRenderer
-              className="three-canvas"
-              scene={editingScene}
-              onSelectionChange={handleSelectionChange}
-              onTransformChange={handleTransformChange}
-              onLightParamsChange={handleLightParamsChange}
-            />
+            <ErrorBoundary
+              key={rendererKey}
+              fallbackTitle="Three.js 렌더링 오류"
+              onReset={handleErrorReset}
+            >
+              <ThreeRenderer
+                className="three-canvas"
+                scene={editingScene}
+                onSelectionChange={handleSelectionChange}
+                onTransformChange={handleTransformChange}
+                onLightParamsChange={handleLightParamsChange}
+              />
+            </ErrorBoundary>
 
             {/* Selected Asset Info Panel */}
             {selectedAssetId && editingScene && (() => {

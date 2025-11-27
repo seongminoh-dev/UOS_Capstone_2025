@@ -348,7 +348,7 @@ fn GetPrevUV(UV : vec2<f32>) -> vec2<f32>
     let PixelID_Closest : vec2<u32> = GetClosestPixelID( PixelID_Center );
 
     let MotionVectorRaw : vec2<f32> = textureLoad(MotionVectorTexture, PixelID_Closest, 0).xy;
-    let MotionVectorUV  : vec2<f32> = (MotionVectorRaw + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
+    let MotionVectorUV  : vec2<f32> = (MotionVectorRaw ) / vec2<f32>(UniformBuffer.Resolution_Source);
 
     return UV - MotionVectorUV;
 }
@@ -404,7 +404,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let UV              : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
     let UV_Unjitter     : vec2<f32> = UV - UniformBuffer.Jitter;
-    let UV_Prev         : vec2<f32> = GetPrevUV(UV_Unjitter);
+    let UV_Prev         : vec2<f32> = GetPrevUV(UV);
 
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
     let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
@@ -413,6 +413,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let CurrentColor    : vec3<f32> = Encode( textureSampleLevel(RadianceTexture, LinearSampler, UV_Unjitter, 0.0).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
     let WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
+
+    //let mv = textureLoad(MotionVectorTexture, vec2<i32>(i32(ThreadID.x),i32(ThreadID.y)), 0).xy;
+    //textureStore(ResultTexture, ThreadID.xy, vec4<f32>(mv, 0.0, 1.0));
     
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
 
