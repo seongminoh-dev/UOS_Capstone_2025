@@ -3,23 +3,20 @@
  *
  * 구성:
  * - Header: Scene 이름 + 저장 상태 + 액션 버튼
- * - QuickControls: 시간/계절/방향 (항상 표시)
+ * - TimeOfDayCard: 시간/계절/방향 (항상 표시)
  * - Tabs: 환경/오브젝트/정보
  */
 
 import { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
-  Button,
-  Badge,
   Tabs,
-  TabList,
-  Tab,
-  TabPanel,
   ConfirmModal,
   useToast,
 } from '../common';
-import { QuickControls } from './QuickControls';
+import { LightSimulatorHeader } from './LightSimulatorHeader';
+import type { SimulatorStatus } from './LightSimulatorHeader';
+import { TimeOfDayCard } from './TimeOfDayCard';
 import { EnvironmentTab } from './EnvironmentTab';
 import { ObjectsTab } from './ObjectsTab';
 import { InfoTab } from './InfoTab';
@@ -80,6 +77,21 @@ export function ControlPanel({
   const [pendingAction, setPendingAction] = useState<'workspace' | 'edit' | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | number | null>(null);
   const [dontShowDeleteConfirm, setDontShowDeleteConfirm] = useState(false);
+  const [isRendering, setIsRendering] = useState(false);
+
+  // 상태 계산
+  const getStatus = (): SimulatorStatus => {
+    if (isRendering) return 'rendering';
+    if (hasUnsavedChanges) return 'modified';
+    return 'synced';
+  };
+
+  // 재렌더링 핸들러
+  const handleRerender = useCallback(() => {
+    setIsRendering(true);
+    // 렌더링 시뮬레이션 (실제로는 WebGPU 엔진에서 콜백 받아야 함)
+    setTimeout(() => setIsRendering(false), 1500);
+  }, []);
 
   // Scene 저장
   const handleSave = async () => {
@@ -216,48 +228,21 @@ export function ControlPanel({
   return (
     <div className="control-panel">
       {/* Header */}
-      <div className="control-panel__header">
-        <button
-          className="control-panel__back"
-          onClick={handleBackToWorkspace}
-          title="Scene 목록으로"
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
-            <path
-              d="M12.5 15L7.5 10L12.5 5"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            />
-          </svg>
-        </button>
-        <div className="control-panel__title-area">
-          <h1 className="control-panel__title">{currentScene.name}</h1>
-          <Badge variant={hasUnsavedChanges ? 'warning' : 'success'} dot>
-            {hasUnsavedChanges ? '수정됨' : '저장됨'}
-          </Badge>
-        </div>
-        <div className="control-panel__actions">
-          <Button variant="secondary" size="sm" onClick={handleEditPage}>
-            편집
-          </Button>
-          <Button
-            variant="primary"
-            size="sm"
-            onClick={handleSave}
-            disabled={!hasUnsavedChanges}
-          >
-            저장
-          </Button>
-        </div>
-      </div>
+      <LightSimulatorHeader
+        title={currentScene.name}
+        status={getStatus()}
+        onEditScene={handleEditPage}
+        onRerender={handleRerender}
+        onSave={handleSave}
+        canRerender={hasUnsavedChanges}
+        canSave={hasUnsavedChanges}
+      />
 
-      {/* Quick Controls */}
-      <div className="control-panel__quick">
-        <QuickControls
-          sunTime={sunSettings.sunTime}
-          onSunTimeChange={sunSettings.setSunTime}
+      {/* Time of Day Card */}
+      <div className="control-panel__time-card">
+        <TimeOfDayCard
+          timeOfDay={sunSettings.sunTime}
+          onTimeChange={sunSettings.setSunTime}
           timeString={sunSettings.getTimeString()}
           isAnimating={sunSettings.isAnimating}
           onToggleAnimation={sunSettings.toggleAnimation}
@@ -265,8 +250,8 @@ export function ControlPanel({
           onAnimationSpeedChange={sunSettings.setAnimationSpeed}
           season={sunSettings.season}
           onSeasonChange={sunSettings.setSeason}
-          roomDirection={sunSettings.roomDirection}
-          onRoomDirectionChange={sunSettings.setRoomDirection}
+          direction={sunSettings.roomDirection}
+          onDirectionChange={sunSettings.setRoomDirection}
         />
       </div>
 

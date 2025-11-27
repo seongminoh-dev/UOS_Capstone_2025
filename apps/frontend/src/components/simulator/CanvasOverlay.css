@@ -45,8 +45,9 @@
   50% { opacity: 0.5; }
 }
 
-.canvas-overlay__status-text {
+.canvas-overlay__resolution {
   font-weight: var(--font-medium);
+  font-variant-numeric: tabular-nums;
 }
 
 .canvas-overlay__divider {
@@ -58,6 +59,10 @@
 }
 
 .canvas-overlay__time {
+  font-variant-numeric: tabular-nums;
+}
+
+.canvas-overlay__camera {
   font-variant-numeric: tabular-nums;
 }
 

@@ -26,11 +26,8 @@ export default function WebGPURenderer({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const engineRef = useRef<WebGPUEngine | null>(null);
-  const [frameTime, setFrameTime] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width, height });
-  const [cameraPosition, setCameraPosition] = useState<{ x: number; y: number; z: number } | null>(null);
-  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true); // 기본 표시, 백틱(`) 키로 토글
   const [isTooSmall, setIsTooSmall] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
@@ -84,16 +81,9 @@ export default function WebGPURenderer({
         const engine = new WebGPUEngine(canvasRef.current);
 
         // Setup callbacks
-        engine.onFrameTimeUpdate = (ft) => {
-          if (isMounted) setFrameTime(ft);
-        };
-
         engine.onCameraUpdate = (pos) => {
-          if (isMounted) {
-            setCameraPosition(pos);
-            if (onCameraUpdate) {
-              onCameraUpdate(pos);
-            }
+          if (isMounted && onCameraUpdate) {
+            onCameraUpdate(pos);
           }
         };
 
@@ -235,21 +225,6 @@ export default function WebGPURenderer({
     loadScene();
   }, [scene, isInitialized]);
 
-  // 키보드 단축키로 디버그 정보 토글 (백틱 키 또는 Ctrl+Shift+H)
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // 백틱(`) 키 또는 Ctrl+Shift+H로 디버그 정보 토글
-      if (e.key === '`' || (e.ctrlKey && e.shiftKey && e.key === 'H')) {
-        e.preventDefault();
-        setShowDebugInfo(prev => !prev);
-      }
-    };
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => {
-      window.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []);
 
   // 에러 화면
   if (error) {
@@ -404,72 +379,6 @@ export default function WebGPURenderer({
         </div>
       )}
 
-      {/* Debug Info - FPS & Camera (좌측 하단) */}
-      {showDebugInfo && !isTooSmall && isSceneLoaded && (
-        <div
-          style={{
-            position: 'absolute',
-            bottom: '16px',
-            left: '16px',
-            display: 'flex',
-            gap: '8px',
-            pointerEvents: 'none',
-            userSelect: 'none',
-          }}
-        >
-          {/* FPS 뱃지 */}
-          <div
-            style={{
-              background: 'rgba(0, 0, 0, 0.75)',
-              backdropFilter: 'blur(8px)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              color: '#ffffff',
-              fontWeight: 600,
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-            }}
-          >
-            <span style={{
-              width: '8px',
-              height: '8px',
-              borderRadius: '50%',
-              background: frameTime > 0 && (1000 / frameTime) > 30 ? '#22c55e' : '#eab308',
-            }} />
-            {frameTime > 0 ? (1000 / frameTime).toFixed(0) : '0'} FPS
-          </div>
-          {/* 해상도 뱃지 */}
-          <div
-            style={{
-              background: 'rgba(0, 0, 0, 0.75)',
-              backdropFilter: 'blur(8px)',
-              padding: '8px 12px',
-              borderRadius: '8px',
-              fontSize: '12px',
-              color: 'rgba(255, 255, 255, 0.8)',
-            }}
-          >
-            {canvasSize.width}×{canvasSize.height}
-          </div>
-          {/* 카메라 위치 뱃지 */}
-          {cameraPosition && (
-            <div
-              style={{
-                background: 'rgba(0, 0, 0, 0.75)',
-                backdropFilter: 'blur(8px)',
-                padding: '8px 12px',
-                borderRadius: '8px',
-                fontSize: '12px',
-                color: 'rgba(255, 255, 255, 0.8)',
-              }}
-            >
-              📍 {cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)}, {cameraPosition.z.toFixed(1)}
-            </div>
-          )}
-        </div>
-      )}
     </div>
   );
 }

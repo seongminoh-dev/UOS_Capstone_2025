@@ -1,0 +1,168 @@
+/**
+ * LightSimulatorHeader - 조명 시뮬레이터 헤더 스타일
+ *
+ * 두 줄 레이아웃 (타이트한 간격):
+ * ┌──────────────────────────────────────────────┐
+ * │ 제목   [상태]                         [저장] │  ← top row
+ * │ [씬 편집하기]   [재렌더링]                   │  ← bottom row
+ * └──────────────────────────────────────────────┘
+ */
+
+.simulator-header {
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  border-bottom: 1px solid #eee;
+  background: var(--bg-surface);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Top Row: 제목 + 뱃지 | 저장
+   ============================================ */
+.simulator-header__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.simulator-header__title-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+}
+
+.simulator-header__title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================
+   Badge
+   ============================================ */
+.simulator-header__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  font-size: 11px;
+  font-weight: 500;
+  border-radius: 6px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.simulator-header__badge--synced {
+  background: #F0F0F0;
+  color: #666;
+}
+
+.simulator-header__badge--modified {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.simulator-header__badge--rendering {
+  background: #DBEAFE;
+  color: #1D4ED8;
+}
+
+/* Spinner */
+.simulator-header__spinner {
+  width: 8px;
+  height: 8px;
+  border: 1.5px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: header-spin 0.8s linear infinite;
+}
+
+@keyframes header-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ============================================
+   Save Button (Top Row)
+   ============================================ */
+.simulator-header__save-btn {
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fff;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s, opacity 0.15s;
+  flex-shrink: 0;
+}
+
+.simulator-header__save-btn:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+}
+
+.simulator-header__save-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   Bottom Row: 액션 버튼들
+   ============================================ */
+.simulator-header__bottom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+/* Action Buttons */
+.simulator-header__action-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 28px;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.simulator-header__action-btn:hover {
+  background: var(--bg-muted);
+  border-color: var(--border-hover);
+  color: var(--text-primary);
+}
+
+.simulator-header__action-btn--primary {
+  background: var(--accent-primary);
+  border-color: var(--accent-primary);
+  color: #fff;
+}
+
+.simulator-header__action-btn--primary:hover {
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
+  color: #fff;
+}
+
+.simulator-header__action-btn svg {
+  flex-shrink: 0;
+}

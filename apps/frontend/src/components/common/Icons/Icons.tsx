@@ -167,3 +167,41 @@ export function ArrowRightIcon({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function ExternalLinkIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M11 3h6v6" />
+      <path d="M17 3L9 11" />
+      <path d="M14 11v5a1 1 0 01-1 1H5a1 1 0 01-1-1V8a1 1 0 011-1h5" />
+    </svg>
+  );
+}
+
+export function RefreshIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M14.5 4.5A7 7 0 1017 10" />
+      <path d="M17 4v4h-4" />
+    </svg>
+  );
+}
+
+export function EyeIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M10 4C5 4 1.5 10 1.5 10S5 16 10 16s8.5-6 8.5-6S15 4 10 4z" />
+      <circle cx="10" cy="10" r="3" />
+    </svg>
+  );
+}
+
+export function EyeOffIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M3 3l14 14" />
+      <path d="M10 4c-1.5 0-2.9.4-4.1 1M16.8 7.5C18 8.8 18.5 10 18.5 10s-3.5 6-8.5 6c-1 0-2-.2-2.8-.5" />
+      <path d="M7.3 7.3A3 3 0 0012.7 12.7" />
+    </svg>
+  );
+}

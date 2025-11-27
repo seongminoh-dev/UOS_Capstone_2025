@@ -1,0 +1,23 @@
+/**
+ * ColorInput Component Styles
+ */
+
+.color-input {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.color-input__preview {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  flex-shrink: 0;
+  margin-top: calc(var(--text-xs) + var(--space-2));
+}
+
+.color-input__fields {
+  flex: 1;
+  min-width: 0;
+}

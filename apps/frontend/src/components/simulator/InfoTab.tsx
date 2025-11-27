@@ -6,6 +6,7 @@
 
 import { useState } from 'react';
 import { Button } from '../common';
+import { PanelSection } from './PanelSection';
 import { getAssetMetadata } from '../../assets/AssetRegistry';
 import type { SceneFrontend } from '../../graphics-core/service/Scene';
 import './InfoTab.css';
@@ -58,16 +59,16 @@ export function InfoTab({
   return (
     <div className="info-tab">
       {/* Scene 정보 */}
-      <div className="info-tab__section">
-        <div className="info-tab__section-header">
-          <h4 className="info-tab__section-title">Scene 정보</h4>
-          {!isEditing && (
+      <PanelSection
+        title="Scene 정보"
+        action={
+          !isEditing && (
             <Button variant="ghost" size="sm" onClick={handleStartEdit}>
               편집
             </Button>
-          )}
-        </div>
-
+          )
+        }
+      >
         {isEditing ? (
           <div className="info-tab__edit-form">
             <div className="info-tab__field">
@@ -123,11 +124,10 @@ export function InfoTab({
             </div>
           </div>
         )}
-      </div>
+      </PanelSection>
 
       {/* Asset 통계 */}
-      <div className="info-tab__section">
-        <h4 className="info-tab__section-title">Asset 통계</h4>
+      <PanelSection title="Asset 통계">
         <div className="info-tab__stats">
           <div className="info-tab__stat">
             <span className="info-tab__stat-value">{scene.assets.length}</span>
@@ -142,11 +142,10 @@ export function InfoTab({
             <span className="info-tab__stat-label">조명</span>
           </div>
         </div>
-      </div>
+      </PanelSection>
 
       {/* 렌더링 정보 */}
-      <div className="info-tab__section">
-        <h4 className="info-tab__section-title">렌더링 설정</h4>
+      <PanelSection title="렌더링 설정">
         <div className="info-tab__info-list">
           <div className="info-tab__info-item">
             <span className="info-tab__info-label">해상도</span>
@@ -161,7 +160,7 @@ export function InfoTab({
             <span className="info-tab__info-value">ReSTIR DI</span>
           </div>
         </div>
-      </div>
+      </PanelSection>
     </div>
   );
 }

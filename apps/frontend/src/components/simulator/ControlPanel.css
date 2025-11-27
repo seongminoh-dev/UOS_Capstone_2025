@@ -3,7 +3,7 @@
  */
 
 .control-panel {
-  width: 340px;
+  width: 380px;
   height: 100%;
   background-color: var(--bg-surface);
   display: flex;
@@ -12,62 +12,8 @@
   border-left: 1px solid var(--border-default);
 }
 
-/* Header */
-.control-panel__header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-4) var(--space-5);
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.control-panel__back {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  color: var(--text-secondary);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: all var(--transition-fast);
-}
-
-.control-panel__back:hover {
-  background-color: var(--bg-muted);
-  color: var(--text-primary);
-}
-
-.control-panel__title-area {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  min-width: 0;
-}
-
-.control-panel__title {
-  font-size: var(--text-md);
-  font-weight: var(--font-semibold);
-  color: var(--text-primary);
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.control-panel__actions {
-  display: flex;
-  gap: var(--space-2);
-  flex-shrink: 0;
-}
-
-/* Quick Controls */
-.control-panel__quick {
+/* Time of Day Card */
+.control-panel__time-card {
   padding: var(--space-4) var(--space-5);
   border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;

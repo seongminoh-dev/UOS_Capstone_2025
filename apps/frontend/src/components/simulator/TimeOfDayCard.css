@@ -1,0 +1,70 @@
+/**
+ * TimeOfDayCard Component Styles
+ */
+
+.time-of-day-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+}
+
+/* ============================================
+   Header - 시간 표시 + 재생 컨트롤
+   ============================================ */
+.time-of-day-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.time-of-day-card__time-display {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.time-of-day-card__time-icon {
+  font-size: var(--text-xl);
+  line-height: 1;
+}
+
+.time-of-day-card__time-value {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+
+.time-of-day-card__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.time-of-day-card__actions .select-wrapper {
+  width: 72px;
+}
+
+/* ============================================
+   Slider - 시간 슬라이더
+   ============================================ */
+.time-of-day-card__slider {
+  /* Slider 컴포넌트가 내부 스타일 처리 */
+}
+
+/* ============================================
+   Options - 계절/방향 Select
+   ============================================ */
+.time-of-day-card__options {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.time-of-day-card__options .select-wrapper {
+  flex: 1;
+}

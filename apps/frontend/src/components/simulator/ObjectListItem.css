@@ -1,0 +1,174 @@
+/**
+ * ObjectListItem Component Styles
+ */
+
+.object-list-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+/* ============================================
+   State Modifiers
+   ============================================ */
+
+/* Clickable */
+.object-list-item--clickable {
+  cursor: pointer;
+}
+
+.object-list-item--clickable:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+/* Selected */
+.object-list-item--selected {
+  background-color: var(--accent-primary-light);
+  border-color: var(--accent-primary);
+}
+
+.object-list-item--selected:hover {
+  background-color: var(--accent-primary-light);
+  border-color: var(--accent-primary);
+}
+
+/* Hidden */
+.object-list-item--hidden {
+  opacity: 0.5;
+}
+
+.object-list-item--hidden .object-list-item__icon,
+.object-list-item--hidden .object-list-item__name {
+  opacity: 0.6;
+}
+
+/* Locked */
+.object-list-item--locked {
+  background-color: var(--bg-muted);
+  cursor: default;
+}
+
+/* Modified */
+.object-list-item--modified {
+  /* 변경됨 상태는 dot으로 표시 */
+}
+
+/* Disabled */
+.object-list-item--disabled {
+  opacity: 0.4;
+  pointer-events: none;
+}
+
+/* ============================================
+   Icon
+   ============================================ */
+.object-list-item__icon {
+  flex-shrink: 0;
+  font-size: var(--text-lg);
+  line-height: 1;
+  width: 24px;
+  text-align: center;
+}
+
+/* ============================================
+   Content
+   ============================================ */
+.object-list-item__content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.object-list-item__name {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.object-list-item__subtitle {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ============================================
+   Status
+   ============================================ */
+.object-list-item__status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.object-list-item__modified-dot {
+  width: 6px;
+  height: 6px;
+  background-color: var(--color-warning);
+  border-radius: 50%;
+}
+
+/* ============================================
+   Actions
+   ============================================ */
+.object-list-item__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  flex-shrink: 0;
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.object-list-item:hover .object-list-item__actions {
+  opacity: 1;
+}
+
+/* Always show actions when hidden state is active */
+.object-list-item--hidden .object-list-item__actions {
+  opacity: 1;
+}
+
+.object-list-item__action-btn {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+  padding: 0;
+}
+
+.object-list-item__action-btn:hover {
+  background-color: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+/* Active state (e.g., hidden toggle is ON) */
+.object-list-item__action-btn--active {
+  color: var(--text-secondary);
+}
+
+/* Danger button (delete) */
+.object-list-item__action-btn--danger:hover {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}

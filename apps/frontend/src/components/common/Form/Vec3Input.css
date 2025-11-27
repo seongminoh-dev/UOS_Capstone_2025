@@ -1,0 +1,56 @@
+/**
+ * Vec3Input Component Styles
+ */
+
+.vec3-input {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+.vec3-input__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.vec3-input__label {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+}
+
+.vec3-input__input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  transition: all var(--transition-fast);
+  box-sizing: border-box;
+}
+
+.vec3-input__input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.vec3-input__input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+  background-color: var(--bg-muted);
+}
+
+/* Hide number input spinners */
+.vec3-input__input::-webkit-outer-spin-button,
+.vec3-input__input::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.vec3-input__input[type='number'] {
+  -moz-appearance: textfield;
+}

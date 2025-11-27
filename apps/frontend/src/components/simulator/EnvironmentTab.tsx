@@ -2,10 +2,10 @@
  * EnvironmentTab - 환경 설정 탭
  *
  * 하늘 품질, 하늘빛 반사 등 환경 관련 설정
- * 추후 확장 가능 (안개, 대기 효과 등)
  */
 
 import { Slider, Button } from '../common';
+import { PanelSection } from './PanelSection';
 import './EnvironmentTab.css';
 
 interface EnvironmentTabProps {
@@ -24,8 +24,7 @@ export function EnvironmentTab({
   return (
     <div className="environment-tab">
       {/* 하늘 품질 */}
-      <div className="environment-tab__section">
-        <h4 className="environment-tab__section-title">하늘 품질</h4>
+      <PanelSection title="하늘 품질">
         <div className="environment-tab__button-group">
           <Button
             variant={skyMode === 2 ? 'primary' : 'secondary'}
@@ -49,14 +48,13 @@ export function EnvironmentTab({
             없음
           </Button>
         </div>
-      </div>
+      </PanelSection>
 
       {/* 하늘빛 반사 */}
-      <div className="environment-tab__section">
-        <h4 className="environment-tab__section-title">하늘빛 반사</h4>
-        <p className="environment-tab__description">
-          실내에 비치는 하늘색 조명의 강도
-        </p>
+      <PanelSection
+        title="하늘빛 반사"
+        description="실내에 비치는 하늘색 조명의 강도"
+      >
         <Slider
           value={envIndirectMult}
           onChange={onEnvIndirectMultChange}
@@ -68,7 +66,7 @@ export function EnvironmentTab({
           minLabel="0%"
           maxLabel="100%"
         />
-      </div>
+      </PanelSection>
     </div>
   );
 }

@@ -42,3 +42,7 @@ export { EmptyState } from './EmptyState';
 
 // LoadingState
 export { LoadingState } from './LoadingState';
+
+// Form
+export { Vec3Input, FormField, ColorInput } from './Form';
+export type { Vec3InputProps, Vec3Labels, FormFieldProps, ColorInputProps } from './Form';
