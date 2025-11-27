@@ -1,13 +1,17 @@
 /**
  * SceneCard - 공간 카드 컴포넌트
- * - 썸네일, 이름, 메타데이터 표시
- * - 그리드/리스트 뷰 모드 지원
- * - 기존 정보에서 모든 메타데이터 유도
+ *
+ * Features:
+ * - Grid/List view modes
+ * - Template/Recently modified badges
+ * - Delete action with hover reveal
+ * - Relative time display
  */
 
 import type { SceneFrontend } from '../../graphics-core/service/Scene';
 import { isDummyScene } from '../../utils/sceneId';
 import { getAssetMetadata } from '../../assets/AssetRegistry';
+import { TrashIcon, CubeIcon, LightbulbIcon } from '../common';
 import './SceneCard.css';
 
 interface SceneCardProps {
@@ -16,10 +20,11 @@ interface SceneCardProps {
   onClick: () => void;
   onDelete?: () => void;
   isSelected?: boolean;
+  isRecentlyModified?: boolean;
 }
 
 /**
- * 상대 시간 포맷 (예: "2시간 전", "3일 전")
+ * Format relative time
  */
 function getRelativeTime(dateString?: string): string {
   if (!dateString) return '';
@@ -27,29 +32,28 @@ function getRelativeTime(dateString?: string): string {
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
-  const diffSec = Math.floor(diffMs / 1000);
-  const diffMin = Math.floor(diffSec / 60);
+  const diffMin = Math.floor(diffMs / 60000);
   const diffHour = Math.floor(diffMin / 60);
   const diffDay = Math.floor(diffHour / 24);
 
-  if (diffDay > 30) {
-    return date.toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
-  }
-  if (diffDay > 0) return `${diffDay}일 전`;
-  if (diffHour > 0) return `${diffHour}시간 전`;
-  if (diffMin > 0) return `${diffMin}분 전`;
-  return '방금 전';
+  if (diffMin < 1) return '방금';
+  if (diffMin < 60) return `${diffMin}분 전`;
+  if (diffHour < 24) return `${diffHour}시간 전`;
+  if (diffDay === 1) return '어제';
+  if (diffDay < 7) return `${diffDay}일 전`;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}.${month}.${day}`;
 }
 
 /**
- * 방 템플릿 정보 - room.meshName에서 유도
+ * Get room icon
  */
-function getRoomInfo(scene: SceneFrontend): { icon: string; name: string } {
+function getRoomIcon(scene: SceneFrontend): string {
   const roomMeta = getAssetMetadata(scene.room?.meshName || '');
-  if (roomMeta) {
-    return { icon: roomMeta.icon, name: roomMeta.name };
-  }
-  return { icon: '🏠', name: scene.room?.meshName || '알 수 없음' };
+  return roomMeta?.icon || '🏠';
 }
 
 export default function SceneCard({
@@ -58,11 +62,12 @@ export default function SceneCard({
   onClick,
   onDelete,
   isSelected,
+  isRecentlyModified,
 }: SceneCardProps) {
-  const room = getRoomInfo(scene);
+  const roomIcon = getRoomIcon(scene);
   const canDelete = !isDummyScene(scene.id);
+  const isTemplate = isDummyScene(scene.id);
 
-  // Asset 개수 계산 (용어: 가구/조명)
   const furnitureCount = scene.assets.filter((a) => a.type === 'object').length;
   const lightCount = scene.assets.filter((a) =>
     ['directional-light', 'point-light', 'rect-light'].includes(a.type)
@@ -73,97 +78,121 @@ export default function SceneCard({
     onDelete?.();
   };
 
+  // List View
   if (viewMode === 'list') {
     return (
-      <div
-        className={`scene-card-list ${isSelected ? 'selected' : ''}`}
+      <article
+        className={`scene-card scene-card--list ${isSelected ? 'is-selected' : ''}`}
         onClick={onClick}
+        tabIndex={0}
+        onKeyDown={(e) => e.key === 'Enter' && onClick()}
       >
-        {/* 썸네일 */}
-        <div className="scene-card-thumbnail-small">
+        {/* Thumbnail */}
+        <div className="scene-card__thumb scene-card__thumb--sm">
           {scene.thumbnailUrl ? (
-            <img src={scene.thumbnailUrl} alt={scene.name} />
+            <img src={scene.thumbnailUrl} alt="" loading="lazy" />
           ) : (
-            <div className="thumbnail-placeholder">
-              <span>{room.icon}</span>
-            </div>
+            <span className="scene-card__thumb-icon">{roomIcon}</span>
           )}
         </div>
 
-        {/* 정보 */}
-        <div className="scene-card-info">
-          <h3 className="scene-card-name">{scene.name}</h3>
-          <div className="scene-card-meta">
-            <span className="meta-item">
-              <span className="meta-icon">{room.icon}</span>
-              {room.name}
+        {/* Body */}
+        <div className="scene-card__body">
+          <div className="scene-card__title-row">
+            <h3 className="scene-card__title">{scene.name}</h3>
+            {isTemplate && (
+              <span className="scene-card__label scene-card__label--muted">템플릿</span>
+            )}
+            {isRecentlyModified && !isTemplate && (
+              <span className="scene-card__label scene-card__label--accent">최근 수정</span>
+            )}
+          </div>
+          <div className="scene-card__meta">
+            <span className="scene-card__stat">
+              <CubeIcon size={12} />
+              {furnitureCount}
             </span>
-            <span className="meta-divider">•</span>
-            <span className="meta-item">{furnitureCount} 가구</span>
-            <span className="meta-divider">•</span>
-            <span className="meta-item">{lightCount} 조명</span>
+            <span className="scene-card__stat">
+              <LightbulbIcon size={12} />
+              {lightCount}
+            </span>
+            <span className="scene-card__time">
+              {getRelativeTime(scene.updatedAt || scene.createdAt)}
+            </span>
           </div>
         </div>
 
-        {/* 시간 & 삭제 (항상 같은 너비 유지) */}
-        <div className="scene-card-actions">
-          <span className="scene-card-time">
-            {getRelativeTime(scene.updatedAt || scene.createdAt)}
-          </span>
-          <button
-            className={`scene-card-delete-btn ${canDelete ? '' : 'hidden'}`}
-            onClick={canDelete ? handleDelete : undefined}
-            title="삭제"
-            disabled={!canDelete}
-          >
-            🗑️
-          </button>
+        {/* Actions */}
+        <div className="scene-card__actions">
+          {canDelete && onDelete && (
+            <button
+              type="button"
+              className="scene-card__delete"
+              onClick={handleDelete}
+              aria-label="삭제"
+            >
+              <TrashIcon size={14} />
+            </button>
+          )}
         </div>
-      </div>
+      </article>
     );
   }
 
   // Grid View
   return (
-    <div
-      className={`scene-card-grid ${isSelected ? 'selected' : ''}`}
+    <article
+      className={`scene-card scene-card--grid ${isSelected ? 'is-selected' : ''}`}
       onClick={onClick}
+      tabIndex={0}
+      onKeyDown={(e) => e.key === 'Enter' && onClick()}
     >
-      {/* 썸네일 */}
-      <div className="scene-card-thumbnail">
+      {/* Thumbnail */}
+      <div className="scene-card__thumb">
         {scene.thumbnailUrl ? (
-          <img src={scene.thumbnailUrl} alt={scene.name} />
+          <img src={scene.thumbnailUrl} alt="" loading="lazy" />
         ) : (
-          <div className="thumbnail-placeholder">
-            <span className="thumbnail-icon">{room.icon}</span>
-            <span className="thumbnail-label">{room.name}</span>
+          <div className="scene-card__thumb-placeholder">
+            <span className="scene-card__thumb-icon">{roomIcon}</span>
           </div>
         )}
 
-        {/* 삭제 버튼 */}
+        {/* Badge */}
+        {isTemplate && <span className="scene-card__badge">템플릿</span>}
+        {isRecentlyModified && !isTemplate && (
+          <span className="scene-card__badge scene-card__badge--accent">최근</span>
+        )}
+
+        {/* Delete */}
         {canDelete && onDelete && (
           <button
-            className="scene-card-delete-btn"
+            type="button"
+            className="scene-card__delete"
             onClick={handleDelete}
-            title="삭제"
+            aria-label="삭제"
           >
-            🗑️
+            <TrashIcon size={14} />
           </button>
         )}
       </div>
 
-      {/* 정보 */}
-      <div className="scene-card-content">
-        <h3 className="scene-card-name">{scene.name}</h3>
-        <div className="scene-card-meta">
-          <span className="meta-item">
-            {furnitureCount + lightCount}개 배치됨
+      {/* Body */}
+      <div className="scene-card__body">
+        <h3 className="scene-card__title">{scene.name}</h3>
+        <div className="scene-card__meta">
+          <span className="scene-card__stat">
+            <CubeIcon size={12} />
+            {furnitureCount}
           </span>
-          <span className="meta-time">
+          <span className="scene-card__stat">
+            <LightbulbIcon size={12} />
+            {lightCount}
+          </span>
+          <span className="scene-card__time">
             {getRelativeTime(scene.updatedAt || scene.createdAt)}
           </span>
         </div>
       </div>
-    </div>
+    </article>
   );
 }

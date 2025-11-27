@@ -5,6 +5,9 @@
 // Layout & Guard
 export { default as ViewportGuard } from './ViewportGuard';
 
+// Icons
+export * from './Icons';
+
 // Toast
 export { ToastProvider, useToast } from './ToastProvider';
 export { ToastContainer } from './Toast';

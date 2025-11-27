@@ -16,10 +16,10 @@
 }
 
 .header-container {
-  max-width: 1440px;
+  max-width: 1280px;
   height: 100%;
   margin: 0 auto;
-  padding: 0 var(--space-10);
+  padding: 0 40px;
   display: flex;
   align-items: center;
   justify-content: space-between;
