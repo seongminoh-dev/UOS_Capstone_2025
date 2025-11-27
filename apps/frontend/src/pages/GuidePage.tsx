@@ -125,7 +125,7 @@ const FAQ_ITEMS = [
   },
   {
     question: 'WebGPU를 지원하지 않는 브라우저에서도 사용할 수 있나요?',
-    answer: '인태리는 WebGPU 기반으로 동작합니다. Chrome, Edge 등 최신 브라우저에서 WebGPU가 활성화되어 있어야 합니다. Safari는 아직 제한적으로 지원됩니다.',
+    answer: 'Intery는 WebGPU 기반으로 동작합니다. Chrome, Edge 등 최신 브라우저에서 WebGPU가 활성화되어 있어야 합니다. Safari는 아직 제한적으로 지원됩니다.',
   },
   {
     question: '렌더링 품질을 조절할 수 있나요?',
@@ -136,8 +136,8 @@ const FAQ_ITEMS = [
     answer: '현재 버전에서는 로컬 저장만 지원합니다. 커뮤니티 공유 기능은 추후 업데이트될 예정입니다.',
   },
   {
-    question: '모바일에서도 사용할 수 있나요?',
-    answer: '반응형 레이아웃을 지원하지만, WebGPU 렌더링 특성상 데스크톱 환경에서 최적의 경험을 제공합니다.',
+    question: '권장 사용 환경은 어떻게 되나요?',
+    answer: 'Intery는 WebGPU 기반의 고품질 렌더링을 위해 데스크톱 환경(1024px 이상)에 최적화되어 있습니다. Chrome, Edge 등 WebGPU를 지원하는 최신 브라우저에서 최상의 경험을 제공합니다.',
   },
 ];
 
@@ -214,7 +214,7 @@ function GuidePage() {
               <section className="content-section">
                 <div className="section-header">
                   <h1>시작하기</h1>
-                  <p>인태리를 처음 사용하시나요? 4단계로 쉽게 시작할 수 있어요.</p>
+                  <p>Intery를 처음 사용하시나요? 4단계로 쉽게 시작할 수 있어요.</p>
                 </div>
 
                 <div className="steps-container">

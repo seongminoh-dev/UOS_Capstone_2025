@@ -87,7 +87,7 @@
 }
 
 .modal-body::-webkit-scrollbar-thumb:hover {
-  background: #B0B0B0;
+  background: var(--border-default);
 }
 
 /* Form Section */

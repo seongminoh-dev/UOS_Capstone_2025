@@ -92,7 +92,7 @@
 
 .panel-content::-webkit-scrollbar-thumb:hover,
 .scrollable::-webkit-scrollbar-thumb:hover {
-  background: #B0B0B0;
+  background: var(--border-default);
 }
 
 /* ============================================
