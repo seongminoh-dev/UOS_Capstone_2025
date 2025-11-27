@@ -11,10 +11,11 @@
 import * as SunCalc from 'suncalc';
 import kelvinToRgb from 'kelvin-to-rgb';
 import type { Season, RoomOrientation } from '../graphics-core/service/Scene';
+import { LOCATION_CONFIG, LIGHTING_CONFIG } from '../config';
 
-// 기본 위치: 서울
-const DEFAULT_LATITUDE = 37.5665;
-const DEFAULT_LONGITUDE = 126.9780;
+// 기본 위치 (from centralized config)
+const DEFAULT_LATITUDE = LOCATION_CONFIG.DEFAULT_LATITUDE;
+const DEFAULT_LONGITUDE = LOCATION_CONFIG.DEFAULT_LONGITUDE;
 
 /**
  * 계절에 따른 대표 날짜
@@ -38,13 +39,9 @@ const ORIENTATION_OFFSET: Record<RoomOrientation, number> = {
   west: -Math.PI / 2,      // 서쪽 (-90도)
 };
 
-/**
- * 색온도 범위 (Kelvin)
- * - 지평선 근처: 붉은 노을
- * - 천정: 태양 표면 온도
- */
-const MIN_COLOR_TEMPERATURE = 1800; // 지평선 (붉은 노을)
-const MAX_COLOR_TEMPERATURE = 5800; // 천정 (태양 표면 온도)
+// 색온도 범위 (from centralized config)
+const MIN_COLOR_TEMPERATURE = LIGHTING_CONFIG.MIN_COLOR_TEMPERATURE;
+const MAX_COLOR_TEMPERATURE = LIGHTING_CONFIG.MAX_COLOR_TEMPERATURE;
 
 /**
  * SunSettings로부터 태양의 방향 벡터를 계산합니다.

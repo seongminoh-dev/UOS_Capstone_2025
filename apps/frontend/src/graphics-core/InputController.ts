@@ -1,5 +1,6 @@
 import { vec3, type Vec3 } from 'wgpu-matrix';
 import type { Camera } from './Camera';
+import { CAMERA_CONFIG } from '../config';
 
 /**
  * InputController - 키보드/마우스 입력을 처리하고 카메라를 제어합니다.
@@ -16,9 +17,9 @@ export class InputController {
     private lastMouseX: number = 0;
     private lastMouseY: number = 0;
 
-    // Settings
-    private moveSpeed: number = 5.0; // Units per second
-    private mouseSensitivity: number = 0.1;
+    // Settings (from centralized config)
+    private moveSpeed: number = CAMERA_CONFIG.MOVE_SPEED;
+    private mouseSensitivity: number = CAMERA_CONFIG.MOUSE_SENSITIVITY;
 
     // Event listeners (for cleanup)
     private boundKeyDown: (e: KeyboardEvent) => void;
