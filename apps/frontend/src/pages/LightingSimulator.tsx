@@ -1,19 +1,27 @@
-import { useState, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import './LightingSimulator.css';
 import Header from '../components/Header';
 import WebGPURenderer from '../components/WebGPURenderer';
 import MainRightPanel from '../components/MainRightPanel';
-import ErrorBoundary from '../components/ErrorBoundary';
-import type { Scene } from '../graphics-core/service/Scene';
+import type { Scene, SunSettings } from '../graphics-core/service/Scene';
+import type { WebGPUEngine } from '../graphics-core/service';
 
 export default function LightingSimulator() {
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [rendererKey, setRendererKey] = useState(0);
+  const engineRef = useRef<WebGPUEngine | null>(null);
 
-  // ErrorBoundary 리셋 시 렌더러 재마운트를 위한 키 증가
-  const handleErrorReset = useCallback(() => {
-    setRendererKey((prev) => prev + 1);
+  // Engine 준비 완료 콜백
+  const handleEngineReady = useCallback((engine: WebGPUEngine) => {
+    engineRef.current = engine;
+    console.log('[LightingSimulator] Engine ready');
+  }, []);
+
+  // 태양 설정 즉시 업데이트 콜백
+  const handleSunSettingsChange = useCallback((sunSettings: SunSettings) => {
+    if (engineRef.current) {
+      engineRef.current.updateSunLight(sunSettings);
+    }
   }, []);
 
   const handleSelectScene = (scene: Scene | null) => {
@@ -60,18 +68,13 @@ export default function LightingSimulator() {
                 </div>
               </div>
             ) : (
-              // 렌더링 - ErrorBoundary로 감싸서 GPU 에러 처리
-              <ErrorBoundary
-                key={rendererKey}
-                fallbackTitle="WebGPU 렌더링 오류"
-                onReset={handleErrorReset}
-              >
-                <WebGPURenderer
-                  key={`${selectedScene.id}-${selectedScene.updatedAt || Date.now()}`}
-                  className="webgpu-canvas"
-                  scene={selectedScene}
-                />
-              </ErrorBoundary>
+              // 렌더링
+              <WebGPURenderer
+                key={`${selectedScene.id}-${selectedScene.updatedAt || Date.now()}`}
+                className="webgpu-canvas"
+                scene={selectedScene}
+                onEngineReady={handleEngineReady}
+              />
             )}
           </div>
 
@@ -80,6 +83,7 @@ export default function LightingSimulator() {
             selectedScene={selectedScene}
             onSelectScene={handleSelectScene}
             onSceneChange={handleSceneChange}
+            onSunSettingsChange={handleSunSettingsChange}
           />
         </div>
       </div>

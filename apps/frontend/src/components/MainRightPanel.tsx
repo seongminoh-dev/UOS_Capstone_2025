@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
+import type { SceneFrontend, SceneAsset, SunSettings, SkyMode } from '../graphics-core/service/Scene';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
@@ -21,17 +21,19 @@ interface MainRightPanelProps {
   selectedScene: SceneFrontend | null;
   onSelectScene: (scene: SceneFrontend | null) => void;
   onSceneChange: () => void; // Scene 변경 감지
+  onSunSettingsChange?: (sunSettings: SunSettings) => void; // 태양 설정 즉시 업데이트
 }
 
-type Tab = 'lighting' | 'furniture' | 'info';
+type Tab = 'environment' | 'furniture' | 'lighting' | 'info';
 
 export default function MainRightPanel({
   selectedScene,
   onSelectScene,
   onSceneChange,
+  onSunSettingsChange,
 }: MainRightPanelProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('lighting');
+  const [activeTab, setActiveTab] = useState<Tab>('environment');
 
   // Zustand Stores
   const { scenes, loadScenes, saveScene, deleteScene } = useSceneRepository();
@@ -51,10 +53,15 @@ export default function MainRightPanel({
   const [currentScene, setCurrentScene] = useState<SceneFrontend | null>(null);
 
   // 태양 설정 상태 (Scene의 sunSettings와 동기화)
-  const [timeOfDay, setTimeOfDay] = useState<'day' | 'night'>('day');
   const [sunTime, setSunTime] = useState(50); // 0-100 (Scene 형식)
   const [season, setSeason] = useState<'spring' | 'summer' | 'autumn' | 'winter'>('spring');
   const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
+  const [skyMode, setSkyMode] = useState<0 | 1 | 2>(2); // 하늘 모드: 0=없음, 1=일반, 2=고품질
+  const [envIndirectMult, setEnvIndirectMult] = useState(50); // 환경 간접광 강도 (0-100%)
+
+  // 하루 애니메이션 상태
+  const [isAnimating, setIsAnimating] = useState(false);
+  const [animationSpeed, setAnimationSpeed] = useState(1); // 1 = 10초에 하루, 2 = 5초에 하루
 
   // Scene 목록 로드 (초기화)
   useEffect(() => {
@@ -69,30 +76,34 @@ export default function MainRightPanel({
 
       // sunSettings에서 UI 상태 초기화
       const sun = selectedScene.sunSettings;
-      setTimeOfDay(sun.isDaytime ? 'day' : 'night');
       setSunTime(sun.timeOfDay);
       setSeason(sun.season);
       setRoomDirection(sun.roomOrientation);
+      setSkyMode(sun.skyMode ?? 2); // 기본값: 고품질 하늘
+      setEnvIndirectMult(Math.round((sun.envIndirectMultiplier ?? 0.5) * 100)); // 기본값: 50%
     }
   }, [selectedScene]);
 
-  // 태양 설정 변경 시 currentScene.sunSettings 업데이트
+  // 태양 설정 변경 시 currentScene.sunSettings 업데이트 + 즉시 렌더링 반영
   useEffect(() => {
     if (currentScene) {
-      const updatedSunSettings = {
+      const updatedSunSettings: SunSettings = {
         timeOfDay: sunTime,
-        isDaytime: timeOfDay === 'day',
+        isDaytime: true, // 항상 true - 시간 슬라이더로 자동 낮/밤 전환
         season: season,
         roomOrientation: roomDirection,
+        skyMode: skyMode,
+        envIndirectMultiplier: envIndirectMult / 100, // 0-100 → 0.0-1.0
       };
 
       // 값이 실제로 변경되었는지 확인
       const sun = currentScene.sunSettings;
       const hasChanged =
         sun.timeOfDay !== updatedSunSettings.timeOfDay ||
-        sun.isDaytime !== updatedSunSettings.isDaytime ||
         sun.season !== updatedSunSettings.season ||
-        sun.roomOrientation !== updatedSunSettings.roomOrientation;
+        sun.roomOrientation !== updatedSunSettings.roomOrientation ||
+        sun.skyMode !== updatedSunSettings.skyMode ||
+        sun.envIndirectMultiplier !== updatedSunSettings.envIndirectMultiplier;
 
       if (hasChanged) {
         setCurrentScene({
@@ -100,9 +111,28 @@ export default function MainRightPanel({
           sunSettings: updatedSunSettings,
         });
         setHasUnsavedChanges(true);
+
+        // 즉시 렌더링에 반영 (저장 없이)
+        if (onSunSettingsChange) {
+          onSunSettingsChange(updatedSunSettings);
+        }
       }
     }
-  }, [timeOfDay, sunTime, season, roomDirection]);
+  }, [sunTime, season, roomDirection, skyMode, envIndirectMult, onSunSettingsChange]);
+
+  // 하루 애니메이션 효과
+  useEffect(() => {
+    if (!isAnimating) return;
+
+    const interval = setInterval(() => {
+      setSunTime((prev) => {
+        const next = prev + (animationSpeed * 0.5); // 0.5%씩 증가 (속도에 따라)
+        return next >= 100 ? 0 : next; // 100 도달 시 0으로 리셋
+      });
+    }, 50); // 50ms 간격
+
+    return () => clearInterval(interval);
+  }, [isAnimating, animationSpeed]);
 
   // Asset 저장 핸들러
   const handleSaveAsset = (updatedAsset: SceneAsset) => {
@@ -499,11 +529,11 @@ export default function MainRightPanel({
         <div className="panel-tab-nav">
           <button
             className={`panel-tab-button ${
-              activeTab === 'lighting' ? 'active' : ''
+              activeTab === 'environment' ? 'active' : ''
             }`}
-            onClick={() => setActiveTab('lighting')}
+            onClick={() => setActiveTab('environment')}
           >
-            조명
+            환경
           </button>
           <button
             className={`panel-tab-button ${
@@ -512,6 +542,14 @@ export default function MainRightPanel({
             onClick={() => setActiveTab('furniture')}
           >
             가구
+          </button>
+          <button
+            className={`panel-tab-button ${
+              activeTab === 'lighting' ? 'active' : ''
+            }`}
+            onClick={() => setActiveTab('lighting')}
+          >
+            조명
           </button>
           <button
             className={`panel-tab-button ${
@@ -525,47 +563,64 @@ export default function MainRightPanel({
       </div>
 
       <div className="panel-content">
-        {/* 조명 탭 */}
-        {activeTab === 'lighting' && (
+        {/* 환경 탭 */}
+        {activeTab === 'environment' && (
           <div className="tab-section">
             {/* 태양 설정 */}
             <div className="section-card">
               <h3 className="section-title">태양 설정</h3>
 
-              {/* 시간대 */}
+              {/* 시간 (20분 단위로 세밀하게 조절) */}
               <div className="form-group">
-                <label className="form-label">시간대</label>
-                <div className="button-group">
-                  <button
-                    className={`toggle-button ${
-                      timeOfDay === 'day' ? 'active' : ''
-                    }`}
-                    onClick={() => setTimeOfDay('day')}
-                  >
-                    낮
-                  </button>
-                  <button
-                    className={`toggle-button ${
-                      timeOfDay === 'night' ? 'active' : ''
-                    }`}
-                    onClick={() => setTimeOfDay('night')}
-                  >
-                    밤
-                  </button>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <label className="form-label" style={{ margin: 0 }}>
+                    시간: {Math.floor((sunTime / 100) * 24)}시
+                  </label>
+                  <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                    <button
+                      onClick={() => setIsAnimating(!isAnimating)}
+                      style={{
+                        padding: '4px 8px',
+                        fontSize: '12px',
+                        borderRadius: '4px',
+                        border: '1px solid #E5E7EB',
+                        backgroundColor: isAnimating ? '#3B82F6' : '#F9FAFB',
+                        color: isAnimating ? '#fff' : '#374151',
+                        cursor: 'pointer',
+                      }}
+                      title={isAnimating ? '정지' : '하루 재생'}
+                    >
+                      {isAnimating ? '⏹ 정지' : '▶ 재생'}
+                    </button>
+                    {isAnimating && (
+                      <select
+                        value={animationSpeed}
+                        onChange={(e) => setAnimationSpeed(Number(e.target.value))}
+                        style={{
+                          padding: '4px',
+                          fontSize: '11px',
+                          borderRadius: '4px',
+                          border: '1px solid #E5E7EB',
+                        }}
+                      >
+                        <option value={0.5}>0.5x</option>
+                        <option value={1}>1x</option>
+                        <option value={2}>2x</option>
+                        <option value={4}>4x</option>
+                      </select>
+                    )}
+                  </div>
                 </div>
-              </div>
-
-              {/* 시간 (0-100 → 0-24시 변환하여 표시) */}
-              <div className="form-group">
-                <label className="form-label">
-                  시간: {Math.round((sunTime / 100) * 24)}시
-                </label>
                 <input
                   type="range"
                   min="0"
-                  max="100"
-                  value={sunTime}
-                  onChange={(e) => setSunTime(Number(e.target.value))}
+                  max="1440"
+                  step="20"
+                  value={Math.round(sunTime / 100 * 1440)}
+                  onChange={(e) => {
+                    setIsAnimating(false); // 수동 조작 시 애니메이션 정지
+                    setSunTime(Number(e.target.value) / 1440 * 100);
+                  }}
                   className="range-slider"
                 />
                 <div className="range-labels">
@@ -605,7 +660,64 @@ export default function MainRightPanel({
               </div>
             </div>
 
-            {/* 조명 목록 */}
+            {/* 하늘 설정 */}
+            <div className="section-card">
+              <h3 className="section-title">하늘 설정</h3>
+
+              {/* 품질 */}
+              <div className="form-group">
+                <label className="form-label">품질</label>
+                <div className="button-group">
+                  <button
+                    className={`toggle-button ${skyMode === 2 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(2)}
+                  >
+                    고품질
+                  </button>
+                  <button
+                    className={`toggle-button ${skyMode === 1 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(1)}
+                  >
+                    일반
+                  </button>
+                  <button
+                    className={`toggle-button ${skyMode === 0 ? 'active' : ''}`}
+                    onClick={() => setSkyMode(0)}
+                  >
+                    없음
+                  </button>
+                </div>
+              </div>
+
+              {/* 하늘빛 반사 */}
+              <div className="form-group">
+                <label className="form-label">
+                  하늘빛 반사: {envIndirectMult}%
+                </label>
+                <p style={{ fontSize: '11px', color: '#9CA3AF', margin: '4px 0 8px 0' }}>
+                  실내에 비치는 하늘색 조명의 강도
+                </p>
+                <input
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value={envIndirectMult}
+                  onChange={(e) => setEnvIndirectMult(Number(e.target.value))}
+                  className="range-slider"
+                />
+                <div className="range-labels">
+                  <span>0% (없음)</span>
+                  <span>100% (자연스러움)</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 조명 탭 */}
+        {activeTab === 'lighting' && (
+          <div className="tab-section">
             <div className="section-card">
               <h3 className="section-title">배치된 조명</h3>
 

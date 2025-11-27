@@ -11,11 +11,10 @@
 import * as SunCalc from 'suncalc';
 import kelvinToRgb from 'kelvin-to-rgb';
 import type { Season, RoomOrientation } from '../graphics-core/service/Scene';
-import { LOCATION_CONFIG, LIGHTING_CONFIG } from '../config';
 
-// 기본 위치 (from centralized config)
-const DEFAULT_LATITUDE = LOCATION_CONFIG.DEFAULT_LATITUDE;
-const DEFAULT_LONGITUDE = LOCATION_CONFIG.DEFAULT_LONGITUDE;
+// 기본 위치: 서울
+const DEFAULT_LATITUDE = 37.5665;
+const DEFAULT_LONGITUDE = 126.9780;
 
 /**
  * 계절에 따른 대표 날짜
@@ -39,9 +38,13 @@ const ORIENTATION_OFFSET: Record<RoomOrientation, number> = {
   west: -Math.PI / 2,      // 서쪽 (-90도)
 };
 
-// 색온도 범위 (from centralized config)
-const MIN_COLOR_TEMPERATURE = LIGHTING_CONFIG.MIN_COLOR_TEMPERATURE;
-const MAX_COLOR_TEMPERATURE = LIGHTING_CONFIG.MAX_COLOR_TEMPERATURE;
+/**
+ * 색온도 범위 (Kelvin)
+ * - 지평선 근처: 붉은 노을
+ * - 천정: 태양 표면 온도
+ */
+const MIN_COLOR_TEMPERATURE = 1800; // 지평선 (붉은 노을)
+const MAX_COLOR_TEMPERATURE = 5800; // 천정 (태양 표면 온도)
 
 /**
  * SunSettings로부터 태양의 방향 벡터를 계산합니다.
@@ -190,6 +193,165 @@ export interface DirectionalLightParams {
   direction: [number, number, number];
   color: [number, number, number];
   intensity: number;
+}
+
+/**
+ * 환경광 파라미터 인터페이스 (물리 기반)
+ */
+export interface EnvironmentParams {
+  // 하늘 기본색 (Rayleigh 산란 결과)
+  skyColor: [number, number, number];
+  // 지평선 색상 (대기 경로 길이에 따른 색상)
+  horizonColor: [number, number, number];
+  // 지면 반사색
+  groundColor: [number, number, number];
+  // 태양 방향 (정규화)
+  sunDirection: [number, number, number];
+  // 태양 강도 (0-1, 고도 기반)
+  sunIntensity: number;
+  // 환경광 전체 강도
+  environmentIntensity: number;
+}
+
+/**
+ * 선형 보간 헬퍼 함수
+ */
+function lerpVec3(
+  a: [number, number, number],
+  b: [number, number, number],
+  t: number
+): [number, number, number] {
+  const clampedT = Math.max(0, Math.min(1, t));
+  return [
+    a[0] + (b[0] - a[0]) * clampedT,
+    a[1] + (b[1] - a[1]) * clampedT,
+    a[2] + (b[2] - a[2]) * clampedT,
+  ];
+}
+
+/**
+ * 물리 기반 환경 파라미터를 계산합니다.
+ * Rayleigh/Mie 산란을 근사하여 시간대별 하늘색을 계산합니다.
+ *
+ * 물리적 원리:
+ * - Rayleigh Scattering: λ^-4 법칙, 파란색이 더 많이 산란 → 낮 하늘이 파란 이유
+ * - Mie Scattering: 태양 주변 밝은 광채(aureole) 형성
+ * - 대기 경로 길이: 태양이 낮을수록 빛이 대기를 더 많이 통과 → 붉은색
+ *
+ * @param timeOfDay - 하루 중 시간 (0-100)
+ * @param isDaytime - 낮/밤 토글
+ * @param season - 계절
+ * @param roomOrientation - 방 방향
+ * @returns 환경 파라미터
+ */
+export function calculateEnvironmentParams(
+  timeOfDay: number,
+  isDaytime: boolean,
+  season: Season,
+  roomOrientation: RoomOrientation,
+  latitude: number = DEFAULT_LATITUDE,
+  longitude: number = DEFAULT_LONGITUDE
+): EnvironmentParams {
+  // 기본 밤 색상 (어두운 청색 - 달빛/별빛 효과)
+  const nightSkyColor: [number, number, number] = [0.02, 0.02, 0.06];
+  const nightHorizonColor: [number, number, number] = [0.03, 0.03, 0.05];
+  const nightGroundColor: [number, number, number] = [0.01, 0.01, 0.02];
+
+  // 밤 모드 (isDaytime = false)
+  if (!isDaytime) {
+    return {
+      skyColor: nightSkyColor,
+      horizonColor: nightHorizonColor,
+      groundColor: nightGroundColor,
+      sunDirection: [0, -1, 0], // 아래 방향 (태양 없음)
+      sunIntensity: 0,
+      environmentIntensity: 0.02,
+    };
+  }
+
+  // 시간 및 태양 위치 계산
+  const hour = (timeOfDay / 100) * 24;
+  const seasonDate = SEASON_DATES[season];
+  const date = new Date(2024, seasonDate.month, seasonDate.day);
+  date.setHours(Math.floor(hour), (hour % 1) * 60, 0, 0);
+
+  const sunPos = SunCalc.getPosition(date, latitude, longitude);
+  const altitude = sunPos.altitude;
+  const azimuth = sunPos.azimuth;
+
+  // 태양 방향 계산 (방 방향 보정 포함)
+  const correctedAzimuth = azimuth + ORIENTATION_OFFSET[roomOrientation];
+  const sunDirX = Math.cos(altitude) * Math.sin(correctedAzimuth);
+  const sunDirY = -Math.sin(altitude);
+  const sunDirZ = Math.cos(altitude) * Math.cos(correctedAzimuth);
+  const sunDirection: [number, number, number] = [sunDirX, sunDirY, sunDirZ];
+
+  // 밤 (태양이 지평선 아래)
+  if (altitude < 0) {
+    // 박명(twilight) 효과: 태양이 지평선 바로 아래일 때
+    const twilightFactor = Math.max(0, 1 + altitude * 3); // -0.33rad에서 0
+
+    const twilightSkyColor: [number, number, number] = [0.08, 0.05, 0.15];
+    const twilightHorizonColor: [number, number, number] = [0.2, 0.1, 0.15];
+
+    return {
+      skyColor: lerpVec3(nightSkyColor, twilightSkyColor, twilightFactor),
+      horizonColor: lerpVec3(nightHorizonColor, twilightHorizonColor, twilightFactor),
+      groundColor: lerpVec3(nightGroundColor, [0.02, 0.02, 0.03], twilightFactor),
+      sunDirection,
+      sunIntensity: 0,
+      environmentIntensity: 0.02 + twilightFactor * 0.1,
+    };
+  }
+
+  // 낮: 물리 기반 색상 계산
+  // t = 0 (지평선) ~ 1 (천정)
+  const t = Math.sin(altitude);
+
+  // === Rayleigh Scattering 근사 ===
+  // 높은 고도: 깊은 파란색 (Rayleigh 우세)
+  // 낮은 고도: 옅은 파란색/흰색
+  const zenithBlue: [number, number, number] = [0.15, 0.35, 0.65];  // 천정 (깊은 파랑)
+  const horizonBlue: [number, number, number] = [0.5, 0.6, 0.75];   // 지평선 (옅은 파랑)
+
+  // === 일출/일몰 색상 (대기 경로 길이 효과) ===
+  // 태양이 낮을 때: 긴 대기 경로 → 파란색 산란 → 붉은색/주황색 도달
+  const sunsetHorizon: [number, number, number] = [0.9, 0.4, 0.2];  // 일몰 지평선 (주황)
+  const sunsetSky: [number, number, number] = [0.6, 0.35, 0.5];     // 일몰 하늘 (보라/분홍)
+
+  // 일출/일몰 혼합 factor (태양 고도 15도 이하에서 강해짐)
+  const sunsetFactor = Math.pow(Math.max(0, 1 - t * 4), 2); // 0~0.25rad에서 효과
+
+  // 하늘색 계산: Rayleigh + 일몰 효과
+  const baseSkyColor = lerpVec3(horizonBlue, zenithBlue, t);
+  const skyColor = lerpVec3(baseSkyColor, sunsetSky, sunsetFactor * 0.6);
+
+  // 지평선색 계산: 기본 + 일몰 효과
+  const baseHorizonColor = lerpVec3([0.6, 0.65, 0.8], horizonBlue, t);
+  const horizonColor = lerpVec3(baseHorizonColor, sunsetHorizon, sunsetFactor);
+
+  // === 지면 반사색 ===
+  // 하늘색의 영향을 받음 (ambient occlusion 효과)
+  const groundColor: [number, number, number] = [
+    skyColor[0] * 0.15 + 0.05,
+    skyColor[1] * 0.18 + 0.08,
+    skyColor[2] * 0.12 + 0.03,
+  ];
+
+  // 태양 강도: sin(altitude) 기반 (물리적으로 정확)
+  const sunIntensity = Math.max(0, Math.sin(altitude));
+
+  // 환경광 전체 강도
+  const environmentIntensity = 0.3 + t * 0.7; // 0.3 ~ 1.0
+
+  return {
+    skyColor,
+    horizonColor,
+    groundColor,
+    sunDirection,
+    sunIntensity,
+    environmentIntensity,
+  };
 }
 
 /**

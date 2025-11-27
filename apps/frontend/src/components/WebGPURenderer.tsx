@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebGPUEngine } from '../graphics-core/service';
 import { SceneAdapter } from '../adapters/SceneAdapter';
-import { RENDERER_CONFIG } from '../config';
 import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
 interface WebGPURendererProps {
@@ -10,6 +9,7 @@ interface WebGPURendererProps {
   height?: number;
   scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
+  onEngineReady?: (engine: WebGPUEngine) => void;
 }
 
 /**
@@ -21,6 +21,7 @@ export default function WebGPURenderer({
   height = 600,
   scene,
   onCameraUpdate,
+  onEngineReady,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -34,8 +35,9 @@ export default function WebGPURenderer({
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
 
-  // 렌더링 크기 제한 (from centralized config)
-  const { MIN_WIDTH, MIN_HEIGHT, MAX_WIDTH, MAX_HEIGHT } = RENDERER_CONFIG;
+  // 최소 렌더링 크기
+  const MIN_WIDTH = 512;
+  const MIN_HEIGHT = 384;
 
   // 반응형 크기 처리 (ResizeObserver)
   useEffect(() => {
@@ -45,7 +47,12 @@ export default function WebGPURenderer({
       for (const entry of entries) {
         const { width: containerWidth, height: containerHeight } = entry.contentRect;
 
-        // 4:3 비율 유지하면서 크기 계산 (MAX_WIDTH/MAX_HEIGHT는 config에서 가져옴)
+        // WebGPU 내부 해상도 제한 (성능 최적화)
+        // CSS로는 크게 표시되지만, 실제 렌더링은 낮은 해상도로
+        const MAX_WIDTH = 1024;   // 최대 내부 렌더 너비
+        const MAX_HEIGHT = 768;  // 최대 내부 렌더 높이 (4:3 비율 유지) 
+
+        // 4:3 비율 유지하면서 크기 계산
         let newWidth = Math.min(containerWidth, MAX_WIDTH);
         let newHeight = newWidth * 3 / 4;
 
@@ -64,7 +71,7 @@ export default function WebGPURenderer({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [MAX_WIDTH, MAX_HEIGHT]);
+  }, []);
 
   // 초기 렌더러 설정 (mount 시 1회만 실행)
   useEffect(() => {
@@ -104,6 +111,10 @@ export default function WebGPURenderer({
         // 초기화 완료
         if (isMounted) {
           setIsInitialized(true);
+          // Engine을 부모 컴포넌트에 전달
+          if (onEngineReady) {
+            onEngineReady(engine);
+          }
         }
       } catch (err) {
         console.error('Error initializing WebGPU engine:', err);
