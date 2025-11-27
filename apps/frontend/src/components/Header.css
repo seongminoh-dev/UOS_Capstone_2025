@@ -1,14 +1,17 @@
-/* Modern Minimal Header Styles */
+/**
+ * Header Component Styles
+ * Modern Minimal Design
+ */
 
 .header {
   width: 100%;
-  height: 70px;
-  background-color: #FFFFFF;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  height: var(--header-height);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-sm);
   position: fixed;
   top: 0;
   left: 0;
-  z-index: 1000;
+  z-index: var(--z-header);
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
@@ -16,7 +19,7 @@
   max-width: 1440px;
   height: 100%;
   margin: 0 auto;
-  padding: 0 40px;
+  padding: 0 var(--space-10);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -26,9 +29,9 @@
 .header-logo {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
   cursor: pointer;
-  transition: opacity 0.2s ease;
+  transition: opacity var(--transition-base);
 }
 
 .header-logo:hover {
@@ -41,50 +44,44 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #000000;
-  border-radius: 4px;
+  background-color: var(--accent-primary);
+  border-radius: var(--radius-sm);
   position: relative;
 }
 
 .logo-shape {
   width: 16px;
   height: 16px;
-  background: linear-gradient(135deg, #FFFFFF 0%, #F5F5F5 100%);
+  background: linear-gradient(135deg, var(--bg-surface) 0%, var(--bg-muted) 100%);
   border-radius: 2px;
   transform: rotate(45deg);
 }
 
 .logo-text {
-  font-size: 20px;
-  font-weight: 600;
-  color: #000000;
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
   letter-spacing: -0.5px;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
 }
 
 /* Navigation */
 .header-nav {
   display: flex;
   align-items: center;
-  gap: 40px;
+  gap: var(--space-10);
   flex: 1;
   justify-content: center;
   margin: 0 60px;
 }
 
 .nav-link {
-  font-size: 15px;
-  font-weight: 500;
-  color: #6B6B6B;
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
   text-decoration: none;
-  transition: color 0.2s ease;
+  transition: color var(--transition-base);
   position: relative;
-  padding: 8px 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  padding: var(--space-2) 0;
 }
 
 .nav-link::after {
@@ -94,12 +91,12 @@
   left: 0;
   width: 0;
   height: 2px;
-  background-color: #000000;
-  transition: width 0.2s ease;
+  background-color: var(--accent-primary);
+  transition: width var(--transition-base);
 }
 
 .nav-link:hover {
-  color: #000000;
+  color: var(--text-primary);
 }
 
 .nav-link:hover::after {
@@ -107,7 +104,7 @@
 }
 
 .nav-link.active {
-  color: #000000;
+  color: var(--text-primary);
 }
 
 .nav-link.active::after {
@@ -118,7 +115,7 @@
 .header-auth {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .header-auth a {
@@ -128,79 +125,73 @@
 .user-info {
   display: flex;
   align-items: center;
-  padding: 8px 16px;
-  background-color: #F5F5F5;
-  border-radius: 6px;
+  padding: var(--space-2) var(--space-4);
+  background-color: var(--bg-muted);
+  border-radius: var(--radius-md);
 }
 
 .user-nickname {
-  font-size: 14px;
-  font-weight: 500;
-  color: #000000;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
 }
 
 .auth-button {
-  font-size: 14px;
-  font-weight: 500;
-  padding: 10px 20px;
-  border-radius: 6px;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  padding: var(--btn-padding-y) var(--space-5);
+  border-radius: var(--radius-md);
   cursor: pointer;
-  transition: all 0.2s ease;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
-    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue',
-    sans-serif;
+  transition: all var(--transition-base);
   white-space: nowrap;
 }
 
 .auth-login {
   background-color: transparent;
-  color: #000000;
-  border: 1px solid #E0E0E0;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .auth-login:hover {
-  background-color: #F5F5F5;
-  border-color: #D0D0D0;
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
 }
 
 .auth-signup {
-  background-color: #000000;
-  color: #FFFFFF;
-  border: 1px solid #000000;
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+  border: 1px solid var(--accent-primary);
 }
 
 .auth-signup:hover {
-  background-color: #2B2B2B;
-  border-color: #2B2B2B;
+  background-color: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
 }
 
 .auth-logout {
   background-color: transparent;
-  color: #000000;
-  border: 1px solid #E0E0E0;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
 }
 
 .auth-logout:hover {
-  background-color: #F5F5F5;
-  border-color: #D0D0D0;
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
 }
 
 /* Responsive Design */
 @media (max-width: 1024px) {
   .header-container {
-    padding: 0 24px;
+    padding: 0 var(--space-6);
   }
 
   .header-nav {
-    gap: 28px;
-    margin: 0 40px;
+    gap: var(--space-7);
+    margin: 0 var(--space-10);
   }
 
   .nav-link {
-    font-size: 14px;
+    font-size: var(--text-base);
   }
 }
 
@@ -210,18 +201,18 @@
   }
 
   .header-container {
-    padding: 0 20px;
+    padding: 0 var(--space-5);
   }
 
   .auth-button {
-    padding: 8px 16px;
-    font-size: 13px;
+    padding: var(--space-2) var(--space-4);
+    font-size: var(--text-sm);
   }
 }
 
 @media (max-width: 480px) {
   .header {
-    height: 60px;
+    height: var(--header-height-mobile);
   }
 
   .logo-icon {
@@ -239,7 +230,7 @@
   }
 
   .auth-button {
-    padding: 7px 14px;
-    font-size: 12px;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-xs);
   }
 }

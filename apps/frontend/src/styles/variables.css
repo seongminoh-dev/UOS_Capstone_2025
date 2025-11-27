@@ -1,0 +1,176 @@
+/**
+ * ============================================
+ * Frontend Design System - CSS Variables
+ * ============================================
+ *
+ * 이 파일은 프론트엔드 전체에서 사용되는 디자인 토큰을 정의합니다.
+ * 모든 CSS 파일에서 이 변수들을 사용하여 일관된 디자인을 유지합니다.
+ *
+ * 사용법:
+ *   color: var(--text-primary);
+ *   padding: var(--space-4);
+ *   border-radius: var(--radius-md);
+ */
+
+:root {
+  /* ============================================
+   * Typography - 폰트
+   * ============================================ */
+
+  /**
+   * 기본 Sans-serif 폰트 스택
+   * - Apple, Windows, Android 등 모든 플랫폼에서 최적의 시스템 폰트 사용
+   */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'Noto Sans', sans-serif,
+    'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol';
+
+  /**
+   * Monospace 폰트 (코드, 디버그 정보용)
+   */
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas,
+    'Liberation Mono', monospace;
+
+  /* Font Sizes */
+  --text-xs: 12px;      /* 작은 라벨, 뱃지 */
+  --text-sm: 13px;      /* 보조 텍스트 */
+  --text-base: 14px;    /* 기본 본문 */
+  --text-md: 15px;      /* 버튼, 입력창 */
+  --text-lg: 16px;      /* 소제목 */
+  --text-xl: 20px;      /* 섹션 제목 */
+  --text-2xl: 24px;     /* 페이지 부제목 */
+  --text-3xl: 28px;     /* 페이지 제목 */
+
+  /* Font Weights */
+  --font-normal: 400;
+  --font-medium: 500;
+  --font-semibold: 600;
+  --font-bold: 700;
+
+  /* Line Heights */
+  --leading-tight: 1.25;
+  --leading-normal: 1.5;
+  --leading-relaxed: 1.6;
+
+  /* ============================================
+   * Colors - 색상
+   * ============================================ */
+
+  /* Background Colors - 배경색 */
+  --bg-page: #FAFAFA;           /* 페이지 전체 배경 */
+  --bg-surface: #FFFFFF;        /* 카드, 패널 배경 */
+  --bg-muted: #F5F5F5;          /* 비활성 영역, 호버 배경 */
+  --bg-subtle: #F0F0F0;         /* 더 어두운 비활성 배경 */
+  --bg-dark: #2A2A2A;           /* 캔버스, 다크 영역 */
+  --bg-darker: #1A1A1A;         /* 더 어두운 영역 */
+
+  /* Text Colors - 텍스트 색상 */
+  --text-primary: #000000;      /* 기본 텍스트 */
+  --text-secondary: #6B6B6B;    /* 보조 텍스트, 라벨 */
+  --text-muted: #A0AEC0;        /* 비활성 텍스트, placeholder */
+  --text-disabled: #BDBDBD;     /* 비활성화된 텍스트 */
+  --text-inverse: #FFFFFF;      /* 어두운 배경 위 텍스트 */
+
+  /* Border Colors - 테두리 색상 */
+  --border-default: #E0E0E0;    /* 기본 테두리 */
+  --border-hover: #D0D0D0;      /* 호버 시 테두리 */
+  --border-focus: #000000;      /* 포커스 시 테두리 */
+  --border-active: #000000;     /* 활성화 시 테두리 */
+
+  /* Primary Colors - 주요 액션 색상 (Black theme) */
+  --accent-primary: #000000;          /* 주요 버튼, 활성 상태 */
+  --accent-primary-hover: #2B2B2B;    /* 주요 버튼 호버 */
+  --accent-primary-light: #F5F5F5;    /* 주요 색상 연한 버전 */
+
+  /* Secondary Colors - 보조 색상 */
+  --accent-secondary: #6B6B6B;        /* 보조 버튼 */
+  --accent-secondary-hover: #5A5A5A;  /* 보조 버튼 호버 */
+
+  /* Semantic Colors - 의미 색상 */
+  --color-success: #22C55E;     /* 성공 */
+  --color-warning: #F59E0B;     /* 경고 */
+  --color-error: #DC2626;       /* 에러, 삭제 */
+  --color-error-bg: #FEE2E2;    /* 에러 배경 */
+  --color-error-border: #FED7D7;/* 에러 테두리 */
+  --color-info: #2196F3;        /* 정보, 선택됨 */
+  --color-info-bg: #E3F2FD;     /* 정보 배경 */
+
+  /* ============================================
+   * Spacing - 간격
+   * ============================================ */
+
+  /* 8px 기반 스케일 */
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-7: 28px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ============================================
+   * Border Radius - 모서리 둥글기
+   * ============================================ */
+  --radius-sm: 4px;       /* 작은 요소 (아이콘, 뱃지) */
+  --radius-md: 6px;       /* 버튼, 입력창 */
+  --radius-lg: 8px;       /* 카드, 섹션, 탭 */
+  --radius-xl: 12px;      /* 모달, 큰 카드 */
+  --radius-full: 9999px;  /* 원형 (뱃지, 토글) */
+
+  /* ============================================
+   * Shadows - 그림자
+   * ============================================ */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-xl: 0 8px 32px rgba(0, 0, 0, 0.2);
+  --shadow-inner: inset 0 2px 4px rgba(0, 0, 0, 0.06);
+  --shadow-panel: -2px 0 8px rgba(0, 0, 0, 0.05);   /* 사이드 패널용 */
+  --shadow-button: 0 1px 3px rgba(0, 0, 0, 0.1);   /* 버튼 활성 상태 */
+
+  /* ============================================
+   * Transitions - 애니메이션
+   * ============================================ */
+  --transition-fast: 150ms ease;
+  --transition-base: 200ms ease;
+  --transition-slow: 300ms ease;
+
+  /* ============================================
+   * Z-Index - 레이어 순서
+   * ============================================ */
+  --z-dropdown: 100;
+  --z-sticky: 500;
+  --z-header: 1000;
+  --z-modal-backdrop: 1500;
+  --z-modal: 2000;
+  --z-tooltip: 2500;
+
+  /* ============================================
+   * Component Specific - 컴포넌트별 설정
+   * ============================================ */
+
+  /* Header */
+  --header-height: 70px;
+  --header-height-mobile: 60px;
+
+  /* Panel */
+  --panel-width: 487px;
+  --panel-width-tablet: 400px;
+
+  /* Input */
+  --input-height: 44px;
+  --input-height-sm: 36px;
+
+  /* Button Padding */
+  --btn-padding-y: 10px;      /* 버튼 상하 패딩 */
+  --btn-padding-y-lg: 14px;   /* 큰 버튼 상하 패딩 */
+
+  /* Focus Ring */
+  --focus-ring: 0 0 0 3px rgba(0, 0, 0, 0.05);
+  --focus-ring-error: 0 0 0 3px rgba(220, 38, 38, 0.1);
+  --focus-ring-info: 0 0 0 3px rgba(33, 150, 243, 0.1);
+}

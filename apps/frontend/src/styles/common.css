@@ -1,0 +1,651 @@
+/**
+ * Common Component Styles
+ * 재사용 가능한 공통 컴포넌트 스타일
+ */
+
+/* ============================================
+   Page Container
+   ============================================ */
+.page-container {
+  position: relative;
+  width: 100%;
+  height: 100vh;
+  margin: 0;
+  padding: var(--header-height) 0 0 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: var(--bg-page);
+}
+
+.page-layout {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+
+/* ============================================
+   Panel (Right Side Panel)
+   ============================================ */
+.panel {
+  width: var(--panel-width);
+  height: 100%;
+  background-color: var(--bg-surface);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  box-shadow: var(--shadow-panel);
+}
+
+.panel-header {
+  padding: var(--space-8) var(--space-8) var(--space-6);
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.panel-title {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-2) 0;
+  color: var(--text-primary);
+}
+
+.panel-subtitle {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6) 0;
+}
+
+.panel-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--space-6) var(--space-8);
+}
+
+.panel-actions {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-5) var(--space-8);
+  border-top: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Scrollbar
+   ============================================ */
+.panel-content::-webkit-scrollbar,
+.scrollable::-webkit-scrollbar {
+  width: 8px;
+}
+
+.panel-content::-webkit-scrollbar-track,
+.scrollable::-webkit-scrollbar-track {
+  background: var(--bg-muted);
+  border-radius: var(--radius-sm);
+}
+
+.panel-content::-webkit-scrollbar-thumb,
+.scrollable::-webkit-scrollbar-thumb {
+  background: var(--border-hover);
+  border-radius: var(--radius-sm);
+}
+
+.panel-content::-webkit-scrollbar-thumb:hover,
+.scrollable::-webkit-scrollbar-thumb:hover {
+  background: #B0B0B0;
+}
+
+/* ============================================
+   Tab Navigation
+   ============================================ */
+.tab-nav {
+  display: flex;
+  background-color: var(--bg-muted);
+  border-radius: var(--radius-lg);
+  padding: var(--space-1);
+  gap: var(--space-2);
+  width: fit-content;
+}
+
+.tab-button {
+  padding: var(--btn-padding-y) var(--space-6);
+  border: none;
+  background: transparent;
+  border-radius: var(--radius-md);
+  font-size: var(--text-md);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  color: var(--text-secondary);
+}
+
+.tab-button.active {
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-button);
+}
+
+.tab-button:hover:not(.active) {
+  color: var(--text-primary);
+}
+
+/* ============================================
+   Section Card
+   ============================================ */
+.section-card {
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+}
+
+.section-title {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-4) 0;
+  color: var(--text-primary);
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-4);
+}
+
+/* ============================================
+   Form Elements
+   ============================================ */
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-bottom: var(--space-5);
+}
+
+.form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-label {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.form-input {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  transition: all var(--transition-base);
+  box-sizing: border-box;
+}
+
+.form-input:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+.form-input::placeholder {
+  color: var(--text-muted);
+}
+
+.form-input:disabled {
+  background-color: var(--bg-muted);
+  cursor: not-allowed;
+}
+
+.form-textarea {
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  resize: vertical;
+  min-height: 80px;
+  transition: border-color var(--transition-base);
+}
+
+.form-textarea:focus {
+  outline: none;
+  border-color: var(--border-focus);
+}
+
+.form-select {
+  width: 100%;
+  padding: var(--btn-padding-y) var(--space-4);
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.form-select:focus {
+  outline: none;
+  border-color: var(--border-focus);
+  box-shadow: var(--focus-ring);
+}
+
+/* ============================================
+   Toggle Button Group
+   ============================================ */
+.button-group {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.toggle-button {
+  flex: 1;
+  padding: var(--btn-padding-y) var(--space-4);
+  background-color: var(--bg-surface);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.toggle-button.active {
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+  border-color: var(--accent-primary);
+}
+
+.toggle-button:hover:not(.active) {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+/* ============================================
+   Range Slider
+   ============================================ */
+.range-slider {
+  width: 100%;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-default);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.range-slider:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.range-slider:disabled::-webkit-slider-thumb {
+  cursor: not-allowed;
+}
+
+.range-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.range-slider:disabled::-webkit-slider-thumb:hover {
+  transform: none;
+}
+
+.range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-full);
+  background: var(--accent-primary);
+  cursor: pointer;
+  border: none;
+}
+
+.range-slider:disabled::-moz-range-thumb {
+  cursor: not-allowed;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: var(--space-2);
+}
+
+.range-labels span {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   Action Buttons
+   ============================================ */
+.btn {
+  padding: var(--btn-padding-y-lg) var(--space-6);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-primary {
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.btn-primary:hover {
+  background-color: var(--accent-primary-hover);
+}
+
+.btn-secondary {
+  background-color: transparent;
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.btn-secondary:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.btn-danger {
+  color: var(--color-error);
+}
+
+.btn-danger:hover {
+  background-color: var(--color-error-bg);
+}
+
+/* Small Button */
+.btn-sm {
+  padding: var(--space-2) var(--space-4);
+  font-size: var(--text-sm);
+  border-radius: var(--radius-md);
+}
+
+/* Icon Button */
+.btn-icon {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background-color: transparent;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+/* ============================================
+   Empty State
+   ============================================ */
+.empty-state {
+  padding: var(--space-8);
+  text-align: center;
+  color: var(--text-muted);
+  font-size: var(--text-base);
+  background-color: var(--bg-page);
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-default);
+  line-height: var(--leading-relaxed);
+}
+
+/* ============================================
+   Canvas / Preview Area
+   ============================================ */
+.canvas-area {
+  flex: 1;
+  height: 100%;
+  background-color: var(--bg-dark);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.canvas-placeholder {
+  text-align: center;
+  color: var(--text-inverse);
+}
+
+.placeholder-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.placeholder-icon {
+  font-size: 64px;
+  opacity: 0.5;
+}
+
+.placeholder-content h3 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-semibold);
+  margin: 0;
+  color: var(--text-inverse);
+}
+
+.placeholder-content p {
+  font-size: var(--text-base);
+  margin: 0;
+  color: var(--text-muted);
+}
+
+/* ============================================
+   Grid Layouts
+   ============================================ */
+.grid-2 {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-3);
+}
+
+.grid-3 {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-3);
+}
+
+/* ============================================
+   Card Button (Selectable)
+   ============================================ */
+.card-button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-align: center;
+}
+
+.card-button:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.card-button.selected,
+.card-button.active {
+  background-color: var(--bg-muted);
+  border-color: var(--accent-primary);
+}
+
+.card-button-icon {
+  font-size: 32px;
+}
+
+.card-button-label {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+/* ============================================
+   List Item
+   ============================================ */
+.list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-2);
+}
+
+.list-item:last-child {
+  margin-bottom: 0;
+}
+
+.list-item.clickable {
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.list-item.clickable:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.list-item.selected {
+  background-color: var(--color-info-bg);
+  border: 2px solid var(--color-info);
+  box-shadow: var(--focus-ring-info);
+}
+
+.list-item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.list-item-icon {
+  font-size: var(--text-xl);
+  flex-shrink: 0;
+}
+
+.list-item-name {
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.list-item-badge {
+  font-size: var(--text-xs);
+  color: var(--text-secondary);
+  background-color: var(--border-default);
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-full);
+  font-weight: var(--font-medium);
+}
+
+/* ============================================
+   Info Grid
+   ============================================ */
+.info-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.info-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.info-item:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.info-label {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  font-weight: var(--font-medium);
+}
+
+.info-value {
+  font-size: var(--text-base);
+  color: var(--text-primary);
+  font-weight: var(--font-medium);
+}
+
+/* ============================================
+   Divider
+   ============================================ */
+.divider {
+  height: 1px;
+  background-color: var(--border-default);
+  margin: var(--space-3) 0;
+}
+
+/* ============================================
+   Responsive - Panel
+   ============================================ */
+@media (max-width: 1024px) {
+  .panel {
+    width: var(--panel-width-tablet);
+  }
+
+  .panel-header {
+    padding: var(--space-6);
+  }
+
+  .panel-content {
+    padding: var(--space-5) var(--space-6);
+  }
+
+  .panel-actions {
+    padding: var(--space-4) var(--space-6);
+  }
+}
+
+@media (max-width: 768px) {
+  .page-layout {
+    flex-direction: column;
+  }
+
+  .canvas-area {
+    height: 50vh;
+  }
+
+  .panel {
+    width: 100%;
+    height: 50vh;
+  }
+}
