@@ -68,7 +68,10 @@
 }
 
 .panel-tab-button {
-  padding: var(--btn-padding-y) var(--space-6);
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--btn-padding-y) var(--space-4);
   border: none;
   background: transparent;
   border-radius: var(--radius-md);
@@ -79,6 +82,15 @@
   color: var(--text-secondary);
 }
 
+.panel-tab-button .tab-icon {
+  font-size: var(--text-base);
+  line-height: 1;
+}
+
+.panel-tab-button .tab-label {
+  line-height: 1;
+}
+
 .panel-tab-button.active {
   background: var(--bg-surface);
   color: var(--text-primary);
@@ -87,6 +99,21 @@
 
 .panel-tab-button:hover:not(.active) {
   color: var(--text-primary);
+}
+
+/* 작은 화면에서 라벨 숨기기 */
+@media (max-width: 1200px) {
+  .panel-tab-button {
+    padding: var(--btn-padding-y) var(--space-3);
+  }
+
+  .panel-tab-button .tab-label {
+    display: none;
+  }
+
+  .panel-tab-button .tab-icon {
+    font-size: var(--text-lg);
+  }
 }
 
 /* Panel Content */

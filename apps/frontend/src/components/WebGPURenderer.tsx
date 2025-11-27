@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { WebGPUEngine } from '../graphics-core/service';
 import { SceneAdapter } from '../adapters/SceneAdapter';
-import { RENDERER_CONFIG } from '../config';
 import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
 interface WebGPURendererProps {
@@ -10,6 +9,7 @@ interface WebGPURendererProps {
   height?: number;
   scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
+  onEngineReady?: (engine: WebGPUEngine) => void;
 }
 
 /**
@@ -21,6 +21,7 @@ export default function WebGPURenderer({
   height = 600,
   scene,
   onCameraUpdate,
+  onEngineReady,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -29,13 +30,14 @@ export default function WebGPURenderer({
   const [error, setError] = useState<string | null>(null);
   const [canvasSize, setCanvasSize] = useState({ width, height });
   const [cameraPosition, setCameraPosition] = useState<{ x: number; y: number; z: number } | null>(null);
-  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true);
+  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(true); // 기본 표시, 백틱(`) 키로 토글
   const [isTooSmall, setIsTooSmall] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
 
-  // 렌더링 크기 제한 (from centralized config)
-  const { MIN_WIDTH, MIN_HEIGHT, MAX_WIDTH, MAX_HEIGHT } = RENDERER_CONFIG;
+  // 최소 렌더링 크기
+  const MIN_WIDTH = 512;
+  const MIN_HEIGHT = 384;
 
   // 반응형 크기 처리 (ResizeObserver)
   useEffect(() => {
@@ -45,7 +47,12 @@ export default function WebGPURenderer({
       for (const entry of entries) {
         const { width: containerWidth, height: containerHeight } = entry.contentRect;
 
-        // 4:3 비율 유지하면서 크기 계산 (MAX_WIDTH/MAX_HEIGHT는 config에서 가져옴)
+        // WebGPU 내부 해상도 제한 (성능 최적화)
+        // CSS로는 크게 표시되지만, 실제 렌더링은 낮은 해상도로
+        const MAX_WIDTH = 1024;   // 최대 내부 렌더 너비
+        const MAX_HEIGHT = 768;  // 최대 내부 렌더 높이 (4:3 비율 유지) 
+
+        // 4:3 비율 유지하면서 크기 계산
         let newWidth = Math.min(containerWidth, MAX_WIDTH);
         let newHeight = newWidth * 3 / 4;
 
@@ -64,7 +71,7 @@ export default function WebGPURenderer({
     return () => {
       resizeObserver.disconnect();
     };
-  }, [MAX_WIDTH, MAX_HEIGHT]);
+  }, []);
 
   // 초기 렌더러 설정 (mount 시 1회만 실행)
   useEffect(() => {
@@ -104,6 +111,10 @@ export default function WebGPURenderer({
         // 초기화 완료
         if (isMounted) {
           setIsInitialized(true);
+          // Engine을 부모 컴포넌트에 전달
+          if (onEngineReady) {
+            onEngineReady(engine);
+          }
         }
       } catch (err) {
         console.error('Error initializing WebGPU engine:', err);
@@ -331,28 +342,56 @@ export default function WebGPURenderer({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: 'rgba(26, 26, 26, 0.95)',
-            color: '#00aaff',
-            fontFamily: 'monospace',
+            background: '#f8f9fa',
             zIndex: 200,
           }}
         >
           <div style={{ textAlign: 'center' }}>
+            {/* 스피너 */}
             <div
               style={{
-                width: '50px',
-                height: '50px',
-                border: '4px solid rgba(0, 170, 255, 0.2)',
-                borderTop: '4px solid #00aaff',
-                borderRadius: '50%',
+                width: '56px',
+                height: '56px',
+                position: 'relative',
                 margin: '0 auto 20px',
-                animation: 'spin 1s linear infinite',
               }}
-            />
-            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>
-              {!isInitialized ? 'WebGPU 초기화 중...' : 'Scene 로딩 중...'}
+            >
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  border: '3px solid #e9ecef',
+                  borderTopColor: '#1a1a1a',
+                  borderRadius: '50%',
+                  animation: 'spin 0.8s linear infinite',
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  inset: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '22px',
+                }}
+              >
+                🏠
+              </div>
             </div>
-            <div style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+            {/* 텍스트 */}
+            <div style={{
+              fontSize: '15px',
+              fontWeight: 600,
+              color: '#1a1a1a',
+              marginBottom: '6px',
+            }}>
+              {!isInitialized ? '렌더러 준비 중' : '공간 불러오는 중'}
+            </div>
+            <div style={{
+              fontSize: '13px',
+              color: '#868e96',
+            }}>
               잠시만 기다려주세요
             </div>
           </div>
@@ -365,32 +404,69 @@ export default function WebGPURenderer({
         </div>
       )}
 
-      {/* Debug Info - FPS & Camera (우측 상단) */}
-      {showDebugInfo && !isTooSmall && (
+      {/* Debug Info - FPS & Camera (좌측 하단) */}
+      {showDebugInfo && !isTooSmall && isSceneLoaded && (
         <div
           style={{
             position: 'absolute',
-            top: '10px',
-            right: '10px',
-            backgroundColor: 'rgba(0, 0, 0, 0.7)',
-            color: '#0f0',
-            padding: '6px 10px',
-            borderRadius: '4px',
-            fontFamily: 'monospace',
-            fontSize: '12px',
+            bottom: '16px',
+            left: '16px',
+            display: 'flex',
+            gap: '8px',
             pointerEvents: 'none',
             userSelect: 'none',
-            lineHeight: '1.4',
           }}
         >
-          FPS: {frameTime > 0 ? (1000 / frameTime).toFixed(0) : '0'} ({frameTime.toFixed(2)}ms)
-          <br />
-          Resolution: {canvasSize.width}x{canvasSize.height}
+          {/* FPS 뱃지 */}
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(8px)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: '#ffffff',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+            }}
+          >
+            <span style={{
+              width: '8px',
+              height: '8px',
+              borderRadius: '50%',
+              background: frameTime > 0 && (1000 / frameTime) > 30 ? '#22c55e' : '#eab308',
+            }} />
+            {frameTime > 0 ? (1000 / frameTime).toFixed(0) : '0'} FPS
+          </div>
+          {/* 해상도 뱃지 */}
+          <div
+            style={{
+              background: 'rgba(0, 0, 0, 0.75)',
+              backdropFilter: 'blur(8px)',
+              padding: '8px 12px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: 'rgba(255, 255, 255, 0.8)',
+            }}
+          >
+            {canvasSize.width}×{canvasSize.height}
+          </div>
+          {/* 카메라 위치 뱃지 */}
           {cameraPosition && (
-            <>
-              <br />
-              X: {cameraPosition.x.toFixed(2)} Y: {cameraPosition.y.toFixed(2)} Z: {cameraPosition.z.toFixed(2)}
-            </>
+            <div
+              style={{
+                background: 'rgba(0, 0, 0, 0.75)',
+                backdropFilter: 'blur(8px)',
+                padding: '8px 12px',
+                borderRadius: '8px',
+                fontSize: '12px',
+                color: 'rgba(255, 255, 255, 0.8)',
+              }}
+            >
+              📍 {cameraPosition.x.toFixed(1)}, {cameraPosition.y.toFixed(1)}, {cameraPosition.z.toFixed(1)}
+            </div>
           )}
         </div>
       )}

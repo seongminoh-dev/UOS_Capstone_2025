@@ -1,0 +1,416 @@
+/**
+ * Guide Page Styles
+ */
+
+.guide-page {
+  min-height: 100vh;
+  background-color: var(--bg-page);
+}
+
+.guide-main {
+  padding-top: var(--header-height);
+  min-height: calc(100vh - var(--header-height));
+}
+
+.guide-container {
+  display: flex;
+  max-width: 1400px;
+  margin: 0 auto;
+  min-height: calc(100vh - var(--header-height));
+}
+
+/* ============================================
+   Sidebar Navigation
+   ============================================ */
+.guide-sidebar {
+  width: 260px;
+  flex-shrink: 0;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  padding: var(--space-6);
+  display: flex;
+  flex-direction: column;
+  position: sticky;
+  top: var(--header-height);
+  height: calc(100vh - var(--header-height));
+}
+
+.guide-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-base);
+  text-align: left;
+}
+
+.nav-item:hover {
+  background-color: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.nav-item.active {
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.nav-icon {
+  font-size: var(--text-lg);
+}
+
+.sidebar-cta {
+  padding-top: var(--space-6);
+  border-top: 1px solid var(--border-default);
+}
+
+.btn-start {
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-md);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-start:hover {
+  background-color: var(--accent-primary-hover);
+}
+
+/* ============================================
+   Main Content
+   ============================================ */
+.guide-content {
+  flex: 1;
+  padding: var(--space-8);
+  overflow-y: auto;
+}
+
+.content-section {
+  max-width: 900px;
+}
+
+.section-header {
+  margin-bottom: var(--space-8);
+}
+
+.section-header .header-icon {
+  font-size: 48px;
+  margin-bottom: var(--space-4);
+}
+
+.section-header h1 {
+  font-size: var(--text-3xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.section-header p {
+  font-size: var(--text-lg);
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+/* ============================================
+   Getting Started Steps
+   ============================================ */
+.steps-container {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-6);
+  margin-bottom: var(--space-10);
+}
+
+.step-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+  transition: all var(--transition-base);
+}
+
+.step-card:hover {
+  border-color: var(--border-hover);
+  box-shadow: var(--shadow-md);
+}
+
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.step-number {
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+  font-size: var(--text-md);
+  font-weight: var(--font-bold);
+  border-radius: var(--radius-full);
+}
+
+.step-icon {
+  font-size: 28px;
+}
+
+.step-title {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.step-description {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-4) 0;
+  line-height: var(--leading-relaxed);
+}
+
+.step-tips {
+  margin: 0;
+  padding-left: var(--space-5);
+}
+
+.step-tips li {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+  line-height: var(--leading-normal);
+}
+
+.step-tips li:last-child {
+  margin-bottom: 0;
+}
+
+/* Quick Start CTA */
+.quick-start-cta {
+  text-align: center;
+  padding: var(--space-10);
+  background: linear-gradient(135deg, var(--bg-muted) 0%, var(--bg-subtle) 100%);
+  border-radius: var(--radius-xl);
+}
+
+.quick-start-cta h3 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.quick-start-cta p {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-6) 0;
+}
+
+.btn-primary-large {
+  padding: var(--space-4) var(--space-8);
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+  border: none;
+  border-radius: var(--radius-lg);
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  cursor: pointer;
+  transition: all var(--transition-base);
+}
+
+.btn-primary-large:hover {
+  background-color: var(--accent-primary-hover);
+}
+
+/* ============================================
+   Feature Guide Sections
+   ============================================ */
+.feature-sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.feature-card {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--space-6);
+}
+
+.feature-card h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-3) 0;
+}
+
+.feature-card p {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* ============================================
+   FAQ Section
+   ============================================ */
+.faq-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.faq-item {
+  background-color: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+  transition: all var(--transition-base);
+}
+
+.faq-item.expanded {
+  border-color: var(--accent-primary);
+}
+
+.faq-question {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: var(--space-5);
+  background: transparent;
+  border: none;
+  font-size: var(--text-base);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  text-align: left;
+  cursor: pointer;
+  transition: background-color var(--transition-base);
+}
+
+.faq-question:hover {
+  background-color: var(--bg-muted);
+}
+
+.faq-toggle {
+  font-size: var(--text-xl);
+  color: var(--text-secondary);
+  font-weight: var(--font-normal);
+}
+
+.faq-answer {
+  padding: 0 var(--space-5) var(--space-5);
+  border-top: 1px solid var(--border-default);
+}
+
+.faq-answer p {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  margin: var(--space-4) 0 0 0;
+  line-height: var(--leading-relaxed);
+}
+
+/* ============================================
+   Responsive
+   ============================================ */
+@media (max-width: 1024px) {
+  .guide-sidebar {
+    width: 220px;
+    padding: var(--space-4);
+  }
+
+  .guide-content {
+    padding: var(--space-6);
+  }
+
+  .steps-container {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 768px) {
+  .guide-container {
+    flex-direction: column;
+  }
+
+  .guide-sidebar {
+    width: 100%;
+    position: relative;
+    top: 0;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-default);
+    padding: var(--space-4);
+  }
+
+  .guide-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .nav-item {
+    flex: 1;
+    min-width: fit-content;
+    justify-content: center;
+    padding: var(--space-2) var(--space-3);
+    font-size: var(--text-sm);
+  }
+
+  .nav-item span:last-child {
+    display: none;
+  }
+
+  .nav-icon {
+    font-size: var(--text-xl);
+  }
+
+  .sidebar-cta {
+    display: none;
+  }
+
+  .guide-content {
+    padding: var(--space-5) var(--space-4);
+  }
+
+  .section-header h1 {
+    font-size: var(--text-2xl);
+  }
+
+  .step-card {
+    padding: var(--space-5);
+  }
+}
+
+@media (max-width: 480px) {
+  .quick-start-cta {
+    padding: var(--space-6);
+  }
+
+  .btn-primary-large {
+    width: 100%;
+    padding: var(--space-4);
+  }
+}

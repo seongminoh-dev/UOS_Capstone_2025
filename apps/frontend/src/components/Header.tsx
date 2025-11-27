@@ -15,7 +15,7 @@ export default function Header() {
 
   const handleLogout = () => {
     logout();
-    navigate('/');
+    navigate('/simulator');
   };
 
   return (
@@ -31,11 +31,14 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="header-nav">
-          <Link to="/" className={`nav-link ${location.pathname === '/' ? 'active' : ''}`}>
-            씬
+          <Link to="/simulator" className={`nav-link ${location.pathname === '/simulator' ? 'active' : ''}`}>
+            시뮬레이터
           </Link>
-          <Link to="/edit" className={`nav-link ${location.pathname === '/edit' ? 'active' : ''}`}>
-            편집
+          <Link to="/templates" className={`nav-link ${location.pathname === '/templates' ? 'active' : ''}`}>
+            템플릿
+          </Link>
+          <Link to="/guide" className={`nav-link ${location.pathname === '/guide' ? 'active' : ''}`}>
+            가이드
           </Link>
         </nav>
 
