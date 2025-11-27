@@ -1,8 +1,15 @@
+import { vec3 } from 'wgpu-matrix';
+import type { Vec3 } from 'wgpu-matrix';
 import { World } from '../World';
 import { InputController } from '../InputController';
+import { calculateSunLightParams } from '../../utils/SunCalculator';
+import type { SunSettings } from './Scene';
 
 // Renderer Renderer_TEST
 import { Renderer } from '../Renderer_TEST';
+
+// 태양 강도 배수 (SceneAdapter와 동일)
+const SUN_INTENSITY_MULTIPLIER = 15;
 
 
 
@@ -260,5 +267,43 @@ export class WebGPUEngine {
         // }
 
         console.log(`[WebGPUEngine] Camera set: position=[${position}], target=[${target}]`);
+    }
+
+    /**
+     * 태양 설정을 즉시 업데이트합니다 (재렌더링 없이).
+     * @param sunSettings - 새로운 태양 설정
+     */
+    public updateSunLight(sunSettings: SunSettings): void {
+        if (!this.renderer) {
+            console.warn('[WebGPUEngine] Renderer not initialized');
+            return;
+        }
+
+        // 태양 파라미터 계산
+        const sunParams = calculateSunLightParams(
+            sunSettings.timeOfDay,
+            sunSettings.isDaytime,
+            sunSettings.season,
+            sunSettings.roomOrientation
+        );
+
+        if (sunParams) {
+            // 낮: DirectionalLight 업데이트
+            const direction: Vec3 = vec3.normalize(
+                vec3.fromValues(...sunParams.direction)
+            );
+            const color: Vec3 = vec3.fromValues(...sunParams.color);
+            const intensity: number = sunParams.intensity * SUN_INTENSITY_MULTIPLIER;
+
+            this.world.UpdateDirectionalLight(direction, color, intensity);
+            console.log(`[WebGPUEngine] Sun updated: direction=[${sunParams.direction}], intensity=${intensity.toFixed(2)}`);
+        } else {
+            // 밤: DirectionalLight 제거
+            this.world.RemoveDirectionalLights();
+            console.log('[WebGPUEngine] Sun removed (night mode)');
+        }
+
+        // GPU 버퍼 업데이트
+        this.renderer.UpdateLights(this.world);
     }
 }

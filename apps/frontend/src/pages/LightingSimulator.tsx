@@ -1,13 +1,28 @@
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import './LightingSimulator.css';
 import Header from '../components/Header';
 import WebGPURenderer from '../components/WebGPURenderer';
 import MainRightPanel from '../components/MainRightPanel';
-import type { Scene } from '../graphics-core/service/Scene';
+import type { Scene, SunSettings } from '../graphics-core/service/Scene';
+import type { WebGPUEngine } from '../graphics-core/service';
 
 export default function LightingSimulator() {
   const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+  const engineRef = useRef<WebGPUEngine | null>(null);
+
+  // Engine 준비 완료 콜백
+  const handleEngineReady = useCallback((engine: WebGPUEngine) => {
+    engineRef.current = engine;
+    console.log('[LightingSimulator] Engine ready');
+  }, []);
+
+  // 태양 설정 즉시 업데이트 콜백
+  const handleSunSettingsChange = useCallback((sunSettings: SunSettings) => {
+    if (engineRef.current) {
+      engineRef.current.updateSunLight(sunSettings);
+    }
+  }, []);
 
   const handleSelectScene = (scene: Scene | null) => {
     if (scene) {
@@ -58,6 +73,7 @@ export default function LightingSimulator() {
                 key={`${selectedScene.id}-${selectedScene.updatedAt || Date.now()}`}
                 className="webgpu-canvas"
                 scene={selectedScene}
+                onEngineReady={handleEngineReady}
               />
             )}
           </div>
@@ -67,6 +83,7 @@ export default function LightingSimulator() {
             selectedScene={selectedScene}
             onSelectScene={handleSelectScene}
             onSceneChange={handleSceneChange}
+            onSunSettingsChange={handleSunSettingsChange}
           />
         </div>
       </div>

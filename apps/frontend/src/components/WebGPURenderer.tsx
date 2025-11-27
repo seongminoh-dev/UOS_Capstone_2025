@@ -9,6 +9,7 @@ interface WebGPURendererProps {
   height?: number;
   scene: Scene | SceneFrontend;
   onCameraUpdate?: (position: { x: number; y: number; z: number }) => void;
+  onEngineReady?: (engine: WebGPUEngine) => void;
 }
 
 /**
@@ -20,6 +21,7 @@ export default function WebGPURenderer({
   height = 600,
   scene,
   onCameraUpdate,
+  onEngineReady,
 }: WebGPURendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,6 +111,10 @@ export default function WebGPURenderer({
         // 초기화 완료
         if (isMounted) {
           setIsInitialized(true);
+          // Engine을 부모 컴포넌트에 전달
+          if (onEngineReady) {
+            onEngineReady(engine);
+          }
         }
       } catch (err) {
         console.error('Error initializing WebGPU engine:', err);

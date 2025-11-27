@@ -9,7 +9,7 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
-import type { SceneFrontend, SceneAsset } from '../graphics-core/service/Scene';
+import type { SceneFrontend, SceneAsset, SunSettings } from '../graphics-core/service/Scene';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
@@ -21,17 +21,19 @@ interface MainRightPanelProps {
   selectedScene: SceneFrontend | null;
   onSelectScene: (scene: SceneFrontend | null) => void;
   onSceneChange: () => void; // Scene 변경 감지
+  onSunSettingsChange?: (sunSettings: SunSettings) => void; // 태양 설정 즉시 업데이트
 }
 
-type Tab = 'lighting' | 'furniture' | 'info';
+type Tab = 'environment' | 'furniture' | 'lighting' | 'info';
 
 export default function MainRightPanel({
   selectedScene,
   onSelectScene,
   onSceneChange,
+  onSunSettingsChange,
 }: MainRightPanelProps) {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState<Tab>('lighting');
+  const [activeTab, setActiveTab] = useState<Tab>('environment');
 
   // Zustand Stores
   const { scenes, loadScenes, saveScene, deleteScene } = useSceneRepository();
@@ -76,10 +78,10 @@ export default function MainRightPanel({
     }
   }, [selectedScene]);
 
-  // 태양 설정 변경 시 currentScene.sunSettings 업데이트
+  // 태양 설정 변경 시 currentScene.sunSettings 업데이트 + 즉시 렌더링 반영
   useEffect(() => {
     if (currentScene) {
-      const updatedSunSettings = {
+      const updatedSunSettings: SunSettings = {
         timeOfDay: sunTime,
         isDaytime: timeOfDay === 'day',
         season: season,
@@ -100,9 +102,14 @@ export default function MainRightPanel({
           sunSettings: updatedSunSettings,
         });
         setHasUnsavedChanges(true);
+
+        // 즉시 렌더링에 반영 (저장 없이)
+        if (onSunSettingsChange) {
+          onSunSettingsChange(updatedSunSettings);
+        }
       }
     }
-  }, [timeOfDay, sunTime, season, roomDirection]);
+  }, [timeOfDay, sunTime, season, roomDirection, onSunSettingsChange]);
 
   // Asset 저장 핸들러
   const handleSaveAsset = (updatedAsset: SceneAsset) => {
@@ -499,11 +506,11 @@ export default function MainRightPanel({
         <div className="panel-tab-nav">
           <button
             className={`panel-tab-button ${
-              activeTab === 'lighting' ? 'active' : ''
+              activeTab === 'environment' ? 'active' : ''
             }`}
-            onClick={() => setActiveTab('lighting')}
+            onClick={() => setActiveTab('environment')}
           >
-            조명
+            환경
           </button>
           <button
             className={`panel-tab-button ${
@@ -512,6 +519,14 @@ export default function MainRightPanel({
             onClick={() => setActiveTab('furniture')}
           >
             가구
+          </button>
+          <button
+            className={`panel-tab-button ${
+              activeTab === 'lighting' ? 'active' : ''
+            }`}
+            onClick={() => setActiveTab('lighting')}
+          >
+            조명
           </button>
           <button
             className={`panel-tab-button ${
@@ -525,8 +540,8 @@ export default function MainRightPanel({
       </div>
 
       <div className="panel-content">
-        {/* 조명 탭 */}
-        {activeTab === 'lighting' && (
+        {/* 환경 탭 */}
+        {activeTab === 'environment' && (
           <div className="tab-section">
             {/* 태양 설정 */}
             <div className="section-card">
@@ -555,17 +570,18 @@ export default function MainRightPanel({
                 </div>
               </div>
 
-              {/* 시간 (0-100 → 0-24시 변환하여 표시) */}
+              {/* 시간 (20분 단위로 세밀하게 조절) */}
               <div className="form-group">
                 <label className="form-label">
-                  시간: {Math.round((sunTime / 100) * 24)}시
+                  시간: {Math.floor((sunTime / 100) * 24)}시
                 </label>
                 <input
                   type="range"
                   min="0"
-                  max="100"
-                  value={sunTime}
-                  onChange={(e) => setSunTime(Number(e.target.value))}
+                  max="1440"
+                  step="20"
+                  value={Math.round(sunTime / 100 * 1440)}
+                  onChange={(e) => setSunTime(Number(e.target.value) / 1440 * 100)}
                   className="range-slider"
                 />
                 <div className="range-labels">
@@ -604,8 +620,12 @@ export default function MainRightPanel({
                 </select>
               </div>
             </div>
+          </div>
+        )}
 
-            {/* 조명 목록 */}
+        {/* 조명 탭 */}
+        {activeTab === 'lighting' && (
+          <div className="tab-section">
             <div className="section-card">
               <h3 className="section-title">배치된 조명</h3>
 

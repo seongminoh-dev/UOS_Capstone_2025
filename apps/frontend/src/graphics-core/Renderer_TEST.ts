@@ -163,9 +163,65 @@ export class Renderer
         return this.Camera;
     }
 
-    public ResetFrameCount() : void 
-    { 
-        this.FrameCount = 0; 
+    public ResetFrameCount() : void
+    {
+        this.FrameCount = 0;
+        return;
+    }
+
+    /**
+     * Light 데이터만 동적으로 업데이트합니다 (전체 재초기화 없이)
+     * Scene 버퍼의 Light 영역과 LightCDF 영역만 업데이트합니다.
+     */
+    public UpdateLights(InWorld: World): void
+    {
+        // 1. Light 데이터 직렬화
+        const SerializedLightArray: Uint32Array[] = [];
+        for (const LightToSerialize of InWorld.Lights) {
+            const LightSerialized: Uint32Array = LightToSerialize.Serialize();
+            SerializedLightArray.push(LightSerialized);
+        }
+
+        // Merge Light Arrays
+        let LightRawData: Uint32Array;
+        if (SerializedLightArray.length > 0) {
+            const totalLength = SerializedLightArray.reduce((sum, arr) => sum + arr.length, 0);
+            LightRawData = new Uint32Array(totalLength);
+            let offset = 0;
+            for (const arr of SerializedLightArray) {
+                LightRawData.set(arr, offset);
+                offset += arr.length;
+            }
+        } else {
+            LightRawData = new Uint32Array(0);
+        }
+
+        // 2. Light CDF 데이터 생성
+        const LightsCDFArrayBuffer: ArrayBuffer = InWorld.GetLightCDFBuffer();
+        const LightsCDFRawData = new Uint32Array(LightsCDFArrayBuffer);
+
+        // 3. Scene 버퍼의 Light 영역 업데이트
+        const lightOffset = this.Offsets[EDataOffsetIndex.Light];
+        const lightByteOffset = lightOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightByteOffset,
+            LightRawData.buffer
+        );
+
+        // 4. Scene 버퍼의 LightCDF 영역 업데이트
+        const lightsCDFOffset = this.Offsets[EDataOffsetIndex.LightsCDF];
+        const lightsCDFByteOffset = lightsCDFOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightsCDFByteOffset,
+            LightsCDFRawData.buffer
+        );
+
+        // 5. World 참조 업데이트 및 프레임 카운트 리셋
+        this.World = InWorld;
+        this.ResetFrameCount();
+
         return;
     }
 
