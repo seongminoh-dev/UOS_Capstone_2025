@@ -4,46 +4,45 @@
 
 struct Uniform
 {
-    Resolution_Source               : vec2<u32>,
-    Resolution_Target               : vec2<u32>,
+    Resolution_Source                       : vec2<u32>,
+    Resolution_Target                       : vec2<u32>,
 
-    ViewProjectionMatrix_Inverse    : mat4x4<f32>,
-    ViewProjectionMatrix_Clean      : mat4x4<f32>,
-    ViewProjectionMatrix_Prev       : mat4x4<f32>,
+    ViewProjectionMatrix_Jittered_Inverse   : mat4x4<f32>,
+    ViewProjectionMatrix                    : mat4x4<f32>,
+    ViewProjectionMatrix_Inverse            : mat4x4<f32>,
+    ViewProjectionMatrix_Prev               : mat4x4<f32>,
 
-    CameraWorldPosition             : vec3<f32>,
-    FrameIndex                      : u32,
+    CameraWorldPosition                     : vec3<f32>,
+    FrameIndex                              : u32,
 
-    Offset_MeshDescriptorBuffer     : u32,
-    Offset_MaterialIDBuffer         : u32,
-    Offset_MaterialBuffer           : u32,
-    Offset_LightBuffer              : u32,
+    Offset_MeshDescriptorBuffer             : u32,
+    Offset_MaterialIDBuffer                 : u32,
+    Offset_MaterialBuffer                   : u32,
+    Offset_LightBuffer                      : u32,
 
-    Offset_LightsCDFBuffer          : u32,
-    Offset_IndexBuffer              : u32,
-    Offset_SubBlasRootArrayBuffer   : u32,
-    Offset_BlasBuffer               : u32,
+    Offset_LightsCDFBuffer                  : u32,
+    Offset_IndexBuffer                      : u32,
+    Offset_SubBlasRootArrayBuffer           : u32,
+    Offset_BlasBuffer                       : u32,
 
-    InstanceCount                   : u32,
-    LightSourceCount                : u32,
-    Jitter                          : vec2<f32>,
+    InstanceCount                           : u32,
+    LightSourceCount                        : u32,
+    Jitter                                  : vec2<f32>,
 
-    FrameCount                      : u32,
-    _padding0                       : f32,
-    _padding1                       : f32,
-    _padding2                       : f32,
+    Padding_0                               : vec3<u32>,
+    FrameCount                              : u32,
 
-    // === 환경 파라미터 (Procedural Sky) ===
-    EnvSkyColor                     : vec3<f32>,
-    _padding3                       : f32,
-    EnvHorizonColor                 : vec4<f32>,   // w = padding
-    EnvGroundColor                  : vec4<f32>,   // w = padding
-    EnvSunDirection                 : vec3<f32>,
-    EnvSunIntensity                 : f32,
-    EnvIntensity                    : f32,
-    EnvIndirectMult                 : f32,         // 환경 간접광 강도 (0.0~1.0)
-    _padding5                       : f32,
-    EnvMode                         : u32,         // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+    EnvSkyColor                             : vec3<f32>,
+    EnvMode                                 : u32,
+
+    EnvHorizonColor                         : vec3<f32>,
+    EnvSunIntensity                         : f32,
+
+    EnvGroundColor                          : vec3<f32>,
+    EnvIntensity                            : f32,
+
+    EnvSunDirection                         : vec3<f32>,
+    EnvIndirectMult                         : f32,
 };
 
 struct Instance
@@ -243,13 +242,6 @@ const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 // Procedural Sky (물리 기반 환경광)
 //==========================================================================
 
-/**
- * 물리 기반 Procedural Sky 색상을 계산합니다.
- * Rayleigh/Mie 산란을 근사하여 하늘색을 계산합니다.
- *
- * @param rayDir - 시선 방향 (정규화됨)
- * @return 하늘 색상 (HDR)
- */
 fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
 {
     // Uniform에서 환경 파라미터 가져오기
@@ -298,21 +290,18 @@ fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
 // 기본 회색 환경색 (없음 모드용)
 const DEFAULT_ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
 
-// ENV_COLOR를 Procedural Sky로 대체하는 헬퍼 함수
-// isPrimaryRay: true = 카메라에서 직접 보이는 환경, false = 간접광 (bounce)
 fn GetEnvironmentColor(rayDir : vec3<f32>) -> vec3<f32>
 {
-    // EnvMode: 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
-    if (UniformBuffer.EnvMode == 0u) {
-        // 없음: 시간대 관계없이 기본 회색
-        return DEFAULT_ENV_COLOR;
+    var EnvColor : vec3<f32>;
+
+    switch ( UniformBuffer.EnvMode )
+    {
+        case 0u : { EnvColor = DEFAULT_ENV_COLOR; }
+        case 1u : { EnvColor = UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity; }
+        case default : { EnvColor = SampleProceduralSky(rayDir); }
     }
-    if (UniformBuffer.EnvMode == 1u) {
-        // 일반 하늘: 시간대 기반 단색 (그라데이션 없음)
-        return UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity;
-    }
-    // 고품질 하늘: 물리 기반 Procedural Sky
-    return SampleProceduralSky(rayDir);
+
+    return EnvColor;
 }
 
 // 간접광용 환경색 (EnvIndirectMult 적용)
@@ -900,7 +889,7 @@ fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
     let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
     let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
 
-    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
+    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Jittered_Inverse);
 }
 
 fn Get_X1(ThreadID : vec2<u32>) -> CompactSurface

@@ -310,13 +310,15 @@ export class Renderer
         const ViewMatrix                = this.Camera.GetViewMatrix();
         const ProjectionMatrix          = this.Camera.GetProjectionMatrix();
         const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(ProjectionMatrix, this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
-        
+
         const ViewProjection            = mat4.multiply(ProjectionMatrix, ViewMatrix);
-        const ViewProjection_Jittered   = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
-        const ViewProjection_Inverse    = mat4.invert(ViewProjection_Jittered);
+        const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 92; // 68 + 4 (padding) + 20 (환경 파라미터)
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
+        const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
+
+        const ELEMENT_COUNT = 104;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
@@ -327,71 +329,52 @@ export class Renderer
             Uint32View[2] = this.Canvas.width;
             Uint32View[3] = this.Canvas.height;
 
-            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Jittered_Inverse?.[iter]!;
             for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Prev[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Inverse[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[52 + iter] = ViewProjection_Prev[iter]!;
 
-            Float32View[52] = CameraLocation[0];
-            Float32View[53] = CameraLocation[1];
-            Float32View[54] = CameraLocation[2];
-            Uint32View [55] = this.FrameID;
+            Float32View[68] = CameraLocation[0];
+            Float32View[69] = CameraLocation[1];
+            Float32View[70] = CameraLocation[2];
+            Uint32View [71] = this.FrameID;
 
-            Uint32View [56] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View [57] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View [58] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View [59] = this.Offsets[EDataOffsetIndex.Light];
+            Uint32View [72] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [73] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [74] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [75] = this.Offsets[EDataOffsetIndex.Light];
 
-            Uint32View [60] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View [61] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View [62] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View [63] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [76] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [77] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [78] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [79] = this.Offsets[EDataOffsetIndex.Blas];
 
-            Uint32View [64] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View [65] = this.World.Lights.length;
-            Float32View[66] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[67] = (Jitter_Y * 2) / this.Canvas.height;
+            Uint32View [80] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [81] = this.World.Lights.length;
+            Float32View[82] = (Jitter_X * 2) / this.Canvas.width;
+            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height;
 
-            Uint32View [68] = this.FrameCount;
-            // [69-71] = padding (_padding0, _padding1, _padding2) - 셰이더 정렬 맞추기
-            Float32View[69] = 0.0;
-            Float32View[70] = 0.0;
-            Float32View[71] = 0.0;
+            Uint32View [87] = this.FrameCount;
 
-            // === 환경 파라미터 (Procedural Sky) ===
-            // [72-74] Sky Color (천정 색상)
-            Float32View[72] = this.EnvSkyColor[0];
-            Float32View[73] = this.EnvSkyColor[1];
-            Float32View[74] = this.EnvSkyColor[2];
-            // [75] = _padding3
-            Float32View[75] = 0.0;
+            Float32View[88] = this.EnvSkyColor[0];
+            Float32View[89] = this.EnvSkyColor[1];
+            Float32View[90] = this.EnvSkyColor[2];
+            Uint32View [91] = this.EnvMode;
 
-            // [76-79] Horizon Color (지평선 색상, vec4)
-            Float32View[76] = this.EnvHorizonColor[0];
-            Float32View[77] = this.EnvHorizonColor[1];
-            Float32View[78] = this.EnvHorizonColor[2];
-            Float32View[79] = 0.0; // w = padding
+            Float32View[92] = this.EnvHorizonColor[0];
+            Float32View[93] = this.EnvHorizonColor[1];
+            Float32View[94] = this.EnvHorizonColor[2];
+            Float32View[95] = this.EnvSunIntensity;
 
-            // [80-83] Ground Color (지면 반사색, vec4)
-            Float32View[80] = this.EnvGroundColor[0];
-            Float32View[81] = this.EnvGroundColor[1];
-            Float32View[82] = this.EnvGroundColor[2];
-            Float32View[83] = 0.0; // w = padding
+            Float32View[96] = this.EnvGroundColor[0];
+            Float32View[97] = this.EnvGroundColor[1];
+            Float32View[98] = this.EnvGroundColor[2];
+            Float32View[99] = this.EnvIntensity;
 
-            // [84-86] Sun Direction (태양 방향, vec3)
-            Float32View[84] = this.EnvSunDirection[0];
-            Float32View[85] = this.EnvSunDirection[1];
-            Float32View[86] = this.EnvSunDirection[2];
-
-            // [87] Sun Intensity, [88] Environment Intensity
-            Float32View[87] = this.EnvSunIntensity;
-            Float32View[88] = this.EnvIntensity;
-
-            // [89] EnvIndirectMult, [90] padding
-            Float32View[89] = this.EnvIndirectMult;
-            Float32View[90] = 0.0; // padding
-
-            // [91] EnvMode (0=없음, 1=일반, 2=고품질)
-            Uint32View[91] = this.EnvMode;
+            Float32View[100] = this.EnvSunDirection[0];
+            Float32View[101] = this.EnvSunDirection[1];
+            Float32View[102] = this.EnvSunDirection[2];
+            Float32View[103] = this.EnvIndirectMult;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -416,8 +399,8 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
     
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            // this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            // this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -536,7 +519,7 @@ export class Renderer
 
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 512, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 1024, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
         this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
         this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
         this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
