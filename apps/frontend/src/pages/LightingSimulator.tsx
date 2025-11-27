@@ -1,4 +1,3 @@
-import { useState, useRef, useCallback } from 'react';
 /**
  * LightingSimulator - 메인 시뮬레이터 페이지
  *
@@ -13,12 +12,6 @@ import './LightingSimulator.css';
 import Header from '../components/Header';
 import WebGPURenderer from '../components/WebGPURenderer';
 import MainRightPanel from '../components/MainRightPanel';
-import type { Scene, SunSettings } from '../graphics-core/service/Scene';
-import type { WebGPUEngine } from '../graphics-core/service';
-
-export default function LightingSimulator() {
-  const [selectedScene, setSelectedScene] = useState<Scene | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
 import { WorkspaceView } from '../components/workspace';
 import type { SceneFrontend, SunSettings } from '../graphics-core/service/Scene';
 import type { WebGPUEngine } from '../graphics-core/service';
@@ -89,18 +82,6 @@ export default function LightingSimulator() {
                 className="webgpu-canvas"
                 scene={selectedScene}
                 onEngineReady={handleEngineReady}
-              />
-            )}
-          </div>
-
-          {/* Right side - Main Right Panel */}
-          <MainRightPanel
-            selectedScene={selectedScene}
-            onSelectScene={handleSelectScene}
-            onSceneChange={handleSceneChange}
-            onSunSettingsChange={handleSunSettingsChange}
-          />
-        </div>
               />
 
               {/* Canvas Overlay UI */}

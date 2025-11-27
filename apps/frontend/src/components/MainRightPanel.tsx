@@ -10,7 +10,6 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import './MainRightPanel.css';
 import type { SceneFrontend, SceneAsset, SunSettings, SkyMode } from '../graphics-core/service/Scene';
-import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
 import { useSceneRepository } from '../stores/sceneRepository';
@@ -55,10 +54,6 @@ export default function MainRightPanel({
   const [roomDirection, setRoomDirection] = useState<'north' | 'south' | 'east' | 'west'>('south');
   const [skyMode, setSkyMode] = useState<0 | 1 | 2>(2); // 하늘 모드: 0=없음, 1=일반, 2=고품질
   const [envIndirectMult, setEnvIndirectMult] = useState(50); // 환경 간접광 강도 (0-100%)
-
-  // 하루 애니메이션 상태
-  const [isAnimating, setIsAnimating] = useState(false);
-  const [animationSpeed, setAnimationSpeed] = useState(1); // 1 = 10초에 하루, 2 = 5초에 하루
 
   // 하루 애니메이션 상태
   const [isAnimating, setIsAnimating] = useState(false);
@@ -375,8 +370,6 @@ export default function MainRightPanel({
               activeTab === 'environment' ? 'active' : ''
             }`}
             onClick={() => setActiveTab('environment')}
-          >
-            환경
             title="환경 설정"
           >
             <span className="tab-icon">☀️</span>
@@ -401,14 +394,6 @@ export default function MainRightPanel({
           >
             <span className="tab-icon">💡</span>
             <span className="tab-label">조명</span>
-          </button>
-          <button
-            className={`panel-tab-button ${
-              activeTab === 'lighting' ? 'active' : ''
-            }`}
-            onClick={() => setActiveTab('lighting')}
-          >
-            조명
           </button>
           <button
             className={`panel-tab-button ${
