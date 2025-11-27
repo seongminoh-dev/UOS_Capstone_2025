@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
+import ErrorBoundary from '../components/ErrorBoundary';
 import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams, RoomSettings } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
@@ -18,6 +19,12 @@ export default function EditPage() {
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
+  const [rendererKey, setRendererKey] = useState(0);
+
+  // ErrorBoundary 리셋 시 렌더러 재마운트를 위한 키 증가
+  const handleErrorReset = useCallback(() => {
+    setRendererKey((prev) => prev + 1);
+  }, []);
 
   // 새 Scene 생성 모달 상태
   const [showCreateSceneModal, setShowCreateSceneModal] = useState(false);
@@ -686,13 +693,19 @@ export default function EditPage() {
         <div className="edit-layout">
           {/* Left side - Three.js Canvas (미리보기) */}
           <div className="preview-canvas" style={{ position: 'relative' }}>
-            <ThreeRenderer
-              className="three-canvas"
-              scene={editingScene}
-              onSelectionChange={handleSelectionChange}
-              onTransformChange={handleTransformChange}
-              onLightParamsChange={handleLightParamsChange}
-            />
+            <ErrorBoundary
+              key={rendererKey}
+              fallbackTitle="Three.js 렌더링 오류"
+              onReset={handleErrorReset}
+            >
+              <ThreeRenderer
+                className="three-canvas"
+                scene={editingScene}
+                onSelectionChange={handleSelectionChange}
+                onTransformChange={handleTransformChange}
+                onLightParamsChange={handleLightParamsChange}
+              />
+            </ErrorBoundary>
 
             {/* Selected Asset Info Panel */}
             {selectedAssetId && editingScene && (() => {
