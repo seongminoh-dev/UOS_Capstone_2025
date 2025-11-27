@@ -223,7 +223,7 @@ export default function EditPage() {
     if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 나가시겠습니까?')) {
       return;
     }
-    navigate('/');
+    navigate('/simulator');
   };
 
   const handleSave = async () => {
@@ -247,7 +247,7 @@ export default function EditPage() {
 
     try {
       await saveScene(editingScene);
-      navigate('/');
+      navigate('/simulator');
     } catch (error) {
       console.error('Failed to save scene:', error);
       alert('Scene 저장에 실패했습니다.');
@@ -525,7 +525,7 @@ export default function EditPage() {
           <div className="modal-content" style={{ maxWidth: '600px' }}>
             <div className="modal-header">
               <h2 className="modal-title">Scene 선택</h2>
-              <button className="modal-close" onClick={() => navigate('/')}>
+              <button className="modal-close" onClick={() => navigate('/simulator')}>
                 ✕
               </button>
             </div>
@@ -579,7 +579,7 @@ export default function EditPage() {
 
       {/* 새 Scene 생성 모달 */}
       {showCreateSceneModal && (
-        <div className="modal-overlay" onClick={() => navigate('/')}>
+        <div className="modal-overlay" onClick={() => navigate('/simulator')}>
           <div
             className="modal-content"
             onClick={(e) => e.stopPropagation()}
@@ -589,7 +589,7 @@ export default function EditPage() {
               <h2 className="modal-title">새 Scene 만들기</h2>
               <button
                 className="modal-close"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/simulator')}
               >
                 ✕
               </button>
@@ -674,7 +674,7 @@ export default function EditPage() {
             <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid #E5E5E5', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
               <button
                 className="modal-button modal-cancel"
-                onClick={() => navigate('/')}
+                onClick={() => navigate('/simulator')}
               >
                 취소
               </button>

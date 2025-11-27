@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import './App.css';
 import OnboardingPage from './pages/OnboardingPage';
 import LightingSimulator from './pages/LightingSimulator';
+import TemplatesPage from './pages/TemplatesPage';
+import GuidePage from './pages/GuidePage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
 import EditPage from './pages/EditPage';
@@ -16,6 +18,12 @@ function App() {
 
           {/* 시뮬레이터 (씬 렌더링) */}
           <Route path="/simulator" element={<LightingSimulator />} />
+
+          {/* 템플릿 갤러리 */}
+          <Route path="/templates" element={<TemplatesPage />} />
+
+          {/* 사용 가이드 */}
+          <Route path="/guide" element={<GuidePage />} />
 
           {/* 로그인/회원가입 */}
           <Route path="/login" element={<LoginPage />} />

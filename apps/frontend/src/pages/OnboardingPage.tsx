@@ -113,6 +113,14 @@ function OnboardingPage() {
             </div>
             <span className="logo-text">인태리</span>
           </div>
+          <div className="nav-links">
+            <button className="nav-link" onClick={() => navigate('/templates')}>
+              템플릿
+            </button>
+            <button className="nav-link" onClick={() => navigate('/guide')}>
+              가이드
+            </button>
+          </div>
           <div className="nav-actions">
             <button className="nav-button secondary" onClick={handleLogin}>
               로그인
@@ -331,9 +339,18 @@ function OnboardingPage() {
               PathTracing 기반 실시간 인테리어 조명 시뮬레이터
             </p>
             <div className="footer-links">
-              <span className="footer-copyright">
-                © 2025 UOS Capstone Project
-              </span>
+              <button className="footer-link" onClick={() => navigate('/templates')}>
+                템플릿
+              </button>
+              <button className="footer-link" onClick={() => navigate('/guide')}>
+                가이드
+              </button>
+              <button className="footer-link" onClick={() => navigate('/simulator')}>
+                시뮬레이터
+              </button>
+            </div>
+            <div className="footer-copyright">
+              © 2025 UOS Capstone Project
             </div>
           </div>
         </div>

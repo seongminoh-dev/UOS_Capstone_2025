@@ -53,8 +53,8 @@ export default function SignupPage() {
         // 동기화 실패해도 회원가입은 성공 처리
       }
 
-      // 회원가입 성공 시 메인 페이지로 이동
-      navigate('/');
+      // 회원가입 성공 시 시뮬레이터 페이지로 이동
+      navigate('/simulator');
     } catch (err) {
       // 에러는 store에서 처리됨
       console.error('Signup failed:', err);
@@ -203,7 +203,7 @@ export default function SignupPage() {
           <button
             type="button"
             className="guest-button"
-            onClick={() => navigate('/')}
+            onClick={() => navigate('/simulator')}
           >
             비회원으로 시작하기
           </button>
