@@ -1,0 +1,153 @@
+/**
+ * Button Component Styles
+ * 화이트/블랙 미니멀 디자인
+ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: none;
+  border-radius: var(--radius-md);
+  font-weight: var(--font-medium);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+  text-decoration: none;
+  outline: none;
+}
+
+.btn:focus-visible {
+  box-shadow: var(--focus-ring);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Variants */
+.btn--primary {
+  background-color: var(--accent-primary);
+  color: var(--text-inverse);
+}
+
+.btn--primary:hover:not(:disabled) {
+  background-color: var(--accent-primary-hover);
+}
+
+.btn--secondary {
+  background-color: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.btn--secondary:hover:not(:disabled) {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.btn--ghost {
+  background-color: transparent;
+  color: var(--text-secondary);
+}
+
+.btn--ghost:hover:not(:disabled) {
+  background-color: var(--bg-muted);
+  color: var(--text-primary);
+}
+
+.btn--danger {
+  background-color: var(--color-error);
+  color: var(--text-inverse);
+}
+
+.btn--danger:hover:not(:disabled) {
+  background-color: #b91c1c;
+}
+
+/* Sizes */
+.btn--sm {
+  height: 32px;
+  padding: 0 var(--space-3);
+  font-size: var(--text-sm);
+}
+
+.btn--md {
+  height: 40px;
+  padding: 0 var(--space-4);
+  font-size: var(--text-base);
+}
+
+.btn--lg {
+  height: 48px;
+  padding: 0 var(--space-6);
+  font-size: var(--text-md);
+}
+
+/* Full Width */
+.btn--full {
+  width: 100%;
+}
+
+/* Loading State */
+.btn--loading {
+  position: relative;
+  color: transparent !important;
+}
+
+.btn__spinner {
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: btn-spin 0.6s linear infinite;
+}
+
+.btn--primary .btn__spinner {
+  border-color: var(--text-inverse);
+  border-right-color: transparent;
+}
+
+@keyframes btn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Icons */
+.btn__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.1em;
+}
+
+.btn__icon--left {
+  margin-right: calc(var(--space-1) * -1);
+}
+
+.btn__icon--right {
+  margin-left: calc(var(--space-1) * -1);
+}
+
+/* Icon Only Button */
+.btn:not(:has(.btn__text)) {
+  padding: 0;
+  aspect-ratio: 1;
+}
+
+.btn--sm:not(:has(.btn__text)) {
+  width: 32px;
+}
+
+.btn--md:not(:has(.btn__text)) {
+  width: 40px;
+}
+
+.btn--lg:not(:has(.btn__text)) {
+  width: 48px;
+}

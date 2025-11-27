@@ -62,7 +62,7 @@
 
 .placeholder-note {
   font-size: var(--text-sm);
-  color: #808080;
+  color: var(--text-muted);
   line-height: var(--leading-relaxed);
   margin-top: var(--space-2);
 }
@@ -152,7 +152,7 @@
 }
 
 .edit-panel-content::-webkit-scrollbar-thumb:hover {
-  background: #B0B0B0;
+  background: var(--border-default);
 }
 
 /* Edit Section */
@@ -399,6 +399,16 @@
   margin: -8px 0 var(--space-4) 0;
 }
 
+.section-badge {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-left: var(--space-2);
+  padding: var(--space-1) var(--space-2);
+  background-color: var(--bg-muted);
+  border-radius: var(--radius-sm);
+  font-weight: var(--font-normal);
+}
+
 /* Room Selection Grid */
 .room-grid {
   display: grid;
@@ -566,6 +576,228 @@
   outline: none;
   border-color: var(--border-focus);
   box-shadow: var(--focus-ring);
+}
+
+/* ============================================
+   Scene Select Modal Styles
+   ============================================ */
+.scene-select-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.scene-select-modal__description {
+  color: var(--text-secondary);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.scene-select-modal__divider {
+  text-align: center;
+  color: var(--text-muted);
+  margin: var(--space-2) 0;
+}
+
+.scene-select-modal__list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.scene-select-modal__subtitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  margin: 0 0 var(--space-3) 0;
+  color: var(--text-primary);
+}
+
+.scene-select-modal__item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  margin-bottom: var(--space-2);
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.scene-select-modal__item:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.scene-select-modal__item-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.scene-select-modal__item-icon {
+  font-size: var(--text-xl);
+}
+
+.scene-select-modal__item-name {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.scene-select-modal__item-action {
+  font-size: var(--text-sm);
+  color: var(--accent-primary);
+  font-weight: var(--font-medium);
+}
+
+/* ============================================
+   Create Scene Modal Styles
+   ============================================ */
+.create-scene-modal {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.form-hint {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: 0 0 var(--space-2) 0;
+}
+
+.room-select-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  max-height: 250px;
+  overflow-y: auto;
+}
+
+.room-select-card {
+  padding: var(--space-3);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  background-color: var(--bg-surface);
+  cursor: pointer;
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.room-select-card:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.room-select-card--selected {
+  border: 2px solid var(--accent-primary);
+  background-color: var(--color-info-bg);
+}
+
+.room-select-card__icon {
+  font-size: var(--text-xl);
+  margin-bottom: var(--space-1);
+}
+
+.room-select-card__name {
+  font-weight: var(--font-medium);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.room-select-card__description {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+}
+
+/* ============================================
+   Room Display (Read-only)
+   ============================================ */
+.room-display {
+  padding: var(--space-4);
+  background-color: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.room-display__icon {
+  font-size: 28px;
+}
+
+.room-display__info {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.room-display__name {
+  font-weight: var(--font-semibold);
+  font-size: var(--text-base);
+  color: var(--text-primary);
+}
+
+.room-display__description {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* ============================================
+   Asset List Item (Unified for objects/lights)
+   ============================================ */
+.asset-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--bg-page);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.asset-list-item:hover {
+  background-color: var(--bg-muted);
+  border-color: var(--border-hover);
+}
+
+.asset-list-item--selected {
+  background-color: var(--color-info-bg);
+  border: 2px solid var(--color-info);
+}
+
+.asset-list-item__info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.asset-list-item__icon {
+  font-size: var(--text-lg);
+}
+
+.asset-list-item__name {
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+}
+
+.asset-list-item__delete {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: var(--text-lg);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-sm);
+  transition: all var(--transition-fast);
+}
+
+.asset-list-item__delete:hover {
+  color: var(--color-danger);
+  background-color: var(--color-danger-bg);
 }
 
 /* Responsive */

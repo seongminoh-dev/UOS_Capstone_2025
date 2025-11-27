@@ -3,10 +3,11 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
+import { useToast, Modal, Button } from '../components/common';
+import { AssetInspector } from '../components/edit';
 import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams, RoomSettings } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
-import { isDummyScene } from '../utils/sceneId';
 import { getFurnitureBySubCategory, getAssetsByCategory, getAssetMetadata, isRequiredAsset, getRoomConfig } from '../assets/AssetRegistry';
 import type { FurnitureSubCategory } from '../assets/AssetTypes';
 import type { SceneId } from '../stores/sceneRepository';
@@ -15,6 +16,7 @@ import './EditPage.css';
 export default function EditPage() {
   const location = useLocation();
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'info' | 'objects' | 'lights'>('info');
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
@@ -104,12 +106,12 @@ export default function EditPage() {
   // 새 Scene 생성 (방 선택 포함)
   const handleCreateNewScene = () => {
     if (!newSceneName.trim()) {
-      alert('Scene 이름을 입력해주세요.');
+      toast.warning('Scene 이름을 입력해주세요.');
       return;
     }
 
     if (!selectedRoomMesh) {
-      alert('방을 선택해주세요.');
+      toast.warning('방을 선택해주세요.');
       return;
     }
 
@@ -235,10 +237,10 @@ export default function EditPage() {
       setCurrentSceneId(saved.id);
       setEditingScene(cloneForEdit(saved.id));
       setIsDirty(false);
-      alert('저장되었습니다.');
+      toast.success('저장되었습니다.');
     } catch (error) {
       console.error('Failed to save scene:', error);
-      alert('Scene 저장에 실패했습니다.');
+      toast.error('Scene 저장에 실패했습니다.');
     }
   };
 
@@ -250,7 +252,7 @@ export default function EditPage() {
       navigate('/simulator');
     } catch (error) {
       console.error('Failed to save scene:', error);
-      alert('Scene 저장에 실패했습니다.');
+      toast.error('Scene 저장에 실패했습니다.');
     }
   };
 
@@ -459,7 +461,7 @@ export default function EditPage() {
     // room.meshName과 일치하는 오브젝트는 삭제 불가
     const assetToDelete = editingScene.assets.find((a) => a.id === selectedAssetId);
     if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === editingScene.room.meshName) {
-      alert('기본 방은 삭제할 수 없습니다.');
+      toast.warning('기본 방은 삭제할 수 없습니다.');
       return;
     }
 
@@ -479,7 +481,7 @@ export default function EditPage() {
     // room.meshName과 일치하는 오브젝트는 삭제 불가
     const assetToDelete = editingScene.assets.find((a) => a.id === assetId);
     if (assetToDelete && assetToDelete.type === 'object' && assetToDelete.meshName === editingScene.room.meshName) {
-      alert('기본 방은 삭제할 수 없습니다.');
+      toast.warning('기본 방은 삭제할 수 없습니다.');
       return;
     }
 
@@ -520,174 +522,117 @@ export default function EditPage() {
       <Header />
 
       {/* Scene 선택 모달 */}
-      {showSceneSelectModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '600px' }}>
-            <div className="modal-header">
-              <h2 className="modal-title">Scene 선택</h2>
-              <button className="modal-close" onClick={() => navigate('/simulator')}>
-                ✕
-              </button>
-            </div>
+      <Modal
+        isOpen={showSceneSelectModal}
+        onClose={() => navigate('/simulator')}
+        title="Scene 선택"
+        size="md"
+      >
+        <div className="scene-select-modal">
+          <p className="scene-select-modal__description">
+            편집할 Scene을 선택하거나 새로 만드세요.
+          </p>
 
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <p style={{ marginBottom: '20px', color: '#6B6B6B' }}>
-                편집할 Scene을 선택하거나 새로 만드세요.
-              </p>
+          <Button
+            variant="primary"
+            fullWidth
+            onClick={handleOpenCreateSceneModal}
+          >
+            새 Scene 만들기
+          </Button>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <button
-                  className="modal-button modal-save"
-                  onClick={handleOpenCreateSceneModal}
-                  style={{ width: '100%' }}
-                >
-                  새 Scene 만들기
-                </button>
+          {scenes.length > 0 && (
+            <>
+              <div className="scene-select-modal__divider">또는</div>
 
-                {scenes.length > 0 && (
-                  <>
-                    <div style={{ textAlign: 'center', color: '#6B6B6B', margin: '8px 0' }}>
-                      또는
+              <div className="scene-select-modal__list">
+                <h3 className="scene-select-modal__subtitle">
+                  기존 Scene 불러오기
+                </h3>
+                {scenes.map((s) => (
+                  <button
+                    key={s.id}
+                    className="scene-select-modal__item"
+                    onClick={() => handleSelectFromList(s)}
+                  >
+                    <div className="scene-select-modal__item-info">
+                      <span className="scene-select-modal__item-icon">🎬</span>
+                      <span className="scene-select-modal__item-name">{s.name}</span>
                     </div>
-
-                    <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
-                      <h3 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
-                        기존 Scene 불러오기
-                      </h3>
-                      {scenes.map((s) => (
-                        <button
-                          key={s.id}
-                          className="asset-item clickable"
-                          onClick={() => handleSelectFromList(s)}
-                          style={{ marginBottom: '8px' }}
-                        >
-                          <div className="asset-info">
-                            <span className="asset-icon">🎬</span>
-                            <span className="asset-name">{s.name}</span>
-                          </div>
-                          <span className="asset-edit">선택</span>
-                        </button>
-                      ))}
-                    </div>
-                  </>
-                )}
+                    <span className="scene-select-modal__item-action">선택</span>
+                  </button>
+                ))}
               </div>
-            </div>
-          </div>
+            </>
+          )}
         </div>
-      )}
+      </Modal>
 
       {/* 새 Scene 생성 모달 */}
-      {showCreateSceneModal && (
-        <div className="modal-overlay" onClick={() => navigate('/simulator')}>
-          <div
-            className="modal-content"
-            onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: '550px' }}
-          >
-            <div className="modal-header">
-              <h2 className="modal-title">새 Scene 만들기</h2>
-              <button
-                className="modal-close"
-                onClick={() => navigate('/simulator')}
-              >
-                ✕
-              </button>
-            </div>
+      <Modal
+        isOpen={showCreateSceneModal}
+        onClose={() => navigate('/simulator')}
+        title="새 Scene 만들기"
+        size="md"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => navigate('/simulator')}>
+              취소
+            </Button>
+            <Button variant="primary" onClick={handleCreateNewScene}>
+              생성
+            </Button>
+          </>
+        }
+      >
+        <div className="create-scene-modal">
+          <div className="form-group">
+            <label className="form-label">Scene 이름 *</label>
+            <input
+              type="text"
+              className="form-input"
+              value={newSceneName}
+              onChange={(e) => setNewSceneName(e.target.value)}
+              placeholder="Scene 이름을 입력하세요"
+              autoFocus
+            />
+          </div>
 
-            <div className="modal-body" style={{ padding: '24px' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                <div className="form-group">
-                  <label className="form-label">Scene 이름 *</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    value={newSceneName}
-                    onChange={(e) => setNewSceneName(e.target.value)}
-                    placeholder="Scene 이름을 입력하세요"
-                    autoFocus
-                  />
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">방 선택 *</label>
-                  <p style={{ fontSize: '12px', color: '#6B6B6B', margin: '0 0 8px 0' }}>
-                    방은 Scene 생성 후 변경할 수 없습니다.
-                  </p>
-                  <div
-                    style={{
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(2, 1fr)',
-                      gap: '8px',
-                      maxHeight: '250px',
-                      overflowY: 'auto',
-                    }}
-                  >
-                    {availableRooms.map((room) => (
-                      <button
-                        key={room.meshName}
-                        type="button"
-                        onClick={() => setSelectedRoomMesh(room.meshName)}
-                        style={{
-                          padding: '12px',
-                          border: selectedRoomMesh === room.meshName
-                            ? '2px solid #2563EB'
-                            : '1px solid #E5E5E5',
-                          borderRadius: '8px',
-                          backgroundColor: selectedRoomMesh === room.meshName
-                            ? '#EFF6FF'
-                            : '#FFFFFF',
-                          cursor: 'pointer',
-                          textAlign: 'left',
-                          transition: 'all 0.2s',
-                        }}
-                      >
-                        <div style={{ fontSize: '20px', marginBottom: '4px' }}>
-                          {room.icon}
-                        </div>
-                        <div style={{ fontWeight: 500, fontSize: '14px' }}>
-                          {room.name}
-                        </div>
-                        {room.description && (
-                          <div style={{ fontSize: '12px', color: '#6B6B6B', marginTop: '2px' }}>
-                            {room.description}
-                          </div>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="form-group">
-                  <label className="form-label">설명</label>
-                  <textarea
-                    className="form-textarea"
-                    value={newSceneDescription}
-                    onChange={(e) => setNewSceneDescription(e.target.value)}
-                    placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
-                    rows={3}
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="modal-actions" style={{ padding: '16px 24px', borderTop: '1px solid #E5E5E5', display: 'flex', gap: '8px', justifyContent: 'flex-end' }}>
-              <button
-                className="modal-button modal-cancel"
-                onClick={() => navigate('/simulator')}
-              >
-                취소
-              </button>
-              <button
-                className="modal-button modal-save"
-                onClick={handleCreateNewScene}
-              >
-                생성
-              </button>
+          <div className="form-group">
+            <label className="form-label">방 선택 *</label>
+            <p className="form-hint">
+              방은 Scene 생성 후 변경할 수 없습니다.
+            </p>
+            <div className="room-select-grid">
+              {availableRooms.map((room) => (
+                <button
+                  key={room.meshName}
+                  type="button"
+                  className={`room-select-card ${selectedRoomMesh === room.meshName ? 'room-select-card--selected' : ''}`}
+                  onClick={() => setSelectedRoomMesh(room.meshName)}
+                >
+                  <div className="room-select-card__icon">{room.icon}</div>
+                  <div className="room-select-card__name">{room.name}</div>
+                  {room.description && (
+                    <div className="room-select-card__description">{room.description}</div>
+                  )}
+                </button>
+              ))}
             </div>
           </div>
+
+          <div className="form-group">
+            <label className="form-label">설명</label>
+            <textarea
+              className="form-textarea"
+              value={newSceneDescription}
+              onChange={(e) => setNewSceneDescription(e.target.value)}
+              placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
+              rows={3}
+            />
+          </div>
         </div>
-      )}
+      </Modal>
 
       <div className="edit-container">
         <div className="edit-layout">
@@ -712,414 +657,14 @@ export default function EditPage() {
               const selectedAsset = editingScene.assets.find((a) => a.id === selectedAssetId);
               if (!selectedAsset) return null;
 
-              const isObject = selectedAsset.type === 'object';
-              const isLight = selectedAsset.type === 'directional-light' ||
-                              selectedAsset.type === 'point-light' ||
-                              selectedAsset.type === 'rect-light';
-
-              const inputStyle = {
-                width: '60px',
-                padding: '2px 4px',
-                backgroundColor: '#1a1a1a',
-                border: '1px solid #555',
-                borderRadius: '3px',
-                color: '#fff',
-                fontSize: '11px',
-                textAlign: 'right' as const,
-                // Remove number input arrows
-                WebkitAppearance: 'none' as const,
-                MozAppearance: 'textfield' as const,
-              };
-
               return (
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '16px',
-                    left: '16px',
-                    backgroundColor: 'rgba(26, 26, 26, 0.95)',
-                    border: '1px solid #444',
-                    borderRadius: '8px',
-                    padding: '12px 16px',
-                    minWidth: '280px',
-                    maxWidth: '320px',
-                    maxHeight: 'calc(100vh - 100px)',
-                    overflowY: 'auto',
-                    color: '#ffffff',
-                    fontFamily: 'monospace',
-                    fontSize: '12px',
-                    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.5)',
-                    zIndex: 100,
-                  }}
-                  onMouseDown={(e) => e.stopPropagation()}
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  {/* Header */}
-                  <div style={{ marginBottom: '12px', paddingBottom: '8px', borderBottom: '1px solid #444' }}>
-                    <div style={{ fontSize: '14px', fontWeight: 'bold', color: '#00aaff', marginBottom: '4px' }}>
-                      {isObject ? '선택된 오브젝트' : '선택된 조명'}
-                    </div>
-                    <div style={{ fontSize: '11px', color: '#888' }}>
-                      {isObject ? selectedAsset.meshName : selectedAsset.type}
-                    </div>
-                  </div>
-
-                  {/* Object Transform */}
-                  {isObject && selectedAsset.transform && (
-                    <>
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#ffa500', marginBottom: '6px', fontWeight: 'bold' }}>Position</div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <span style={{ color: '#888', width: '15px' }}>X:</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={selectedAsset.transform.position[0]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'position', 0, value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={selectedAsset.transform.position[1]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'position', 1, value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                          <input
-                            type="number"
-                            step="0.1"
-                            value={selectedAsset.transform.position[2]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'position', 2, value);
-                            }}
-                            style={inputStyle}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#ff00ff', marginBottom: '6px', fontWeight: 'bold' }}>Rotation (°)</div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <span style={{ color: '#888', width: '15px' }}>X:</span>
-                          <input
-                            type="number"
-                            step="1"
-                            value={selectedAsset.transform.rotation[0]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'rotation', 0, value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                          <input
-                            type="number"
-                            step="1"
-                            value={selectedAsset.transform.rotation[1]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'rotation', 1, value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                          <input
-                            type="number"
-                            step="1"
-                            value={selectedAsset.transform.rotation[2]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handlePropertyChange(selectedAsset.id, 'rotation', 2, value);
-                            }}
-                            style={inputStyle}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#00ff00', marginBottom: '6px', fontWeight: 'bold' }}>Scale (Uniform)</div>
-                        <input
-                          type="number"
-                          step="0.1"
-                          min="0.01"
-                          value={selectedAsset.transform.scale[0]}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            if (!isNaN(value) && value > 0) handleUniformScaleChange(selectedAsset.id, value);
-                          }}
-                          style={{ ...inputStyle, width: '100px' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Light Params */}
-                  {isLight && selectedAsset.lightParams && (
-                    <>
-                      {selectedAsset.type === 'directional-light' && 'direction' in selectedAsset.lightParams && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontSize: '12px', color: '#ffa500', marginBottom: '6px', fontWeight: 'bold' }}>Direction</div>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <span style={{ color: '#888', width: '15px' }}>X:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.direction[0]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'direction.0', value);
-                              }}
-                              style={inputStyle}
-                            />
-                            <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.direction[1]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'direction.1', value);
-                              }}
-                              style={inputStyle}
-                            />
-                            <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.direction[2]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'direction.2', value);
-                              }}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {(selectedAsset.type === 'point-light' || selectedAsset.type === 'rect-light') && 'position' in selectedAsset.lightParams && (
-                        <div style={{ marginBottom: '12px' }}>
-                          <div style={{ fontSize: '12px', color: '#ffa500', marginBottom: '6px', fontWeight: 'bold' }}>Position</div>
-                          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                            <span style={{ color: '#888', width: '15px' }}>X:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.position[0]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'position.0', value);
-                              }}
-                              style={inputStyle}
-                            />
-                            <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.position[1]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'position.1', value);
-                              }}
-                              style={inputStyle}
-                            />
-                            <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                            <input
-                              type="number"
-                              step="0.1"
-                              value={selectedAsset.lightParams.position[2]}
-                              onChange={(e) => {
-                                const value = parseFloat(e.target.value);
-                                if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'position.2', value);
-                              }}
-                              style={inputStyle}
-                            />
-                          </div>
-                        </div>
-                      )}
-
-                      {selectedAsset.type === 'rect-light' && 'u' in selectedAsset.lightParams && 'v' in selectedAsset.lightParams && (
-                        <>
-                          <div style={{ marginBottom: '12px' }}>
-                            <div style={{ fontSize: '12px', color: '#ff00ff', marginBottom: '6px', fontWeight: 'bold' }}>U Vector</div>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                              <span style={{ color: '#888', width: '15px' }}>X:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.u[0]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'u.0', value);
-                                }}
-                                style={inputStyle}
-                              />
-                              <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.u[1]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'u.1', value);
-                                }}
-                                style={inputStyle}
-                              />
-                              <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.u[2]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'u.2', value);
-                                }}
-                                style={inputStyle}
-                              />
-                            </div>
-                          </div>
-
-                          <div style={{ marginBottom: '12px' }}>
-                            <div style={{ fontSize: '12px', color: '#ff00ff', marginBottom: '6px', fontWeight: 'bold' }}>V Vector</div>
-                            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                              <span style={{ color: '#888', width: '15px' }}>X:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.v[0]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'v.0', value);
-                                }}
-                                style={inputStyle}
-                              />
-                              <span style={{ color: '#888', width: '15px' }}>Y:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.v[1]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'v.1', value);
-                                }}
-                                style={inputStyle}
-                              />
-                              <span style={{ color: '#888', width: '15px' }}>Z:</span>
-                              <input
-                                type="number"
-                                step="0.1"
-                                value={selectedAsset.lightParams.v[2]}
-                                onChange={(e) => {
-                                  const value = parseFloat(e.target.value);
-                                  if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'v.2', value);
-                                }}
-                                style={inputStyle}
-                              />
-                            </div>
-                          </div>
-                        </>
-                      )}
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#00ffff', marginBottom: '6px', fontWeight: 'bold' }}>Color (RGB 0-1)</div>
-                        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
-                          <span style={{ color: '#888', width: '15px' }}>R:</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="1"
-                            value={selectedAsset.lightParams.color[0]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'color.0', value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>G:</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="1"
-                            value={selectedAsset.lightParams.color[1]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'color.1', value);
-                            }}
-                            style={inputStyle}
-                          />
-                          <span style={{ color: '#888', width: '15px' }}>B:</span>
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            max="1"
-                            value={selectedAsset.lightParams.color[2]}
-                            onChange={(e) => {
-                              const value = parseFloat(e.target.value);
-                              if (!isNaN(value)) handleLightParamChange(selectedAsset.id, 'color.2', value);
-                            }}
-                            style={inputStyle}
-                          />
-                        </div>
-                      </div>
-
-                      <div style={{ marginBottom: '12px' }}>
-                        <div style={{ fontSize: '12px', color: '#ffff00', marginBottom: '6px', fontWeight: 'bold' }}>Intensity</div>
-                        <input
-                          type="number"
-                          step="0.5"
-                          min="0"
-                          value={selectedAsset.lightParams.intensity}
-                          onChange={(e) => {
-                            const value = parseFloat(e.target.value);
-                            if (!isNaN(value) && value >= 0) handleLightParamChange(selectedAsset.id, 'intensity', value);
-                          }}
-                          style={{ ...inputStyle, width: '100px' }}
-                        />
-                      </div>
-                    </>
-                  )}
-
-                  {/* Delete Button */}
-                  <div style={{ marginTop: '16px', paddingTop: '12px', borderTop: '1px solid #444' }}>
-                    <button
-                      onClick={handleDeleteObject}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        backgroundColor: '#dc2626',
-                        color: '#fff',
-                        border: 'none',
-                        borderRadius: '4px',
-                        cursor: 'pointer',
-                        fontSize: '12px',
-                        fontWeight: 'bold',
-                      }}
-                      onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#b91c1c'}
-                      onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#dc2626'}
-                    >
-                      🗑️ 삭제 (Delete)
-                    </button>
-                  </div>
-
-                  {/* Keyboard Shortcuts */}
-                  {isObject && (
-                    <div style={{ marginTop: '12px', paddingTop: '8px', borderTop: '1px solid #444', fontSize: '10px', color: '#666' }}>
-                      <div>단축키: G(이동) R(회전) +/-(스케일)</div>
-                    </div>
-                  )}
-                </div>
+                <AssetInspector
+                  asset={selectedAsset}
+                  onPropertyChange={handlePropertyChange}
+                  onUniformScaleChange={handleUniformScaleChange}
+                  onLightParamChange={handleLightParamChange}
+                  onDelete={handleDeleteObject}
+                />
               );
             })()}
           </div>
@@ -1186,19 +731,9 @@ export default function EditPage() {
 
                   <h3 className="section-title">
                     기본 방
-                    <span style={{
-                      fontSize: '11px',
-                      color: '#9CA3AF',
-                      marginLeft: '8px',
-                      padding: '2px 8px',
-                      backgroundColor: '#F3F4F6',
-                      borderRadius: '4px',
-                      fontWeight: 'normal',
-                    }}>
-                      변경 불가
-                    </span>
+                    <span className="section-badge">변경 불가</span>
                   </h3>
-                  <p className="section-subtitle" style={{ color: '#6B6B6B', fontSize: '13px' }}>
+                  <p className="section-subtitle">
                     방은 Scene 생성 시에만 선택할 수 있습니다.
                   </p>
 
@@ -1206,26 +741,16 @@ export default function EditPage() {
                   {editingScene?.room && (() => {
                     const currentRoomMeta = getAssetMetadata(editingScene.room.meshName);
                     return (
-                      <div
-                        style={{
-                          padding: '16px',
-                          backgroundColor: '#F9FAFB',
-                          border: '1px solid #E5E7EB',
-                          borderRadius: '8px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '12px',
-                        }}
-                      >
-                        <span style={{ fontSize: '28px' }}>
+                      <div className="room-display">
+                        <span className="room-display__icon">
                           {currentRoomMeta?.icon || '🏠'}
                         </span>
-                        <div>
-                          <div style={{ fontWeight: 600, fontSize: '15px', color: '#1F2937' }}>
+                        <div className="room-display__info">
+                          <div className="room-display__name">
                             {currentRoomMeta?.name || editingScene.room.meshName}
                           </div>
                           {currentRoomMeta?.description && (
-                            <div style={{ fontSize: '13px', color: '#6B7280', marginTop: '2px' }}>
+                            <div className="room-display__description">
                               {currentRoomMeta.description}
                             </div>
                           )}
@@ -1306,31 +831,21 @@ export default function EditPage() {
                         return (
                           <div
                             key={asset.id}
-                            className={`object-item ${isSelected ? 'selected' : ''}`}
+                            className={`asset-list-item ${isSelected ? 'asset-list-item--selected' : ''}`}
                             onClick={() => setSelectedAssetId(asset.id)}
-                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span className="object-icon">{metadata?.icon || '📦'}</span>
-                              <span className="object-name">
+                            <div className="asset-list-item__info">
+                              <span className="asset-list-item__icon">{metadata?.icon || '📦'}</span>
+                              <span className="asset-list-item__name">
                                 {metadata?.name || asset.meshName}
                               </span>
                             </div>
                             <button
+                              className="asset-list-item__delete"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteAssetById(asset.id);
                               }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#999',
-                                cursor: 'pointer',
-                                fontSize: '16px',
-                                padding: '4px 8px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
-                              onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
                             >
                               ✕
                             </button>
@@ -1351,7 +866,7 @@ export default function EditPage() {
                 <div className="edit-section">
                   {/* 태양광 설정 */}
                   <h3 className="section-title">태양광 설정 (기본 조명)</h3>
-                  <p className="section-subtitle" style={{ color: '#6B6B6B', fontSize: '13px', marginBottom: '16px' }}>
+                  <p className="section-subtitle">
                     기본 태양광은 삭제 및 직접 수정이 불가능합니다. 시간대, 계절, 방향만 조절할 수 있습니다.
                   </p>
 
@@ -1468,36 +983,26 @@ export default function EditPage() {
                         return (
                           <div
                             key={asset.id}
-                            className={`light-item ${isSelected ? 'selected' : ''}`}
+                            className={`asset-list-item ${isSelected ? 'asset-list-item--selected' : ''}`}
                             onClick={(e) => {
                               e.stopPropagation();
                               setSelectedAssetId(asset.id);
                             }}
-                            style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
                           >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                              <span className="light-icon">
+                            <div className="asset-list-item__info">
+                              <span className="asset-list-item__icon">
                                 {asset.type === 'directional-light' ? '☀️' : asset.type === 'point-light' ? '💡' : '🔲'}
                               </span>
-                              <span className="light-name">
+                              <span className="asset-list-item__name">
                                 {asset.type === 'directional-light' ? '평행광' : asset.type === 'point-light' ? 'PointLight' : 'RectLight'}
                               </span>
                             </div>
                             <button
+                              className="asset-list-item__delete"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDeleteAssetById(asset.id);
                               }}
-                              style={{
-                                background: 'none',
-                                border: 'none',
-                                color: '#999',
-                                cursor: 'pointer',
-                                fontSize: '16px',
-                                padding: '4px 8px',
-                              }}
-                              onMouseEnter={(e) => e.currentTarget.style.color = '#dc2626'}
-                              onMouseLeave={(e) => e.currentTarget.style.color = '#999'}
                             >
                               ✕
                             </button>
@@ -1514,20 +1019,19 @@ export default function EditPage() {
 
             {/* Action Buttons */}
             <div className="edit-actions">
-              <button className="action-button action-cancel" onClick={handleCancel}>
+              <Button variant="secondary" onClick={handleCancel}>
                 취소
-              </button>
-              <button
-                className="action-button action-save"
+              </Button>
+              <Button
+                variant="primary"
                 onClick={handleSave}
                 disabled={!isDirty}
-                style={{ opacity: isDirty ? 1 : 0.5 }}
               >
                 저장
-              </button>
-              <button className="action-button action-save" onClick={handleSaveAndExit}>
+              </Button>
+              <Button variant="primary" onClick={handleSaveAndExit}>
                 저장 후 나가기
-              </button>
+              </Button>
             </div>
           </div>
         </div>

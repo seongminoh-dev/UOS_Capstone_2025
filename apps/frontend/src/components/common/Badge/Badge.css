@@ -1,0 +1,69 @@
+/**
+ * Badge Component Styles
+ */
+
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-full);
+  white-space: nowrap;
+}
+
+/* Sizes */
+.badge--sm {
+  padding: 2px var(--space-2);
+  font-size: var(--text-xs);
+}
+
+.badge--md {
+  padding: var(--space-1) var(--space-3);
+  font-size: var(--text-sm);
+}
+
+/* Variants */
+.badge--default {
+  background-color: var(--bg-muted);
+  color: var(--text-secondary);
+}
+
+.badge--success {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.badge--warning {
+  background-color: rgba(251, 191, 36, 0.15);
+  color: #d97706;
+}
+
+.badge--error {
+  background-color: var(--color-error-bg);
+  color: var(--color-error);
+}
+
+.badge--info {
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #2563eb;
+}
+
+/* Dot indicator */
+.badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: currentColor;
+}
+
+.badge--success .badge__dot {
+  background-color: #16a34a;
+}
+
+.badge--warning .badge__dot {
+  background-color: #d97706;
+}
+
+.badge--error .badge__dot {
+  background-color: var(--color-error);
+}

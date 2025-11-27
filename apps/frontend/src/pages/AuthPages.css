@@ -83,7 +83,7 @@
 
 /* Error Message */
 .auth-error {
-  background-color: #FFF5F5;
+  background-color: var(--color-error-bg);
   border: 1px solid var(--color-error-border);
   border-radius: var(--radius-md);
   padding: var(--space-3) var(--space-4);

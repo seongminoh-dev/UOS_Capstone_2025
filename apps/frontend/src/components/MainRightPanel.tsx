@@ -13,6 +13,7 @@ import type { SceneFrontend, SceneAsset, SunSettings, SkyMode } from '../graphic
 import InstanceEditModal from './InstanceEditModal';
 import { getAssetMetadata } from '../assets/AssetRegistry';
 import { useSceneRepository } from '../stores/sceneRepository';
+import { useToast } from './common';
 
 interface MainRightPanelProps {
   selectedScene: SceneFrontend | null;
@@ -30,6 +31,7 @@ export default function MainRightPanel({
   onSunSettingsChange,
 }: MainRightPanelProps) {
   const navigate = useNavigate();
+  const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<Tab>('environment');
 
   // Zustand Stores
@@ -177,7 +179,7 @@ export default function MainRightPanel({
       setPendingNavigation(null);
     } catch (error) {
       console.error('Failed to save scene:', error);
-      alert('Scene 저장에 실패했습니다.');
+      toast.error('Scene 저장에 실패했습니다.');
     }
   };
 
@@ -225,10 +227,10 @@ export default function MainRightPanel({
       onSelectScene({ ...savedScene });
 
       // 피드백
-      alert('Scene이 저장되고 렌더링에 적용되었습니다.');
+      toast.success('Scene이 저장되었습니다.');
     } catch (error) {
       console.error('Failed to save scene:', error);
-      alert('Scene 저장에 실패했습니다.');
+      toast.error('Scene 저장에 실패했습니다.');
     }
   };
 
@@ -241,7 +243,7 @@ export default function MainRightPanel({
   const handleDeleteAssetRequest = (assetId: string | number) => {
     // 태양(Sun) 삭제 방지
     if (assetId === 'sun' || assetId === 'Sun' || assetId === 'sun_light') {
-      alert('자연광은 필수 조명으로 삭제할 수 없습니다.');
+      toast.warning('자연광은 필수 조명으로 삭제할 수 없습니다.');
       return;
     }
 
@@ -249,7 +251,7 @@ export default function MainRightPanel({
     if (!currentScene) return;
     const asset = currentScene.assets.find((a) => a.id === assetId);
     if (asset && asset.type === 'object' && asset.meshName === 'TestScene') {
-      alert('방(TestScene)은 필수 오브젝트로 삭제할 수 없습니다.');
+      toast.warning('방(TestScene)은 필수 오브젝트로 삭제할 수 없습니다.');
       return;
     }
 
@@ -300,7 +302,7 @@ export default function MainRightPanel({
   const handleSaveSceneInfo = () => {
     if (!currentScene) return;
     if (!editingSceneName.trim()) {
-      alert('Scene 이름을 입력해주세요.');
+      toast.warning('Scene 이름을 입력해주세요.');
       return;
     }
 

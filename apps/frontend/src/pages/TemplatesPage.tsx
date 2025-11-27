@@ -19,7 +19,7 @@ type Category = 'all' | 'official' | 'community';
 const OFFICIAL_TEMPLATES = DUMMY_SCENES.map((scene) => ({
   ...scene,
   type: 'official' as const,
-  author: '인태리',
+  author: 'Intery',
   likes: 0,
   thumbnail: null,
 }));

@@ -1,0 +1,102 @@
+/**
+ * CanvasOverlay Component Styles
+ */
+
+.canvas-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.canvas-overlay > div {
+  pointer-events: auto;
+}
+
+/* Bottom Left - Render Info */
+.canvas-overlay__bottom-left {
+  position: absolute;
+  bottom: var(--space-4);
+  left: var(--space-4);
+}
+
+.canvas-overlay__render-info {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.canvas-overlay__status-dot {
+  width: 6px;
+  height: 6px;
+  background: #4ade80;
+  border-radius: 50%;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.canvas-overlay__status-text {
+  font-weight: var(--font-medium);
+}
+
+.canvas-overlay__divider {
+  color: rgba(255, 255, 255, 0.3);
+}
+
+.canvas-overlay__time-icon {
+  font-size: var(--text-sm);
+}
+
+.canvas-overlay__time {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Bottom Right - Camera Controls */
+.canvas-overlay__bottom-right {
+  position: absolute;
+  bottom: var(--space-4);
+  right: var(--space-4);
+}
+
+.canvas-overlay__controls-help {
+  display: flex;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(8px);
+  border-radius: var(--radius-md);
+}
+
+.canvas-overlay__control-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.canvas-overlay__control-item kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 18px;
+  padding: 0 var(--space-1);
+  background: rgba(255, 255, 255, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  color: rgba(255, 255, 255, 0.9);
+}

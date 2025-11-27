@@ -111,7 +111,7 @@ function OnboardingPage() {
             <div className="logo-icon">
               <div className="logo-shape" />
             </div>
-            <span className="logo-text">인태리</span>
+            <span className="logo-text">Intery</span>
           </div>
           <div className="nav-links">
             <button className="nav-link" onClick={() => navigate('/templates')}>
@@ -169,7 +169,7 @@ function OnboardingPage() {
               <div className="frame-dots">
                 <span /><span /><span />
               </div>
-              <span className="frame-title">인태리 시뮬레이터</span>
+              <span className="frame-title">Intery Simulator</span>
             </div>
             <div className="frame-content">
               <div className="preview-placeholder">
@@ -254,7 +254,7 @@ function OnboardingPage() {
             <span className="section-badge">Gallery</span>
             <h2 className="section-title">렌더링 샘플</h2>
             <p className="section-description">
-              인태리로 만들 수 있는 결과물을 확인해보세요
+              Intery로 만들 수 있는 결과물을 확인해보세요
             </p>
           </div>
 
@@ -333,7 +333,7 @@ function OnboardingPage() {
               <div className="logo-icon small">
                 <div className="logo-shape" />
               </div>
-              <span className="logo-text">인태리</span>
+              <span className="logo-text">Intery</span>
             </div>
             <p className="footer-description">
               PathTracing 기반 실시간 인테리어 조명 시뮬레이터

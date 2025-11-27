@@ -1,0 +1,78 @@
+/**
+ * ViewportGuard Styles
+ * 최소 뷰포트 미만 시 표시되는 안내 화면
+ */
+
+.viewport-guard {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: var(--bg-surface);
+  padding: var(--space-6);
+}
+
+.viewport-guard-content {
+  text-align: center;
+  max-width: 400px;
+}
+
+.viewport-guard-icon {
+  color: var(--text-secondary);
+  margin-bottom: var(--space-6);
+}
+
+.viewport-guard-icon svg {
+  width: 64px;
+  height: 64px;
+}
+
+.viewport-guard-title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin: 0 0 var(--space-4) 0;
+}
+
+.viewport-guard-description {
+  font-size: var(--text-base);
+  color: var(--text-secondary);
+  line-height: var(--leading-relaxed);
+  margin: 0 0 var(--space-8) 0;
+}
+
+.viewport-guard-tips {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
+}
+
+.tip-item {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background-color: var(--bg-muted);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  color: var(--text-primary);
+}
+
+.tip-icon {
+  font-size: var(--text-base);
+}
+
+.viewport-guard-footer {
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border-default);
+}
+
+.footer-note {
+  font-size: var(--text-xs);
+  color: var(--text-muted);
+  margin: 0;
+}

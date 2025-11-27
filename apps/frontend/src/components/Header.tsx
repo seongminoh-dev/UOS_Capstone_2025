@@ -26,7 +26,7 @@ export default function Header() {
           <div className="logo-icon">
             <div className="logo-shape"></div>
           </div>
-          <span className="logo-text">인태리</span>
+          <span className="logo-text">Intery</span>
         </Link>
 
         {/* Navigation */}

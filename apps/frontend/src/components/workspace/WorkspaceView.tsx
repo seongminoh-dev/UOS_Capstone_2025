@@ -10,6 +10,7 @@ import SceneCard from './SceneCard';
 import type { SceneFrontend } from '../../graphics-core/service/Scene';
 import { useSceneRepository } from '../../stores/sceneRepository';
 import { useAuthStore } from '../../stores/authStore';
+import { useToast } from '../common';
 import { isDummyScene } from '../../utils/sceneId';
 import './WorkspaceView.css';
 
@@ -25,6 +26,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
   const navigate = useNavigate();
   const { scenes, loadScenes, deleteScene } = useSceneRepository();
   const { isGuest } = useAuthStore();
+  const { toast } = useToast();
 
   // UI 상태
   const [searchQuery, setSearchQuery] = useState('');
@@ -125,7 +127,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
       }
     } catch (error) {
       console.error('Failed to delete scene:', error);
-      alert('Scene 삭제에 실패했습니다.');
+      toast.error('Scene 삭제에 실패했습니다.');
     }
     setDeletingSceneId(null);
   };
