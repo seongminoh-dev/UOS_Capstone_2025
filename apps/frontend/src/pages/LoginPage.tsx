@@ -1,11 +1,13 @@
 import { useState, FormEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuthStore } from '../stores/authStore';
+import { useSceneRepository } from '../stores/sceneRepository';
 import './AuthPages.css';
 
 export default function LoginPage() {
   const navigate = useNavigate();
   const { login, isLoading, error, clearError } = useAuthStore();
+  const { syncLocalToServer, loadScenes } = useSceneRepository();
 
   const [formData, setFormData] = useState({
     username: '',
@@ -18,6 +20,16 @@ export default function LoginPage() {
 
     try {
       await login(formData);
+
+      // 로그인 성공 후 LocalScenes → Server 동기화
+      try {
+        await syncLocalToServer();
+        await loadScenes();
+      } catch (syncError) {
+        console.error('Failed to sync local scenes:', syncError);
+        // 동기화 실패해도 로그인은 성공 처리
+      }
+
       // 로그인 성공 시 메인 페이지로 이동
       navigate('/');
     } catch (err) {

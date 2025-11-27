@@ -1,5 +1,6 @@
 import { World } from '../World';
 import { InputController } from '../InputController';
+import { RENDERER_CONFIG } from '../../config';
 
 // Renderer Renderer_TEST
 import { Renderer } from '../Renderer_TEST';
@@ -22,9 +23,9 @@ export class WebGPUEngine {
     private lastFrameTime: number = performance.now();
     private isRunning: boolean = false;
 
-    // Frame time averaging
+    // Frame time averaging (sample count from centralized config)
     private frameTimeSamples: number[] = [];
-    private readonly FRAME_TIME_SAMPLE_COUNT = 60; // 최근 60 프레임 평균
+    private readonly FRAME_TIME_SAMPLE_COUNT = RENDERER_CONFIG.FRAME_TIME_SAMPLE_COUNT;
 
     // Callbacks
     public onFrameTimeUpdate: ((frameTime: number) => void) | null = null;
