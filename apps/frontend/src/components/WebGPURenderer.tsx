@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { WebGPUEngine } from '../graphics-core/service';
+import { WebGPUEngine, PHASE_METADATA } from '../graphics-core/service';
+import type { InitProgress } from '../graphics-core/service';
 import { SceneAdapter } from '../adapters/SceneAdapter';
 import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
 
@@ -31,6 +32,7 @@ export default function WebGPURenderer({
   const [isTooSmall, setIsTooSmall] = useState<boolean>(false);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
   const [isSceneLoaded, setIsSceneLoaded] = useState<boolean>(false);
+  const [initProgress, setInitProgress] = useState<InitProgress | null>(null);
 
   // 최소 렌더링 크기
   const MIN_WIDTH = 512;
@@ -87,8 +89,14 @@ export default function WebGPURenderer({
           }
         };
 
-        // ✅ Initialize engine (no sceneId)
-        await engine.initialize(canvasSize.width, canvasSize.height);
+        // ✅ Initialize engine with progress callback
+        await engine.initialize(canvasSize.width, canvasSize.height, {
+          onProgress: (progress) => {
+            if (isMounted) {
+              setInitProgress(progress);
+            }
+          },
+        });
 
         if (!isMounted) {
           engine.dispose();
@@ -192,10 +200,12 @@ export default function WebGPURenderer({
         // 3. SceneAdapter를 통해 World에 Scene 로드
         SceneAdapter.loadSceneToWorld(sceneFrontend, world);
 
-        // 4. Renderer 재초기화
+        // 4. Renderer 재초기화 (with progress callback)
         const renderer = engine.getRenderer();
         if (renderer) {
-          await renderer.Initialize(world);
+          await renderer.Initialize(world, (progress) => {
+            setInitProgress(progress);
+          });
         }
 
         // 5. InputController에 카메라 설정
@@ -321,7 +331,7 @@ export default function WebGPURenderer({
             zIndex: 200,
           }}
         >
-          <div style={{ textAlign: 'center' }}>
+          <div style={{ textAlign: 'center', maxWidth: '280px' }}>
             {/* 스피너 */}
             <div
               style={{
@@ -354,20 +364,63 @@ export default function WebGPURenderer({
                 🏠
               </div>
             </div>
-            {/* 텍스트 */}
+
+            {/* 단계 표시 */}
+            {initProgress && (
+              <div style={{
+                fontSize: '12px',
+                color: '#495057',
+                marginBottom: '8px',
+                fontFamily: 'monospace',
+              }}>
+                {initProgress.step}/{initProgress.totalSteps}
+              </div>
+            )}
+
+            {/* 프로그레스 바 */}
+            {initProgress && (
+              <div style={{
+                width: '100%',
+                height: '4px',
+                backgroundColor: '#e9ecef',
+                borderRadius: '2px',
+                marginBottom: '16px',
+                overflow: 'hidden',
+              }}>
+                <div
+                  style={{
+                    width: `${(initProgress.step / initProgress.totalSteps) * 100}%`,
+                    height: '100%',
+                    backgroundColor: '#1a1a1a',
+                    borderRadius: '2px',
+                    transition: 'width 0.3s ease-out',
+                  }}
+                />
+              </div>
+            )}
+
+            {/* 메인 텍스트 */}
             <div style={{
               fontSize: '15px',
               fontWeight: 600,
               color: '#1a1a1a',
               marginBottom: '6px',
             }}>
-              {!isInitialized ? '렌더러 준비 중' : '공간 불러오는 중'}
+              {initProgress
+                ? PHASE_METADATA[initProgress.phase]?.labelKo || initProgress.message
+                : (!isInitialized ? '렌더러 준비 중' : '공간 불러오는 중')
+              }
             </div>
+
+            {/* 서브 텍스트 */}
             <div style={{
               fontSize: '13px',
               color: '#868e96',
             }}>
-              잠시만 기다려주세요
+              {initProgress
+                ? `${PHASE_METADATA[initProgress.phase]?.label || ''}`
+                : '잠시만 기다려주세요'
+              }
             </div>
           </div>
           <style>{`

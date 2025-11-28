@@ -17,3 +17,12 @@ export type {
 
 // WebGPUEngine export
 export { WebGPUEngine } from './WebGPUEngine';
+
+// InitProgress 타입 및 상수 export
+export type {
+  InitPhase,
+  InitProgress,
+  InitializeOptions,
+  OnProgressCallback,
+} from './types/InitProgress';
+export { PHASE_METADATA, TOTAL_INIT_STEPS } from './types/InitProgress';
