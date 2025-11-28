@@ -28,6 +28,7 @@
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
+  padding-top: var(--header-height);
 }
 
 /* Section Inner - Header와 일관된 max-width */

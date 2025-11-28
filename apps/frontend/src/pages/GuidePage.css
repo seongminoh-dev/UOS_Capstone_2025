@@ -21,6 +21,7 @@
 .guide-main {
   flex: 1;
   overflow: hidden;
+  padding-top: var(--header-height);
 }
 
 .guide-container {
