@@ -7,7 +7,7 @@
  * - FAQ
  */
 
-import { useState } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import './GuidePage.css';
@@ -145,6 +145,7 @@ function GuidePage() {
   const navigate = useNavigate();
   const [activeSection, setActiveSection] = useState<GuideSection>('getting-started');
   const [expandedFaq, setExpandedFaq] = useState<number | null>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
 
   const handleStartSimulator = () => {
     navigate('/simulator');
@@ -153,6 +154,15 @@ function GuidePage() {
   const toggleFaq = (index: number) => {
     setExpandedFaq(expandedFaq === index ? null : index);
   };
+
+  // 섹션 클릭 시 해당 영역으로 스크롤
+  const handleNavClick = useCallback((section: GuideSection) => {
+    setActiveSection(section);
+    // 콘텐츠 영역 최상단으로 스크롤
+    if (contentRef.current) {
+      contentRef.current.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, []);
 
   return (
     <div className="guide-page">
@@ -165,44 +175,44 @@ function GuidePage() {
             <div className="guide-sidebar-inner">
               <nav className="guide-nav">
                 <button
-                  className={`nav-item ${activeSection === 'getting-started' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('getting-started')}
+                  className={`guide-nav__item ${activeSection === 'getting-started' ? 'is-active' : ''}`}
+                  onClick={() => handleNavClick('getting-started')}
                 >
-                  <span className="nav-icon">🚀</span>
-                  <span>시작하기</span>
+                  <span className="guide-nav__icon">🚀</span>
+                  <span className="guide-nav__text">시작하기</span>
                 </button>
                 <button
-                  className={`nav-item ${activeSection === 'lighting' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('lighting')}
+                  className={`guide-nav__item ${activeSection === 'lighting' ? 'is-active' : ''}`}
+                  onClick={() => handleNavClick('lighting')}
                 >
-                  <span className="nav-icon">💡</span>
-                  <span>조명 설정</span>
+                  <span className="guide-nav__icon">💡</span>
+                  <span className="guide-nav__text">조명 설정</span>
                 </button>
                 <button
-                  className={`nav-item ${activeSection === 'furniture' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('furniture')}
+                  className={`guide-nav__item ${activeSection === 'furniture' ? 'is-active' : ''}`}
+                  onClick={() => handleNavClick('furniture')}
                 >
-                  <span className="nav-icon">🛋️</span>
-                  <span>가구 배치</span>
+                  <span className="guide-nav__icon">🛋️</span>
+                  <span className="guide-nav__text">가구 배치</span>
                 </button>
                 <button
-                  className={`nav-item ${activeSection === 'scene' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('scene')}
+                  className={`guide-nav__item ${activeSection === 'scene' ? 'is-active' : ''}`}
+                  onClick={() => handleNavClick('scene')}
                 >
-                  <span className="nav-icon">💾</span>
-                  <span>씬 관리</span>
+                  <span className="guide-nav__icon">💾</span>
+                  <span className="guide-nav__text">씬 관리</span>
                 </button>
                 <button
-                  className={`nav-item ${activeSection === 'faq' ? 'active' : ''}`}
-                  onClick={() => setActiveSection('faq')}
+                  className={`guide-nav__item ${activeSection === 'faq' ? 'is-active' : ''}`}
+                  onClick={() => handleNavClick('faq')}
                 >
-                  <span className="nav-icon">❓</span>
-                  <span>FAQ</span>
+                  <span className="guide-nav__icon">❓</span>
+                  <span className="guide-nav__text">FAQ</span>
                 </button>
               </nav>
 
-              <div className="sidebar-cta">
-                <button className="btn-start" onClick={handleStartSimulator}>
+              <div className="guide-sidebar__cta">
+                <button className="guide-sidebar__btn" onClick={handleStartSimulator}>
                   시뮬레이터 시작
                 </button>
               </div>
@@ -210,7 +220,7 @@ function GuidePage() {
           </aside>
 
           {/* 메인 컨텐츠 */}
-          <div className="guide-content">
+          <div className="guide-content" ref={contentRef}>
             {/* 시작하기 */}
             {activeSection === 'getting-started' && (
               <section className="content-section">

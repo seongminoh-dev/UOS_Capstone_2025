@@ -1,0 +1,63 @@
+/**
+ * GizmoModeSelector Styles
+ * Compact 전문 툴 스타일
+ */
+
+.gizmo-mode-selector {
+  position: absolute;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 3px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 6px;
+  z-index: 10;
+}
+
+.gizmo-mode-selector__btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 10px;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.gizmo-mode-selector__btn:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.gizmo-mode-selector__btn--active {
+  color: #fff;
+  background: var(--accent-primary);
+}
+
+.gizmo-mode-selector__btn--active:hover {
+  background: var(--accent-primary-hover, #2563eb);
+}
+
+.gizmo-mode-selector__icon {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.gizmo-mode-selector__label {
+  font-weight: 500;
+}
+
+.gizmo-mode-selector__shortcut {
+  font-size: 9px;
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  opacity: 0.8;
+}

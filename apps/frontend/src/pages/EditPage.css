@@ -1,17 +1,14 @@
 /**
- * EditPage Styles - 리디자인
+ * EditPage Styles - 3분할 레이아웃 리디자인
  *
  * 레이아웃:
  * ┌──────────────────────────────────────────────────────────┐
  * │ EditPageHeader (84px = 36px nav + 48px main)            │
- * ├────────────────────────────────┬─────────────────────────┤
- * │                                │                         │
- * │   Three.js Canvas              │   Edit Panel (380px)    │
- * │   (flex: 1)                    │   - Tabs (underline)    │
- * │                                │   - Content (scroll)    │
- * │   + AssetInspector (overlay)   │                         │
- * │                                │                         │
- * └────────────────────────────────┴─────────────────────────┘
+ * ├────────────┬──────────────────────────────┬──────────────┤
+ * │ LeftPanel  │  Canvas                      │ RightPanel   │
+ * │ (300px)    │  (flex: 1)                   │ (360px)      │
+ * │            │  + Overlays                  │              │
+ * └────────────┴──────────────────────────────┴──────────────┘
  */
 
 /* ============================================
@@ -33,7 +30,21 @@
 }
 
 /* ============================================
-   Canvas Area (Left)
+   Left Panel (300px) - Balanced Compact
+   ============================================ */
+.edit-page__left-panel {
+  width: 300px;
+  height: 100%;
+  background-color: var(--bg-surface);
+  border-right: 1px solid var(--border-default);
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+}
+
+/* ============================================
+   Canvas Area (Center)
    ============================================ */
 .edit-page__canvas {
   flex: 1;
@@ -42,6 +53,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  min-width: 0;
 }
 
 .edit-page__canvas .three-canvas {
@@ -50,367 +62,17 @@
 }
 
 /* ============================================
-   Edit Panel (Right)
+   Right Panel (360px) - Balanced Compact
    ============================================ */
-.edit-page__panel {
-  width: 380px;
+.edit-page__right-panel {
+  width: 360px;
   height: 100%;
   background-color: var(--bg-surface);
   border-left: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
-}
-
-.edit-page__tabs {
-  flex: 1;
   overflow: hidden;
-  display: flex;
-  flex-direction: column;
-}
-
-.edit-page__tabs .tabs {
-  display: flex;
-  flex-direction: column;
-  height: 100%;
-}
-
-.edit-page__tabs .tabs__list {
-  padding: 0 20px;
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
-.edit-page__tabs .tabs__panel {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-/* ============================================
-   Edit Section (Tab Content)
-   ============================================ */
-.edit-section {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.edit-section__subtitle {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.edit-section__hint {
-  font-size: 12px;
-  color: var(--text-tertiary);
-  margin: -8px 0 8px 0;
-  line-height: 1.4;
-}
-
-.edit-section__divider {
-  height: 1px;
-  background: var(--border-default);
-  margin: 4px 0;
-}
-
-/* Form Group */
-.edit-section__group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.edit-section__label-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.edit-section__label {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.edit-section__badge {
-  font-size: 10px;
-  font-weight: 500;
-  color: var(--text-tertiary);
-  background: var(--bg-muted);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-.edit-section__input,
-.edit-section__textarea,
-.edit-section__select {
-  padding: 10px 12px;
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  font-size: 13px;
-  background: var(--bg-surface);
-  color: var(--text-primary);
-  transition: border-color 0.15s ease;
-}
-
-.edit-section__input:focus,
-.edit-section__textarea:focus,
-.edit-section__select:focus {
-  outline: none;
-  border-color: var(--accent-primary);
-}
-
-.edit-section__textarea {
-  resize: vertical;
-  min-height: 72px;
-}
-
-/* Room Display */
-.edit-section__room-display {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px;
-  background: var(--bg-muted);
-  border-radius: 8px;
-}
-
-.edit-section__room-icon {
-  font-size: 24px;
-}
-
-.edit-section__room-info {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.edit-section__room-name {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.edit-section__room-desc {
-  font-size: 12px;
-  color: var(--text-tertiary);
-}
-
-/* Subtabs (Furniture categories) */
-.edit-section__subtabs {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.edit-section__subtab {
-  padding: 6px 12px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.edit-section__subtab:hover {
-  background: var(--bg-muted);
-  border-color: var(--border-hover);
-}
-
-.edit-section__subtab--active {
-  background: var(--accent-primary);
-  color: #fff;
-  border-color: var(--accent-primary);
-}
-
-/* Grid (Add buttons) */
-.edit-section__grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-}
-
-.edit-section__grid--3col {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.edit-section__add-btn {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 14px 8px;
-  background: var(--bg-muted);
-  border: 1px solid transparent;
-  border-radius: 8px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.edit-section__add-btn:hover {
-  background: var(--bg-tertiary, #ECECEE);
-  border-color: var(--border-default);
-}
-
-.edit-section__add-icon {
-  font-size: 24px;
-}
-
-.edit-section__add-name {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-primary);
-  text-align: center;
-}
-
-/* List (Placed assets) */
-.edit-section__list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.edit-section__list-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 10px 12px;
-  background: var(--bg-muted);
-  border: 1.5px solid transparent;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.edit-section__list-item:hover {
-  background: var(--bg-tertiary, #ECECEE);
-}
-
-.edit-section__list-item--selected {
-  background: var(--bg-surface);
-  border-color: var(--accent-primary);
-}
-
-.edit-section__list-info {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.edit-section__list-icon {
-  font-size: 16px;
-}
-
-.edit-section__list-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.edit-section__list-delete {
-  padding: 4px 8px;
-  font-size: 12px;
-  color: var(--text-tertiary);
-  background: transparent;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  opacity: 0;
-  transition: all 0.15s ease;
-}
-
-.edit-section__list-item:hover .edit-section__list-delete {
-  opacity: 1;
-}
-
-.edit-section__list-delete:hover {
-  color: var(--color-danger, #DC2626);
-  background: var(--color-danger-bg, #FEE2E2);
-}
-
-/* Empty State */
-.edit-section__empty {
-  padding: 24px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--text-tertiary);
-  background: var(--bg-muted);
-  border: 1px dashed var(--border-default);
-  border-radius: 8px;
-}
-
-/* Toggle Group (Day/Night) */
-.edit-section__toggle-group {
-  display: flex;
-  gap: 6px;
-}
-
-.edit-section__toggle {
-  flex: 1;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: var(--bg-surface);
-  border: 1px solid var(--border-default);
-  border-radius: 6px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.edit-section__toggle:hover:not(.edit-section__toggle--active) {
-  background: var(--bg-muted);
-}
-
-.edit-section__toggle--active {
-  background: var(--accent-primary);
-  color: #fff;
-  border-color: var(--accent-primary);
-}
-
-/* Range Slider */
-.edit-section__range {
-  width: 100%;
-  height: 6px;
-  border-radius: 3px;
-  background: var(--border-default);
-  outline: none;
-  -webkit-appearance: none;
-  appearance: none;
-}
-
-.edit-section__range:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-
-.edit-section__range::-webkit-slider-thumb {
-  -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  border-radius: 50%;
-  background: var(--accent-primary);
-  cursor: pointer;
-  transition: transform 0.15s ease;
-}
-
-.edit-section__range:not(:disabled)::-webkit-slider-thumb:hover {
-  transform: scale(1.15);
-}
-
-.edit-section__range-labels {
-  display: flex;
-  justify-content: space-between;
-  font-size: 11px;
-  color: var(--text-tertiary);
-  margin-top: 4px;
 }
 
 /* ============================================
@@ -455,7 +117,7 @@
   margin-bottom: 8px;
   background: var(--bg-muted);
   border: 1px solid transparent;
-  border-radius: 8px;
+  border-radius: 10px;
   cursor: pointer;
   transition: all 0.15s ease;
 }
@@ -491,13 +153,13 @@
 .create-scene-modal {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 24px;
 }
 
 .form-group {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
 }
 
 .form-label {
@@ -509,97 +171,146 @@
 .form-hint {
   font-size: 12px;
   color: var(--text-tertiary);
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
+  line-height: 1.4;
 }
 
 .form-input,
 .form-textarea {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border: 1px solid var(--border-default);
-  border-radius: 6px;
+  border-radius: 10px;
   font-size: 14px;
+  color: var(--text-primary);
   background: var(--bg-surface);
-  transition: border-color 0.15s ease;
+  transition: all 0.15s ease;
+}
+
+.form-input:hover:not(:focus),
+.form-textarea:hover:not(:focus) {
+  border-color: var(--border-hover);
 }
 
 .form-input:focus,
 .form-textarea:focus {
   outline: none;
-  border-color: var(--accent-primary);
+  border-color: #000;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.08);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--text-muted);
 }
 
 .form-textarea {
   resize: vertical;
-  min-height: 72px;
+  min-height: 80px;
+  line-height: 1.5;
 }
 
 /* Room Select Grid */
 .room-select-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 8px;
-  max-height: 220px;
+  gap: 12px;
+  max-height: 240px;
   overflow-y: auto;
+  padding: 2px;
 }
 
 .room-select-card {
-  padding: 12px;
-  border: 1.5px solid var(--border-default);
-  border-radius: 8px;
-  background: var(--bg-surface);
+  padding: 16px;
+  border: 1px solid #e5e5e5;
+  border-radius: 12px;
+  background: #fff;
   cursor: pointer;
   text-align: left;
   transition: all 0.15s ease;
 }
 
 .room-select-card:hover {
-  background: var(--bg-muted);
-  border-color: var(--border-hover);
+  background: #fafafa;
+  border-color: #d0d0d0;
 }
 
 .room-select-card--selected {
-  border-color: var(--accent-primary);
-  background: var(--bg-muted);
+  border: 2px solid #000;
+  background: #f5f5f5;
+  box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.06);
+}
+
+.room-select-card--selected .room-select-card__name {
+  color: #000;
 }
 
 .room-select-card__icon {
-  font-size: 20px;
-  margin-bottom: 4px;
+  font-size: 28px;
+  margin-bottom: 8px;
 }
 
 .room-select-card__name {
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   color: var(--text-primary);
 }
 
 .room-select-card__description {
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-tertiary);
-  margin-top: 2px;
+  margin-top: 4px;
+  line-height: 1.4;
 }
 
 /* ============================================
    Responsive
    ============================================ */
+@media (max-width: 1200px) {
+  .edit-page__left-panel {
+    width: 280px;
+  }
+
+  .edit-page__right-panel {
+    width: 340px;
+  }
+}
+
 @media (max-width: 1024px) {
-  .edit-page__panel {
+  .edit-page__left-panel {
+    width: 260px;
+  }
+
+  .edit-page__right-panel {
+    width: 320px;
+  }
+}
+
+@media (max-width: 900px) {
+  /* 태블릿: 좌측 패널 숨김 */
+  .edit-page__left-panel {
+    display: none;
+  }
+
+  .edit-page__right-panel {
     width: 340px;
   }
 }
 
 @media (max-width: 768px) {
+  /* 모바일: 세로 레이아웃 */
   .edit-page__layout {
     flex-direction: column;
   }
 
   .edit-page__canvas {
-    height: 50vh;
+    flex: 1;
+    min-height: 300px;
   }
 
-  .edit-page__panel {
+  .edit-page__right-panel {
     width: 100%;
-    height: 50vh;
+    height: auto;
+    max-height: 40vh;
     border-left: none;
     border-top: 1px solid var(--border-default);
   }

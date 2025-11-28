@@ -1,0 +1,93 @@
+/**
+ * ObjectTreeItem Styles
+ * Balanced Compact - 전문 툴 + 적당한 여백
+ */
+
+.object-tree-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 4px;
+  min-height: 46px;
+  background: var(--bg-muted);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+  border-left: 3px solid transparent;
+}
+
+.object-tree-item:hover {
+  background: #f7f7f7;
+}
+
+.object-tree-item--selected {
+  background: var(--bg-surface);
+  border-color: var(--border-default);
+  border-left-color: var(--accent-primary);
+}
+
+.object-tree-item--hidden {
+  opacity: 0.45;
+}
+
+.object-tree-item__content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+}
+
+.object-tree-item__icon {
+  font-size: 18px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.object-tree-item__name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.object-tree-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
+}
+
+.object-tree-item__action-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  font-size: 12px;
+  background: transparent;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+  transition: all 0.12s ease;
+}
+
+.object-tree-item:hover .object-tree-item__action-btn {
+  opacity: 0.5;
+}
+
+.object-tree-item__action-btn:hover {
+  opacity: 1 !important;
+  background: var(--bg-tertiary, #ECECEE);
+}
+
+.object-tree-item__action-btn--delete:hover {
+  color: var(--color-danger, #DC2626);
+  background: var(--color-danger-bg, #FEE2E2);
+}
