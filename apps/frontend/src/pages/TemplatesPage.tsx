@@ -1,11 +1,9 @@
 /**
  * TemplatesPage - 템플릿 갤러리
  *
- * WorkspaceView와 동일한 레이아웃 구조:
- * - Header (글로벌 네비게이션)
- * - TopSection: Title + Description
- * - ControlSection: Search | RightControls(Sort, ViewToggle, CreateBtn)
- * - Grid: 4 columns, gapX=20, gapY=24
+ * 목적: 제공 템플릿에서 출발점 고르기
+ * - 사용자가 카드를 선택하면 해당 템플릿으로 새 Scene 시작
+ * - "새로 만들기" 버튼 제거 (템플릿 선택이 주 목적)
  */
 
 import { useState, useMemo, useCallback } from 'react';
@@ -18,14 +16,13 @@ import {
   SearchIcon,
   GridIcon,
   ListIcon,
-  PlusIcon,
   CubeIcon,
   LightbulbIcon,
   EmptyState,
 } from '../components/common';
 import './TemplatesPage.css';
 
-type SortOption = 'name' | 'assets';
+type SortOption = 'name' | 'recent';
 type ViewMode = 'grid' | 'list';
 
 // 템플릿 데이터 (DUMMY_SCENES 기반)
@@ -36,7 +33,7 @@ const TEMPLATES = DUMMY_SCENES.map((scene) => ({
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'name', label: '이름순' },
-  { value: 'assets', label: '오브젝트순' },
+  { value: 'recent', label: '최근 추가순' },
 ];
 
 /**
@@ -70,8 +67,9 @@ export default function TemplatesPage() {
     // 정렬
     result.sort((a, b) => {
       switch (sortBy) {
-        case 'assets':
-          return b.assets.length - a.assets.length;
+        case 'recent':
+          // ID 역순 (최근 추가 가정)
+          return String(b.id).localeCompare(String(a.id));
         case 'name':
         default:
           return a.name.localeCompare(b.name, 'ko');
@@ -88,10 +86,6 @@ export default function TemplatesPage() {
     [navigate]
   );
 
-  const handleCreateNew = useCallback(() => {
-    navigate('/edit', { state: { createNew: true } });
-  }, [navigate]);
-
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
   }, []);
@@ -106,10 +100,10 @@ export default function TemplatesPage() {
           <section className="templates__top">
             <div className="templates__title-row">
               <h1 className="templates__title">템플릿 갤러리</h1>
-              <span className="templates__count">{TEMPLATES.length}개</span>
+              <span className="templates__count">{TEMPLATES.length}개의 템플릿</span>
             </div>
             <p className="templates__desc">
-              기본 제공 템플릿으로 빠르게 시작하세요
+              기본 제공 템플릿으로 빠르게 새 공간을 시작하세요.
             </p>
           </section>
 
@@ -170,16 +164,6 @@ export default function TemplatesPage() {
                   <ListIcon size={16} />
                 </button>
               </div>
-
-              {/* CreateButton */}
-              <Button
-                variant="primary"
-                size="sm"
-                leftIcon={<PlusIcon size={16} />}
-                onClick={handleCreateNew}
-              >
-                새로 만들기
-              </Button>
             </div>
           </section>
 
@@ -210,25 +194,35 @@ export default function TemplatesPage() {
                         <div className="template-card__thumb-placeholder">
                           <span className="template-card__thumb-icon">{roomIcon}</span>
                         </div>
-                        <span className="template-card__badge">공식</span>
+                        <span className="template-card__badge">공식 템플릿</span>
                         <div className="template-card__overlay">
-                          <span className="template-card__use">사용하기</span>
+                          <button
+                            className="template-card__use-btn"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleTemplateClick(template);
+                            }}
+                          >
+                            이 템플릿으로 시작
+                          </button>
                         </div>
                       </div>
 
                       {/* Body */}
                       <div className="template-card__body">
                         <h3 className="template-card__title">{template.name}</h3>
+                        <p className="template-card__description">
+                          {template.description || '기본 제공 템플릿'}
+                        </p>
                         <div className="template-card__meta">
                           <span className="template-card__stat">
                             <CubeIcon size={12} />
-                            {furnitureCount}
+                            <span>가구 {furnitureCount}</span>
                           </span>
                           <span className="template-card__stat">
                             <LightbulbIcon size={12} />
-                            {lightCount}
+                            <span>조명 {lightCount}</span>
                           </span>
-                          <span className="template-card__author">{template.author}</span>
                         </div>
                       </div>
                     </article>
@@ -271,13 +265,12 @@ export default function TemplatesPage() {
                         <div className="template-card__meta">
                           <span className="template-card__stat">
                             <CubeIcon size={12} />
-                            {furnitureCount}
+                            <span>{furnitureCount}</span>
                           </span>
                           <span className="template-card__stat">
                             <LightbulbIcon size={12} />
-                            {lightCount}
+                            <span>{lightCount}</span>
                           </span>
-                          <span className="template-card__author">{template.author}</span>
                         </div>
                       </div>
 
@@ -289,7 +282,7 @@ export default function TemplatesPage() {
                           handleTemplateClick(template);
                         }}
                       >
-                        사용
+                        사용하기
                       </button>
                     </article>
                   );
@@ -311,14 +304,20 @@ export default function TemplatesPage() {
               />
             )}
 
-            {/* Info Section */}
-            <div className="templates__info">
-              <p className="templates__info-text">
-                템플릿을 선택하면 해당 공간으로 시뮬레이터가 열립니다.
-                <br />
-                원하는 대로 수정한 후 저장하면 내 공간으로 복사됩니다.
-              </p>
-            </div>
+            {/* Info Section - 템플릿 사용 방법 안내 */}
+            {filteredTemplates.length > 0 && (
+              <div className="templates__info">
+                <div className="templates__info-icon">🎯</div>
+                <div className="templates__info-content">
+                  <h4 className="templates__info-title">템플릿 사용 방법</h4>
+                  <p className="templates__info-text">
+                    템플릿을 선택하면 해당 공간이 시뮬레이터에서 열립니다.
+                    <br />
+                    원하는 대로 수정한 뒤 저장하면 내 작업공간에 새 장면으로 복사됩니다.
+                  </p>
+                </div>
+              </div>
+            )}
           </section>
         </div>
       </main>

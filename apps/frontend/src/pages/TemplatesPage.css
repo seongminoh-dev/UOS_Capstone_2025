@@ -1,23 +1,9 @@
 /**
- * TemplatesPage - WorkspaceView와 동일한 레이아웃
+ * TemplatesPage - 템플릿 갤러리 스타일
  *
- * Layout Specification:
- * ┌─────────────────────────────────────────────────────────────┐
- * │  MainWrapper: maxWidth=1280, paddingX=40, paddingTop=28     │
- * │                                                             │
- * │  TopSection: marginBottom=24                                │
- * │    - BackButton: 뒤로가기                                   │
- * │    - TitleRow: H1(24px) + Count Badge                      │
- * │    - Description: 14px, #666                               │
- * │                                                             │
- * │  ControlSection: marginBottom=24                            │
- * │    - SearchInput: width=260                                │
- * │    - RightControls: gap=12                                 │
- * │      [SortFilter] [ViewToggle] [CreateBtn]                 │
- * │                                                             │
- * │  Grid: columns=4, gapX=20, gapY=24                         │
- * │    [Card] [Card] [Card] [Card]                             │
- * └─────────────────────────────────────────────────────────────┘
+ * 목적: 제공 템플릿에서 출발점 고르기
+ * - Workspace와 유사하지만 CTA와 정보 구조가 다름
+ * - 카드 클릭 = 템플릿으로 새 Scene 시작
  */
 
 /* ============================================
@@ -49,7 +35,7 @@
   width: 100%;
   height: 100%;
   margin: 0 auto;
-  padding: 28px 40px 0;
+  padding: 32px 48px 0;
   overflow: hidden;
 }
 
@@ -58,37 +44,38 @@
    ============================================ */
 .templates__top {
   flex-shrink: 0;
-  margin-bottom: 24px;
+  margin-bottom: 28px;
 }
 
 .templates__title-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-bottom: 4px;
+  gap: 12px;
+  margin-bottom: 8px;
 }
 
 .templates__title {
-  font-size: 24px;
-  font-weight: 600;
+  font-size: 26px;
+  font-weight: 700;
   color: var(--text-primary);
   margin: 0;
   letter-spacing: -0.02em;
 }
 
 .templates__count {
-  padding: 3px 8px;
-  background: var(--bg-muted);
-  border-radius: 4px;
-  font-size: 12px;
-  font-weight: 500;
+  padding: 4px 10px;
+  background: rgba(0, 0, 0, 0.06); /* 톤 다운: accent-primary → 옅은 회색 */
   color: var(--text-secondary);
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 600;
 }
 
 .templates__desc {
-  font-size: 14px;
-  color: #666;
+  font-size: 15px;
+  color: var(--text-secondary);
   margin: 0;
+  line-height: 1.5;
 }
 
 /* ============================================
@@ -99,27 +86,18 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-/* ============================================
-   Scrollable Content Area
-   ============================================ */
-.templates__content {
-  flex: 1;
-  overflow-y: auto;
-  padding-bottom: 48px;
+  margin-bottom: 36px; /* 24px → 36px: 검색창과 그리드 사이 여백 증가 */
 }
 
 /* Search Input */
 .templates__search {
   position: relative;
-  width: 260px;
+  width: 280px;
 }
 
 .templates__search-icon {
   position: absolute;
-  left: 12px;
+  left: 14px;
   top: 50%;
   transform: translateY(-50%);
   color: var(--text-muted);
@@ -128,14 +106,14 @@
 
 .templates__search-input {
   width: 100%;
-  height: 36px;
-  padding: 0 36px 0 36px;
-  border: 1px solid #E5E5E5;
-  border-radius: 6px;
+  height: 40px;
+  padding: 0 40px 0 40px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   font-size: 14px;
   background: var(--bg-surface);
   color: var(--text-primary);
-  transition: border-color 0.15s;
+  transition: all 0.15s ease;
 }
 
 .templates__search-input:hover {
@@ -144,24 +122,25 @@
 
 .templates__search-input:focus {
   outline: none;
-  border-color: var(--text-primary);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
 }
 
 .templates__search-input::placeholder {
-  color: #999;
+  color: var(--text-muted);
 }
 
 .templates__search-clear {
   position: absolute;
-  right: 8px;
+  right: 10px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   border: none;
   background: var(--bg-muted);
   border-radius: 50%;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--text-secondary);
   cursor: pointer;
   display: flex;
@@ -183,19 +162,19 @@
 }
 
 .templates__select {
-  height: 36px;
-  padding: 0 32px 0 12px;
-  border: 1px solid #E5E5E5;
-  border-radius: 6px;
+  height: 40px;
+  padding: 0 36px 0 14px;
+  border: 1px solid var(--border-default);
+  border-radius: 8px;
   font-size: 14px;
   background: var(--bg-surface);
   color: var(--text-primary);
   cursor: pointer;
-  transition: border-color 0.15s;
+  transition: all 0.15s ease;
   appearance: none;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 10 10'%3E%3Cpath d='M2 3.5L5 6.5L8 3.5' stroke='%236B6B6B' stroke-width='1.2' stroke-linecap='round' stroke-linejoin='round' fill='none'/%3E%3C/svg%3E");
   background-repeat: no-repeat;
-  background-position: right 10px center;
+  background-position: right 12px center;
 }
 
 .templates__select:hover {
@@ -204,23 +183,23 @@
 
 .templates__select:focus {
   outline: none;
-  border-color: var(--text-primary);
+  border-color: var(--accent-primary);
 }
 
 /* View Toggle */
 .templates__view-toggle {
   display: flex;
   background: var(--bg-muted);
-  border-radius: 6px;
-  padding: 3px;
+  border-radius: 8px;
+  padding: 4px;
 }
 
 .templates__view-btn {
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   border: none;
   background: transparent;
-  border-radius: 4px;
+  border-radius: 6px;
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.15s;
@@ -236,23 +215,32 @@
 .templates__view-btn.is-active {
   background: var(--bg-surface);
   color: var(--text-primary);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
 }
 
 /* ============================================
-   Grid: 4 columns, gapX=20, gapY=24
+   Scrollable Content Area
+   ============================================ */
+.templates__content {
+  flex: 1;
+  overflow-y: auto;
+  padding-bottom: 48px;
+}
+
+/* ============================================
+   Grid: 3 columns (템플릿 갤러리용)
    ============================================ */
 .templates__grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 24px 20px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 32px; /* 24px → 32px: 카드 간격 소폭 증가 */
 }
 
 /* List View */
 .templates__list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 /* ============================================
@@ -261,27 +249,27 @@
 .template-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-default);
-  border-radius: 8px;
+  border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
   outline: none;
-  transition: border-color 0.15s, box-shadow 0.2s, transform 0.2s;
+  transition: all 0.2s ease;
 }
 
 .template-card:hover {
-  border-color: var(--border-hover);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  transform: translateY(-2px);
+  border-color: var(--accent-primary);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
+  transform: translateY(-4px);
 }
 
 .template-card:focus-visible {
-  box-shadow: 0 0 0 2px var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.3);
 }
 
 /* Thumbnail */
 .template-card__thumb {
   position: relative;
-  aspect-ratio: 3 / 2;
+  aspect-ratio: 16 / 10;
   background: var(--bg-muted);
   overflow: hidden;
 }
@@ -292,85 +280,112 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, var(--bg-muted) 0%, var(--bg-subtle) 100%);
+  background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
 .template-card__thumb-icon {
-  font-size: 28px;
-  opacity: 0.4;
+  font-size: 42px;
+  opacity: 0.5;
+  transition: all 0.2s ease;
+}
+
+.template-card:hover .template-card__thumb-icon {
+  transform: scale(1.1);
+  opacity: 0.7;
 }
 
 /* Badge */
 .template-card__badge {
   position: absolute;
-  top: 8px;
-  left: 8px;
-  padding: 3px 8px;
-  background: rgba(82, 82, 82, 0.9);
+  top: 12px;
+  left: 12px;
+  padding: 5px 10px;
+  background: rgba(0, 0, 0, 0.75);
   color: #fff;
   font-size: 11px;
-  font-weight: 500;
-  border-radius: 4px;
+  font-weight: 600;
+  border-radius: 6px;
   backdrop-filter: blur(4px);
+  letter-spacing: 0.02em;
 }
 
-/* Overlay */
+/* Overlay with Use Button */
 .template-card__overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.6);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.2s;
+  transition: opacity 0.2s ease;
 }
 
 .template-card:hover .template-card__overlay {
   opacity: 1;
 }
 
-.template-card__use {
-  padding: 8px 20px;
-  background: var(--bg-surface);
+.template-card__use-btn {
+  padding: 12px 24px;
+  background: #fff;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
-  border-radius: 6px;
-  transition: all 0.15s;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease; /* 0.15s → 0.2s: 부드러운 전환 */
+  transform: translateY(8px);
+  opacity: 0; /* 초기 상태에서 투명 */
 }
 
-.template-card:hover .template-card__use:hover {
+.template-card:hover .template-card__use-btn {
+  transform: translateY(0);
+  opacity: 1; /* hover 시 나타남 */
+}
+
+.template-card__use-btn:hover {
   background: var(--accent-primary);
   color: #fff;
 }
 
 /* Body */
 .template-card__body {
-  padding: 12px;
+  padding: 16px;
 }
 
 .template-card__title {
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+.template-card__description {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin: 0 0 12px 0;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
 .template-card__meta {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 16px;
 }
 
 .template-card__stat {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  font-size: 12px;
+  gap: 5px;
+  font-size: 13px;
   color: var(--text-secondary);
 }
 
@@ -390,9 +405,10 @@
 .template-card--list {
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 12px;
+  gap: 16px;
+  padding: 16px;
   transform: none;
+  border-radius: 10px;
 }
 
 .template-card--list:hover {
@@ -403,18 +419,20 @@
 
 /* List Thumbnail */
 .template-card__thumb--sm {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   aspect-ratio: auto;
-  border-radius: 6px;
+  border-radius: 10px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: linear-gradient(145deg, #f8f9fa 0%, #e9ecef 100%);
 }
 
 .template-card__thumb--sm .template-card__thumb-icon {
-  font-size: 18px;
+  font-size: 24px;
+  opacity: 0.6;
 }
 
 /* List Body */
@@ -427,36 +445,37 @@
 .template-card__title-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 4px;
+  gap: 10px;
+  margin-bottom: 6px;
 }
 
 .template-card--list .template-card__title {
   margin: 0;
+  font-size: 15px;
 }
 
 .template-card__label {
   flex-shrink: 0;
-  padding: 2px 6px;
+  padding: 3px 8px;
   font-size: 11px;
-  font-weight: 500;
-  background: #F0F0F0;
-  color: #525252;
+  font-weight: 600;
+  background: var(--accent-primary);
+  color: #fff;
   border-radius: 4px;
 }
 
 /* List Action */
 .template-card__action {
-  padding: 6px 14px;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--accent-primary);
-  background: transparent;
-  border: 1px solid var(--accent-primary);
-  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--accent-primary);
+  border: none;
+  border-radius: 8px;
   cursor: pointer;
   opacity: 0;
-  transition: all 0.15s;
+  transition: all 0.15s ease;
 }
 
 .template-card--list:hover .template-card__action {
@@ -464,19 +483,40 @@
 }
 
 .template-card__action:hover {
-  background: var(--accent-primary);
-  color: #fff;
+  background: var(--accent-primary-hover, #2563eb);
+  transform: scale(1.02);
 }
 
 /* ============================================
-   Info Section
+   Info Section - 템플릿 사용 방법 안내
    ============================================ */
 .templates__info {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
   margin-top: 40px;
-  padding: 24px;
-  background: var(--bg-muted);
-  border-radius: 8px;
-  text-align: center;
+  padding: 20px 24px;
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04); /* 약한 그림자로 depth 추가 */
+}
+
+.templates__info-icon {
+  font-size: 24px;
+  flex-shrink: 0;
+  line-height: 1;
+}
+
+.templates__info-content {
+  flex: 1;
+}
+
+.templates__info-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px 0;
 }
 
 .templates__info-text {
@@ -491,7 +531,7 @@
    ============================================ */
 @media (max-width: 1200px) {
   .templates__grid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 }
 
@@ -502,6 +542,7 @@
 
   .templates__grid {
     grid-template-columns: repeat(2, 1fr);
+    gap: 20px;
   }
 }
 
@@ -519,11 +560,21 @@
   .templates__right-controls {
     justify-content: space-between;
   }
+
+  .templates__info {
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+  }
 }
 
 @media (max-width: 600px) {
   .templates__inner {
     padding: 20px 16px 32px;
+  }
+
+  .templates__title {
+    font-size: 22px;
   }
 
   .templates__grid {
@@ -534,5 +585,9 @@
   .templates__right-controls {
     flex-wrap: wrap;
     gap: 8px;
+  }
+
+  .template-card__thumb {
+    aspect-ratio: 16 / 9;
   }
 }
