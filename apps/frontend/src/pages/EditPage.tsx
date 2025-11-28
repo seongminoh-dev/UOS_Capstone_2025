@@ -1,10 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import Header from '../components/Header';
 import ThreeRenderer from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
-import { useToast, Modal, Button } from '../components/common';
-import { AssetInspector } from '../components/edit';
+import { useToast, Modal, Button, Tabs } from '../components/common';
+import { AssetInspector, EditPageHeader } from '../components/edit';
 import type { SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams, RoomSettings } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
@@ -17,7 +16,7 @@ export default function EditPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [activeTab, setActiveTab] = useState<'info' | 'objects' | 'lights'>('info');
+  const [activeTab, setActiveTab] = useState<'all' | 'furniture' | 'lights' | 'info'>('all');
   const [furnitureSubTab, setFurnitureSubTab] = useState<FurnitureSubCategory>('seating');
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
@@ -519,18 +518,16 @@ export default function EditPage() {
 
   return (
     <>
-      <Header />
-
-      {/* Scene 선택 모달 */}
+      {/* 공간 선택 모달 */}
       <Modal
         isOpen={showSceneSelectModal}
         onClose={() => navigate('/simulator')}
-        title="Scene 선택"
+        title="공간 선택"
         size="md"
       >
         <div className="scene-select-modal">
           <p className="scene-select-modal__description">
-            편집할 Scene을 선택하거나 새로 만드세요.
+            편집할 공간을 선택하거나 새로 만드세요.
           </p>
 
           <Button
@@ -538,7 +535,7 @@ export default function EditPage() {
             fullWidth
             onClick={handleOpenCreateSceneModal}
           >
-            새 Scene 만들기
+            새 공간 만들기
           </Button>
 
           {scenes.length > 0 && (
@@ -547,7 +544,7 @@ export default function EditPage() {
 
               <div className="scene-select-modal__list">
                 <h3 className="scene-select-modal__subtitle">
-                  기존 Scene 불러오기
+                  기존 공간 불러오기
                 </h3>
                 {scenes.map((s) => (
                   <button
@@ -556,7 +553,7 @@ export default function EditPage() {
                     onClick={() => handleSelectFromList(s)}
                   >
                     <div className="scene-select-modal__item-info">
-                      <span className="scene-select-modal__item-icon">🎬</span>
+                      <span className="scene-select-modal__item-icon">🏠</span>
                       <span className="scene-select-modal__item-name">{s.name}</span>
                     </div>
                     <span className="scene-select-modal__item-action">선택</span>
@@ -568,11 +565,11 @@ export default function EditPage() {
         </div>
       </Modal>
 
-      {/* 새 Scene 생성 모달 */}
+      {/* 새 공간 생성 모달 */}
       <Modal
         isOpen={showCreateSceneModal}
         onClose={() => navigate('/simulator')}
-        title="새 Scene 만들기"
+        title="새 공간 만들기"
         size="md"
         footer={
           <>
@@ -587,13 +584,13 @@ export default function EditPage() {
       >
         <div className="create-scene-modal">
           <div className="form-group">
-            <label className="form-label">Scene 이름 *</label>
+            <label className="form-label">공간 이름 *</label>
             <input
               type="text"
               className="form-input"
               value={newSceneName}
               onChange={(e) => setNewSceneName(e.target.value)}
-              placeholder="Scene 이름을 입력하세요"
+              placeholder="공간 이름을 입력하세요"
               autoFocus
             />
           </div>
@@ -601,7 +598,7 @@ export default function EditPage() {
           <div className="form-group">
             <label className="form-label">방 선택 *</label>
             <p className="form-hint">
-              방은 Scene 생성 후 변경할 수 없습니다.
+              방은 공간 생성 후 변경할 수 없습니다.
             </p>
             <div className="room-select-grid">
               {availableRooms.map((room) => (
@@ -627,17 +624,27 @@ export default function EditPage() {
               className="form-textarea"
               value={newSceneDescription}
               onChange={(e) => setNewSceneDescription(e.target.value)}
-              placeholder="Scene에 대한 설명을 입력하세요 (선택사항)"
+              placeholder="공간에 대한 설명을 입력하세요 (선택사항)"
               rows={3}
             />
           </div>
         </div>
       </Modal>
 
-      <div className="edit-container">
-        <div className="edit-layout">
+      <div className="edit-page">
+        {/* Header */}
+        <EditPageHeader
+          title={editingScene?.name || '공간'}
+          status={isDirty ? 'modified' : 'synced'}
+          onBack={handleCancel}
+          onCancel={handleCancel}
+          onSave={handleSaveAndExit}
+          canSave={isDirty}
+        />
+
+        <div className="edit-page__layout">
           {/* Left side - Three.js Canvas (미리보기) */}
-          <div className="preview-canvas" style={{ position: 'relative' }}>
+          <div className="edit-page__canvas">
             <ErrorBoundary
               key={rendererKey}
               fallbackTitle="Three.js 렌더링 오류"
@@ -670,368 +677,273 @@ export default function EditPage() {
           </div>
 
           {/* Right side - Edit Panel */}
-          <div className="edit-panel">
-            <div className="edit-panel-header">
-              <h1 className="edit-title">{editingScene?.name || 'Scene'} 편집</h1>
-              <p className="edit-subtitle">
-                가구와 조명을 배치하고 실시간으로 확인하세요
-              </p>
+          <div className="edit-page__panel">
+            {/* Tabs - 언더라인 스타일 */}
+            <div className="edit-page__tabs">
+              <Tabs value={activeTab} onChange={(v) => setActiveTab(v as 'all' | 'furniture' | 'lights' | 'info')} variant="underline">
+                <Tabs.List>
+                  <Tabs.Tab value="all">전체</Tabs.Tab>
+                  <Tabs.Tab value="furniture">가구</Tabs.Tab>
+                  <Tabs.Tab value="lights">조명</Tabs.Tab>
+                  <Tabs.Tab value="info">정보</Tabs.Tab>
+                </Tabs.List>
 
-              {/* Tab Navigation */}
-              <div className="edit-tab-nav">
-                <button
-                  className={`edit-tab-button ${activeTab === 'info' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('info')}
-                >
-                  Scene 정보
-                </button>
-                <button
-                  className={`edit-tab-button ${activeTab === 'objects' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('objects')}
-                >
-                  가구
-                </button>
-                <button
-                  className={`edit-tab-button ${activeTab === 'lights' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('lights')}
-                >
-                  조명
-                </button>
-              </div>
-            </div>
+                {/* 전체 탭 - 모든 배치된 오브젝트 리스트 */}
+                <Tabs.Panel value="all">
+                  <div className="edit-section">
+                    <div className="edit-section__subtitle">배치된 오브젝트</div>
+                    <div className="edit-section__list">
+                      {/* 가구 */}
+                      {objectAssets
+                        .filter((asset) => {
+                          const required = asset.meshName ? isRequiredAsset(asset.meshName) : false;
+                          return !required;
+                        })
+                        .map((asset) => {
+                          const metadata = asset.meshName ? getAssetMetadata(asset.meshName) : null;
+                          const isSelected = selectedAssetId === asset.id;
 
-            <div className="edit-panel-content">
-              {activeTab === 'info' && (
-                <div className="edit-section">
-                  <h3 className="section-title">기본 정보</h3>
-
-                  <div className="form-group">
-                    <label className="form-label">Scene 이름</label>
-                    <input
-                      type="text"
-                      className="form-input"
-                      value={editingScene?.name || ''}
-                      onChange={handleSceneNameChange}
-                      placeholder="Scene 이름을 입력하세요"
-                    />
-                  </div>
-
-                  <div className="form-group">
-                    <label className="form-label">설명</label>
-                    <textarea
-                      className="form-textarea"
-                      value={editingScene?.description || ''}
-                      onChange={handleSceneDescriptionChange}
-                      placeholder="Scene 설명을 입력하세요"
-                      rows={3}
-                    />
-                  </div>
-
-                  <div className="divider"></div>
-
-                  <h3 className="section-title">
-                    기본 방
-                    <span className="section-badge">변경 불가</span>
-                  </h3>
-                  <p className="section-subtitle">
-                    방은 Scene 생성 시에만 선택할 수 있습니다.
-                  </p>
-
-                  {/* 현재 선택된 방 표시 (읽기 전용) */}
-                  {editingScene?.room && (() => {
-                    const currentRoomMeta = getAssetMetadata(editingScene.room.meshName);
-                    return (
-                      <div className="room-display">
-                        <span className="room-display__icon">
-                          {currentRoomMeta?.icon || '🏠'}
-                        </span>
-                        <div className="room-display__info">
-                          <div className="room-display__name">
-                            {currentRoomMeta?.name || editingScene.room.meshName}
-                          </div>
-                          {currentRoomMeta?.description && (
-                            <div className="room-display__description">
-                              {currentRoomMeta.description}
+                          return (
+                            <div
+                              key={asset.id}
+                              className={`edit-section__list-item ${isSelected ? 'edit-section__list-item--selected' : ''}`}
+                              onClick={() => setSelectedAssetId(asset.id)}
+                            >
+                              <div className="edit-section__list-info">
+                                <span className="edit-section__list-icon">{metadata?.icon || '📦'}</span>
+                                <span className="edit-section__list-name">
+                                  {metadata?.name || asset.meshName}
+                                </span>
+                              </div>
+                              <button
+                                className="edit-section__list-delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAssetById(asset.id);
+                                }}
+                              >
+                                ✕
+                              </button>
                             </div>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-
-              {activeTab === 'objects' && (
-                <div className="edit-section">
-                  <h3 className="section-title">가구 추가</h3>
-
-                  {/* 가구 서브카테고리 탭 */}
-                  <div className="furniture-subtab-nav">
-                    {(['seating', 'table', 'storage', 'bed', 'other'] as FurnitureSubCategory[]).map((sub) => (
-                      <button
-                        key={sub}
-                        className={`furniture-subtab-button ${furnitureSubTab === sub ? 'active' : ''}`}
-                        onClick={() => setFurnitureSubTab(sub)}
-                      >
-                        {sub === 'seating' && '앉는 가구'}
-                        {sub === 'table' && '테이블'}
-                        {sub === 'storage' && '수납'}
-                        {sub === 'bed' && '침대'}
-                        {sub === 'other' && '기타'}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="object-grid">
-                    {getFurnitureBySubCategory(furnitureSubTab).map((asset) => (
-                      <button
-                        key={asset.meshName}
-                        className="object-add-button"
-                        onClick={() => handleAddObject(asset.meshName)}
-                      >
-                        <span className="object-icon">{asset.icon || '📦'}</span>
-                        <span>{asset.name}</span>
-                      </button>
-                    ))}
-                    {getFurnitureBySubCategory(furnitureSubTab).length === 0 && (
-                      <div className="empty-state">이 카테고리에는 아직 가구가 없습니다</div>
-                    )}
-                  </div>
-
-                  <div className="divider"></div>
-
-                  {/* 장식 카테고리 */}
-                  <h3 className="section-title">장식 추가</h3>
-                  <div className="object-grid">
-                    {getAssetsByCategory('decoration').map((asset) => (
-                      <button
-                        key={asset.meshName}
-                        className="object-add-button"
-                        onClick={() => handleAddObject(asset.meshName)}
-                      >
-                        <span className="object-icon">{asset.icon || '🎨'}</span>
-                        <span>{asset.name}</span>
-                      </button>
-                    ))}
-                  </div>
-
-                  <div className="divider"></div>
-
-                  <h3 className="section-title">배치된 오브젝트</h3>
-                  <div className="object-list">
-                    {objectAssets
-                      .filter((asset) => {
-                        // 필수 에셋(defaultRoom)은 Scene 정보 탭에서 관리하므로 여기서 제외
+                          );
+                        })}
+                      {/* 조명 */}
+                      {lightAssets
+                        .filter((a) => a.type === 'point-light' || a.type === 'rect-light')
+                        .map((asset) => {
+                          const isSelected = selectedAssetId === asset.id;
+                          return (
+                            <div
+                              key={asset.id}
+                              className={`edit-section__list-item ${isSelected ? 'edit-section__list-item--selected' : ''}`}
+                              onClick={() => setSelectedAssetId(asset.id)}
+                            >
+                              <div className="edit-section__list-info">
+                                <span className="edit-section__list-icon">
+                                  {asset.type === 'point-light' ? '💡' : '🔲'}
+                                </span>
+                                <span className="edit-section__list-name">
+                                  {asset.type === 'point-light' ? '포인트 조명' : '면광원'}
+                                </span>
+                              </div>
+                              <button
+                                className="edit-section__list-delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAssetById(asset.id);
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      {objectAssets.filter((asset) => {
                         const required = asset.meshName ? isRequiredAsset(asset.meshName) : false;
                         return !required;
-                      })
-                      .map((asset) => {
-                        const metadata = asset.meshName ? getAssetMetadata(asset.meshName) : null;
-                        const isSelected = selectedAssetId === asset.id;
-
-                        return (
-                          <div
-                            key={asset.id}
-                            className={`asset-list-item ${isSelected ? 'asset-list-item--selected' : ''}`}
-                            onClick={() => setSelectedAssetId(asset.id)}
-                          >
-                            <div className="asset-list-item__info">
-                              <span className="asset-list-item__icon">{metadata?.icon || '📦'}</span>
-                              <span className="asset-list-item__name">
-                                {metadata?.name || asset.meshName}
-                              </span>
-                            </div>
-                            <button
-                              className="asset-list-item__delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteAssetById(asset.id);
-                              }}
-                            >
-                              ✕
-                            </button>
-                          </div>
-                        );
-                      })}
-                    {objectAssets.filter((asset) => {
-                      const required = asset.meshName ? isRequiredAsset(asset.meshName) : false;
-                      return !required;
-                    }).length === 0 && (
-                      <div className="empty-state">오브젝트를 추가해보세요</div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {activeTab === 'lights' && (
-                <div className="edit-section">
-                  {/* 태양광 설정 */}
-                  <h3 className="section-title">태양광 설정 (기본 조명)</h3>
-                  <p className="section-subtitle">
-                    기본 태양광은 삭제 및 직접 수정이 불가능합니다. 시간대, 계절, 방향만 조절할 수 있습니다.
-                  </p>
-
-                  {/* 시간대 (낮/밤) */}
-                  <div className="form-group">
-                    <label className="form-label">시간대</label>
-                    <div className="button-group">
-                      <button
-                        className={`toggle-button ${editingScene?.sunSettings.isDaytime ? 'active' : ''}`}
-                        onClick={() => handleDaytimeToggle(true)}
-                      >
-                        낮
-                      </button>
-                      <button
-                        className={`toggle-button ${!editingScene?.sunSettings.isDaytime ? 'active' : ''}`}
-                        onClick={() => handleDaytimeToggle(false)}
-                      >
-                        밤
-                      </button>
+                      }).length === 0 && lightAssets.filter((a) => a.type === 'point-light' || a.type === 'rect-light').length === 0 && (
+                        <div className="edit-section__empty">오브젝트를 추가해보세요</div>
+                      )}
                     </div>
                   </div>
+                </Tabs.Panel>
 
-                  {/* 시간 슬라이더 (6~18시, 낮에만 활성화) */}
-                  <div className="form-group">
-                    <label className="form-label">
-                      시간: {editingScene?.sunSettings.isDaytime
-                        ? `${Math.round(6 + (editingScene?.sunSettings.timeOfDay || 50) * 12 / 100)}시`
-                        : '(밤 시간대)'
-                      }
-                    </label>
-                    <input
-                      type="range"
-                      min="0"
-                      max="100"
-                      value={editingScene?.sunSettings.timeOfDay || 50}
-                      onChange={(e) => handleSunTimeChange(Number(e.target.value))}
-                      className="range-slider"
-                      disabled={!editingScene?.sunSettings.isDaytime}
-                    />
-                    <div className="range-labels">
-                      <span>6시 (일출)</span>
-                      <span>18시 (일몰)</span>
+                {/* 가구 탭 */}
+                <Tabs.Panel value="furniture">
+                  <div className="edit-section">
+                    <div className="edit-section__subtitle">가구 추가</div>
+
+                    {/* 가구 서브카테고리 */}
+                    <div className="edit-section__subtabs">
+                      {(['seating', 'table', 'storage', 'bed', 'other'] as FurnitureSubCategory[]).map((sub) => (
+                        <button
+                          key={sub}
+                          className={`edit-section__subtab ${furnitureSubTab === sub ? 'edit-section__subtab--active' : ''}`}
+                          onClick={() => setFurnitureSubTab(sub)}
+                        >
+                          {sub === 'seating' && '앉는 가구'}
+                          {sub === 'table' && '테이블'}
+                          {sub === 'storage' && '수납'}
+                          {sub === 'bed' && '침대'}
+                          {sub === 'other' && '기타'}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="edit-section__grid">
+                      {getFurnitureBySubCategory(furnitureSubTab).map((asset) => (
+                        <button
+                          key={asset.meshName}
+                          className="edit-section__add-btn"
+                          onClick={() => handleAddObject(asset.meshName)}
+                        >
+                          <span className="edit-section__add-icon">{asset.icon || '📦'}</span>
+                          <span className="edit-section__add-name">{asset.name}</span>
+                        </button>
+                      ))}
+                      {getFurnitureBySubCategory(furnitureSubTab).length === 0 && (
+                        <div className="edit-section__empty">이 카테고리에는 아직 가구가 없습니다</div>
+                      )}
+                    </div>
+
+                    <div className="edit-section__divider" />
+
+                    <div className="edit-section__subtitle">장식 추가</div>
+                    <div className="edit-section__grid">
+                      {getAssetsByCategory('decoration').map((asset) => (
+                        <button
+                          key={asset.meshName}
+                          className="edit-section__add-btn"
+                          onClick={() => handleAddObject(asset.meshName)}
+                        >
+                          <span className="edit-section__add-icon">{asset.icon || '🎨'}</span>
+                          <span className="edit-section__add-name">{asset.name}</span>
+                        </button>
+                      ))}
                     </div>
                   </div>
+                </Tabs.Panel>
 
-                  {/* 계절 */}
-                  <div className="form-group">
-                    <label className="form-label">계절</label>
-                    <select
-                      value={editingScene?.sunSettings.season || 'summer'}
-                      onChange={(e) => handleSeasonChange(e.target.value as any)}
-                      className="form-select"
-                    >
-                      <option value="spring">봄</option>
-                      <option value="summer">여름</option>
-                      <option value="autumn">가을</option>
-                      <option value="winter">겨울</option>
-                    </select>
-                  </div>
+                {/* 조명 탭 */}
+                <Tabs.Panel value="lights">
+                  <div className="edit-section">
+                    <div className="edit-section__subtitle">조명 추가</div>
+                    <p className="edit-section__hint">위치, 색상, 강도를 직접 조절할 수 있습니다.</p>
 
-                  {/* 방 방향 */}
-                  <div className="form-group">
-                    <label className="form-label">방 방향</label>
-                    <select
-                      value={editingScene?.sunSettings.roomOrientation || 'south'}
-                      onChange={(e) => handleRoomOrientationChange(e.target.value as any)}
-                      className="form-select"
-                    >
-                      <option value="east">동향</option>
-                      <option value="west">서향</option>
-                      <option value="south">남향</option>
-                      <option value="north">북향</option>
-                    </select>
-                  </div>
+                    <div className="edit-section__grid">
+                      <button
+                        className="edit-section__add-btn"
+                        onClick={() => handleAddLight('point-light')}
+                      >
+                        <span className="edit-section__add-icon">💡</span>
+                        <span className="edit-section__add-name">포인트 조명</span>
+                      </button>
+                      <button
+                        className="edit-section__add-btn"
+                        onClick={() => handleAddLight('rect-light')}
+                      >
+                        <span className="edit-section__add-icon">🔲</span>
+                        <span className="edit-section__add-name">면광원</span>
+                      </button>
+                    </div>
 
-                  <div className="divider"></div>
+                    <div className="edit-section__divider" />
 
-                  {/* 추가 조명 */}
-                  <h3 className="section-title">추가 조명</h3>
-                  <p className="section-subtitle">자유롭게 추가/삭제 가능한 조명입니다. 위치, 색상, 강도 등을 직접 조절할 수 있습니다.</p>
-
-                  <div className="light-grid">
-                    <button
-                      className="light-add-button"
-                      onClick={() => handleAddLight('directional-light')}
-                    >
-                      <span className="light-icon">☀️</span>
-                      <span>평행광</span>
-                    </button>
-                    <button
-                      className="light-add-button"
-                      onClick={() => handleAddLight('point-light')}
-                    >
-                      <span className="light-icon">💡</span>
-                      <span>포인트 라이트</span>
-                    </button>
-                    <button
-                      className="light-add-button"
-                      onClick={() => handleAddLight('rect-light')}
-                    >
-                      <span className="light-icon">🔲</span>
-                      <span>면광원</span>
-                    </button>
-                  </div>
-
-                  <div className="divider"></div>
-
-                  <h3 className="section-title">배치된 추가 조명</h3>
-                  <div className="light-list">
-                    {lightAssets
-                      .filter((a) => a.type === 'directional-light' || a.type === 'point-light' || a.type === 'rect-light')
-                      .map((asset) => {
-                        const isSelected = selectedAssetId === asset.id;
-                        return (
-                          <div
-                            key={asset.id}
-                            className={`asset-list-item ${isSelected ? 'asset-list-item--selected' : ''}`}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedAssetId(asset.id);
-                            }}
-                          >
-                            <div className="asset-list-item__info">
-                              <span className="asset-list-item__icon">
-                                {asset.type === 'directional-light' ? '☀️' : asset.type === 'point-light' ? '💡' : '🔲'}
-                              </span>
-                              <span className="asset-list-item__name">
-                                {asset.type === 'directional-light' ? '평행광' : asset.type === 'point-light' ? 'PointLight' : 'RectLight'}
-                              </span>
-                            </div>
-                            <button
-                              className="asset-list-item__delete"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleDeleteAssetById(asset.id);
-                              }}
+                    <div className="edit-section__subtitle">배치된 조명</div>
+                    <div className="edit-section__list">
+                      {lightAssets
+                        .filter((a) => a.type === 'point-light' || a.type === 'rect-light')
+                        .map((asset) => {
+                          const isSelected = selectedAssetId === asset.id;
+                          return (
+                            <div
+                              key={asset.id}
+                              className={`edit-section__list-item ${isSelected ? 'edit-section__list-item--selected' : ''}`}
+                              onClick={() => setSelectedAssetId(asset.id)}
                             >
-                              ✕
-                            </button>
+                              <div className="edit-section__list-info">
+                                <span className="edit-section__list-icon">
+                                  {asset.type === 'point-light' ? '💡' : '🔲'}
+                                </span>
+                                <span className="edit-section__list-name">
+                                  {asset.type === 'point-light' ? '포인트 조명' : '면광원'}
+                                </span>
+                              </div>
+                              <button
+                                className="edit-section__list-delete"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDeleteAssetById(asset.id);
+                                }}
+                              >
+                                ✕
+                              </button>
+                            </div>
+                          );
+                        })}
+                      {lightAssets.filter((a) => a.type === 'point-light' || a.type === 'rect-light').length === 0 && (
+                        <div className="edit-section__empty">조명을 추가해보세요</div>
+                      )}
+                    </div>
+                  </div>
+                </Tabs.Panel>
+
+                {/* 정보 탭 */}
+                <Tabs.Panel value="info">
+                  <div className="edit-section">
+                    <div className="edit-section__group">
+                      <label className="edit-section__label">공간 이름</label>
+                      <input
+                        type="text"
+                        className="edit-section__input"
+                        value={editingScene?.name || ''}
+                        onChange={handleSceneNameChange}
+                        placeholder="공간 이름을 입력하세요"
+                      />
+                    </div>
+
+                    <div className="edit-section__group">
+                      <label className="edit-section__label">설명</label>
+                      <textarea
+                        className="edit-section__textarea"
+                        value={editingScene?.description || ''}
+                        onChange={handleSceneDescriptionChange}
+                        placeholder="공간 설명을 입력하세요"
+                        rows={3}
+                      />
+                    </div>
+
+                    <div className="edit-section__divider" />
+
+                    <div className="edit-section__group">
+                      <div className="edit-section__label-row">
+                        <label className="edit-section__label">방 타입</label>
+                        <span className="edit-section__badge">변경 불가</span>
+                      </div>
+                      {editingScene?.room && (() => {
+                        const currentRoomMeta = getAssetMetadata(editingScene.room.meshName);
+                        return (
+                          <div className="edit-section__room-display">
+                            <span className="edit-section__room-icon">
+                              {currentRoomMeta?.icon || '🏠'}
+                            </span>
+                            <div className="edit-section__room-info">
+                              <div className="edit-section__room-name">
+                                {currentRoomMeta?.name || editingScene.room.meshName}
+                              </div>
+                              {currentRoomMeta?.description && (
+                                <div className="edit-section__room-desc">
+                                  {currentRoomMeta.description}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         );
-                      })}
-                    {lightAssets.filter((a) => a.type === 'directional-light' || a.type === 'point-light' || a.type === 'rect-light').length === 0 && (
-                      <div className="empty-state">추가 조명이 없습니다</div>
-                    )}
+                      })()}
+                    </div>
                   </div>
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            <div className="edit-actions">
-              <Button variant="secondary" onClick={handleCancel}>
-                취소
-              </Button>
-              <Button
-                variant="primary"
-                onClick={handleSave}
-                disabled={!isDirty}
-              >
-                저장
-              </Button>
-              <Button variant="primary" onClick={handleSaveAndExit}>
-                저장 후 나가기
-              </Button>
+                </Tabs.Panel>
+              </Tabs>
             </div>
           </div>
         </div>

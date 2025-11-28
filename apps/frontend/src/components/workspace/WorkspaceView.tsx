@@ -274,19 +274,21 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
                   isRecentlyModified={recentlyModifiedIds.has(scene.id)}
                 />
               ))}
-              {/* AddNewCard (dashed) */}
-              <div
-                className="workspace__add-card"
-                onClick={handleCreateNew}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => e.key === 'Enter' && handleCreateNew()}
-              >
-                <div className="workspace__add-icon">
-                  <PlusIcon size={24} />
+              {/* AddNewCard (dashed) - 3개 이하일 때만 표시 */}
+              {filteredScenes.length < 4 && (
+                <div
+                  className="workspace__add-card"
+                  onClick={handleCreateNew}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateNew()}
+                >
+                  <div className="workspace__add-icon">
+                    <PlusIcon size={24} />
+                  </div>
+                  <span className="workspace__add-label">새 공간 만들기</span>
                 </div>
-                <span className="workspace__add-label">새 공간 만들기</span>
-              </div>
+              )}
             </div>
           )}
 

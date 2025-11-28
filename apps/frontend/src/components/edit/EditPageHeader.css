@@ -1,15 +1,15 @@
 /**
- * LightSimulatorHeader - 조명 시뮬레이터 헤더 스타일
+ * EditPageHeader - Edit 페이지 헤더 스타일
  *
  * 두 줄 레이아웃:
- * ┌──────────────────────────────────────────────────────────────┐
- * │ ← Workspace                                                  │  ← 상단 (36px)
- * ├──────────────────────────────────────────────────────────────┤
- * │ Scene 제목 [상태뱃지]                [씬 편집] [저장]         │  ← 하단 (44px)
- * └──────────────────────────────────────────────────────────────┘
+ * ┌──────────────────────────────────────────────────────────┐
+ * │ ← Simulator                                              │  ← 상단 (36px)
+ * ├──────────────────────────────────────────────────────────┤
+ * │ 공간 이름 [상태뱃지]                        [취소] [저장] │  ← 하단 (48px)
+ * └──────────────────────────────────────────────────────────┘
  */
 
-.panel-header-v2 {
+.edit-header {
   display: flex;
   flex-direction: column;
   background: var(--bg-surface);
@@ -19,7 +19,7 @@
 }
 
 /* Dirty 상태일 때 하단 메인 영역만 좌측 강조 */
-.panel-header-v2--dirty .header__main {
+.edit-header--dirty .edit-header__main {
   border-left: 3px solid #F59E0B;
   padding-left: 17px; /* 20px - 3px border */
 }
@@ -27,7 +27,7 @@
 /* ============================================
    Top Row: Navigation
    ============================================ */
-.header__nav {
+.edit-header__nav {
   display: flex;
   align-items: center;
   height: 36px;
@@ -35,7 +35,7 @@
   border-bottom: 1px solid var(--border-default);
 }
 
-.header__back-btn {
+.edit-header__back-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -51,19 +51,19 @@
   transition: all 0.15s ease;
 }
 
-.header__back-btn:hover {
+.edit-header__back-btn:hover {
   color: var(--text-primary);
   background: var(--bg-muted);
 }
 
-.header__back-btn svg {
+.edit-header__back-btn svg {
   flex-shrink: 0;
 }
 
 /* ============================================
    Bottom Row: Title + Actions
    ============================================ */
-.header__main {
+.edit-header__main {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -72,7 +72,7 @@
   padding: 0 20px;
 }
 
-.header__left {
+.edit-header__left {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -80,7 +80,7 @@
   flex: 1;
 }
 
-.header__title {
+.edit-header__title {
   font-size: 15px;
   font-weight: 600;
   color: var(--text-primary);
@@ -93,7 +93,7 @@
 /* ============================================
    Badge
    ============================================ */
-.header__badge {
+.edit-header__badge {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -105,41 +105,20 @@
   line-height: 1;
 }
 
-.header__badge--synced {
+.edit-header__badge--synced {
   background: #EAEAEA;
   color: #666;
 }
 
-.header__badge--modified {
+.edit-header__badge--modified {
   background: #FEF3C7;
   color: #92400E;
-}
-
-.header__badge--rendering {
-  background: #DBEAFE;
-  color: #1D4ED8;
-}
-
-/* Spinner */
-.header__spinner {
-  width: 8px;
-  height: 8px;
-  border: 1.5px solid currentColor;
-  border-top-color: transparent;
-  border-radius: 50%;
-  animation: header-spin 0.8s linear infinite;
-}
-
-@keyframes header-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
 
 /* ============================================
    Action Buttons
    ============================================ */
-.header__actions {
+.edit-header__actions {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -147,7 +126,7 @@
 }
 
 /* Base Button Style */
-.header__btn {
+.edit-header__btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -163,34 +142,34 @@
   white-space: nowrap;
 }
 
-.header__btn:disabled {
+.edit-header__btn:disabled {
   opacity: 0.4;
   cursor: not-allowed;
 }
 
-.header__btn svg {
+.edit-header__btn svg {
   flex-shrink: 0;
 }
 
-/* Secondary Style - 씬 편집하기 */
-.header__btn--secondary {
+/* Secondary Style - 취소 */
+.edit-header__btn--secondary {
   background: var(--bg-muted);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
 }
 
-.header__btn--secondary:hover:not(:disabled) {
+.edit-header__btn--secondary:hover:not(:disabled) {
   background: var(--bg-subtle);
   border-color: var(--border-hover);
 }
 
 /* Primary Style - 저장 */
-.header__btn--primary {
+.edit-header__btn--primary {
   background: var(--accent-primary);
   color: #fff;
   min-width: 60px;
 }
 
-.header__btn--primary:hover:not(:disabled) {
+.edit-header__btn--primary:hover:not(:disabled) {
   background: var(--accent-primary-hover);
 }

@@ -2,13 +2,14 @@
  * LightSimulatorHeader - 조명 시뮬레이터 헤더
  *
  * 두 줄 레이아웃:
- * ┌──────────────────────────────────────────────┐
- * │ 제목   [상태]                         [저장] │  ← top row
- * │ [씬 편집하기]   [재렌더링]                   │  ← bottom row
- * └──────────────────────────────────────────────┘
+ * ┌──────────────────────────────────────────────────────────────┐
+ * │ ← Workspace                                                  │  ← 상단: 네비게이션
+ * ├──────────────────────────────────────────────────────────────┤
+ * │ Scene 제목 [상태뱃지]                [씬 편집] [저장]         │  ← 하단: 제목 + 액션
+ * └──────────────────────────────────────────────────────────────┘
  */
 
-import { ExternalLinkIcon, RefreshIcon } from '../common';
+import { ChevronLeftIcon, ExternalLinkIcon } from '../common';
 import './LightSimulatorHeader.css';
 
 export type SimulatorStatus = 'synced' | 'modified' | 'rendering';
@@ -16,71 +17,72 @@ export type SimulatorStatus = 'synced' | 'modified' | 'rendering';
 interface LightSimulatorHeaderProps {
   title: string;
   status: SimulatorStatus;
+  onBack: () => void;
   onEditScene: () => void;
-  onRerender: () => void;
   onSave: () => void;
-  canRerender?: boolean;
   canSave?: boolean;
 }
 
 const STATUS_CONFIG: Record<SimulatorStatus, { label: string; className: string }> = {
-  synced: { label: '최신', className: 'simulator-header__badge--synced' },
-  modified: { label: '변경됨', className: 'simulator-header__badge--modified' },
-  rendering: { label: '렌더링 중', className: 'simulator-header__badge--rendering' },
+  synced: { label: '저장됨', className: 'header__badge--synced' },
+  modified: { label: '변경됨', className: 'header__badge--modified' },
+  rendering: { label: '렌더링 중', className: 'header__badge--rendering' },
 };
 
 export function LightSimulatorHeader({
   title,
   status,
+  onBack,
   onEditScene,
-  onRerender,
   onSave,
-  canRerender = false,
   canSave = false,
 }: LightSimulatorHeaderProps) {
   const statusConfig = STATUS_CONFIG[status];
+  const isDirty = status === 'modified';
 
   return (
-    <header className="simulator-header">
-      {/* Top Row: 제목 + 뱃지 | 저장 */}
-      <div className="simulator-header__top">
-        <div className="simulator-header__title-group">
-          <h2 className="simulator-header__title">{title}</h2>
-          <span className={`simulator-header__badge ${statusConfig.className}`}>
-            {status === 'rendering' && (
-              <span className="simulator-header__spinner" />
-            )}
-            {statusConfig.label}
-          </span>
-        </div>
+    <header className={`panel-header-v2 ${isDirty ? 'panel-header-v2--dirty' : ''}`}>
+      {/* Top Row: Navigation */}
+      <div className="header__nav">
         <button
           type="button"
-          className="simulator-header__save-btn"
-          onClick={onSave}
-          disabled={!canSave}
+          className="header__back-btn"
+          onClick={onBack}
         >
-          저장
+          <ChevronLeftIcon size={14} />
+          <span>Workspace</span>
         </button>
       </div>
 
-      {/* Bottom Row: 액션 버튼들 */}
-      <div className="simulator-header__bottom">
-        <button
-          type="button"
-          className="simulator-header__action-btn"
-          onClick={onEditScene}
-        >
-          씬 편집하기
-          <ExternalLinkIcon size={12} />
-        </button>
-        <button
-          type="button"
-          className={`simulator-header__action-btn ${canRerender ? 'simulator-header__action-btn--primary' : ''}`}
-          onClick={onRerender}
-        >
-          <RefreshIcon size={12} />
-          재렌더링
-        </button>
+      {/* Bottom Row: Title + Actions */}
+      <div className="header__main">
+        <div className="header__left">
+          <h2 className="header__title">{title}</h2>
+          <span className={`header__badge ${statusConfig.className}`}>
+            {status === 'rendering' && <span className="header__spinner" />}
+            {statusConfig.label}
+          </span>
+        </div>
+
+        <div className="header__actions">
+          <button
+            type="button"
+            className="header__btn header__btn--secondary"
+            onClick={onEditScene}
+          >
+            <span>씬 편집</span>
+            <ExternalLinkIcon size={12} />
+          </button>
+
+          <button
+            type="button"
+            className="header__btn header__btn--primary"
+            onClick={onSave}
+            disabled={!canSave}
+          >
+            저장
+          </button>
+        </div>
       </div>
     </header>
   );

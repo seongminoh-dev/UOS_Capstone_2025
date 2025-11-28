@@ -1,5 +1,9 @@
 /**
  * Tabs Component Styles
+ *
+ * Variants:
+ * - pill: 배경색 pill 스타일 (기본)
+ * - underline: 언더라인 스타일
  */
 
 .tabs {
@@ -7,7 +11,10 @@
   flex-direction: column;
 }
 
-.tabs__list {
+/* ============================================
+   Pill Variant (기본)
+   ============================================ */
+.tabs__list--pill {
   display: flex;
   background-color: var(--bg-muted);
   border-radius: var(--radius-lg);
@@ -15,7 +22,7 @@
   gap: var(--space-1);
 }
 
-.tabs__tab {
+.tabs__tab--pill {
   flex: 1;
   display: flex;
   align-items: center;
@@ -32,22 +39,79 @@
   transition: all var(--transition-fast);
 }
 
-.tabs__tab:hover:not(:disabled):not(.tabs__tab--active) {
+.tabs__tab--pill:hover:not(:disabled):not(.tabs__tab--active) {
   color: var(--text-primary);
   background-color: rgba(0, 0, 0, 0.03);
 }
 
-.tabs__tab--active {
+.tabs__tab--pill.tabs__tab--active {
   background-color: var(--bg-surface);
   color: var(--text-primary);
   box-shadow: var(--shadow-sm);
 }
 
-.tabs__tab:disabled {
+.tabs__tab--pill:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 
+/* ============================================
+   Underline Variant
+   ============================================ */
+.tabs__list--underline {
+  display: flex;
+  gap: 0;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.tabs__tab--underline {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border: none;
+  background: transparent;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s ease;
+}
+
+.tabs__tab--underline::after {
+  content: '';
+  position: absolute;
+  bottom: -1px;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: transparent;
+  transition: background 0.15s ease;
+}
+
+.tabs__tab--underline:hover:not(:disabled):not(.tabs__tab--active) {
+  color: var(--text-primary);
+}
+
+.tabs__tab--underline.tabs__tab--active {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.tabs__tab--underline.tabs__tab--active::after {
+  background: var(--accent-primary);
+}
+
+.tabs__tab--underline:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ============================================
+   Common Elements
+   ============================================ */
 .tabs__tab-icon {
   font-size: var(--text-base);
   line-height: 1;
@@ -61,12 +125,19 @@
   padding-top: var(--space-4);
 }
 
-/* Compact variant for smaller spaces */
-.tabs--compact .tabs__list {
+/* ============================================
+   Compact variant for smaller spaces
+   ============================================ */
+.tabs--compact .tabs__list--pill {
   padding: 2px;
 }
 
-.tabs--compact .tabs__tab {
+.tabs--compact .tabs__tab--pill {
   padding: var(--space-1) var(--space-3);
   font-size: var(--text-xs);
+}
+
+.tabs--compact .tabs__tab--underline {
+  padding: 8px 12px;
+  font-size: 12px;
 }

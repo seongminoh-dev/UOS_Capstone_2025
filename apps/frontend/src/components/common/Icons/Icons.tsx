@@ -89,6 +89,14 @@ export function ChevronDownIcon({ size = 20, ...props }: IconProps) {
   );
 }
 
+export function ChevronLeftIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M13 5l-5 5 5 5" />
+    </svg>
+  );
+}
+
 export function ClockIcon({ size = 20, ...props }: IconProps) {
   return (
     <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>

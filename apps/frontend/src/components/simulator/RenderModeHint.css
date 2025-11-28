@@ -1,0 +1,68 @@
+/**
+ * RenderModeHint Component Styles
+ *
+ * 렌더링 모드 안내 배너
+ */
+
+.render-mode-hint {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  margin-bottom: 4px;
+}
+
+.render-mode-hint__icon {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
+  margin-top: 1px;
+}
+
+.render-mode-hint__content {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.render-mode-hint__label {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.2;
+}
+
+.render-mode-hint__description {
+  font-size: 11px;
+  line-height: 1.4;
+  opacity: 0.85;
+}
+
+/* Realtime Mode - 녹색 계열 */
+.render-mode-hint--realtime {
+  background-color: #ECFDF5;
+  border: 1px solid #A7F3D0;
+}
+
+.render-mode-hint--realtime .render-mode-hint__label {
+  color: #065F46;
+}
+
+.render-mode-hint--realtime .render-mode-hint__description {
+  color: #047857;
+}
+
+/* Save Required Mode - 주황색 계열 */
+.render-mode-hint--save {
+  background-color: #FFFBEB;
+  border: 1px solid #FDE68A;
+}
+
+.render-mode-hint--save .render-mode-hint__label {
+  color: #92400E;
+}
+
+.render-mode-hint--save .render-mode-hint__description {
+  color: #B45309;
+}

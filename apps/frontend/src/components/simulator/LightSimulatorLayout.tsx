@@ -30,11 +30,12 @@ interface LightSimulatorLayoutProps {
   onBack: () => void;
 }
 
-export function LightSimulatorLayout({ scene, onBack }: LightSimulatorLayoutProps) {
+export function LightSimulatorLayout({ scene: initialScene, onBack }: LightSimulatorLayoutProps) {
   const engineRef = useRef<WebGPUEngine | null>(null);
+  const [currentScene, setCurrentScene] = useState<SceneFrontend>(initialScene);
   const [isSaved, setIsSaved] = useState(true);
   const [currentTimeString, setCurrentTimeString] = useState(() => {
-    const timeOfDay = scene.sunSettings?.timeOfDay ?? 50;
+    const timeOfDay = initialScene.sunSettings?.timeOfDay ?? 50;
     const totalMinutes = Math.floor((timeOfDay / 100) * 24 * 60);
     const hours = Math.floor(totalMinutes / 60);
     const minutes = totalMinutes % 60;
@@ -77,11 +78,15 @@ export function LightSimulatorLayout({ scene, onBack }: LightSimulatorLayoutProp
     );
   }, []);
 
-  // Scene 선택 핸들러 (null이면 Workspace로 복귀)
+  // Scene 선택 핸들러 (null이면 Workspace로 복귀, 새 scene이면 업데이트)
   const handleSceneSelect = useCallback(
     (newScene: SceneFrontend | null) => {
       if (!newScene) {
         onBack();
+      } else {
+        // 저장된 새 scene으로 업데이트 → rendererKey 변경 → 재렌더링
+        setCurrentScene(newScene);
+        setIsSaved(true);
       }
     },
     [onBack]
@@ -89,8 +94,8 @@ export function LightSimulatorLayout({ scene, onBack }: LightSimulatorLayoutProp
 
   // Renderer key (Scene 변경 시 리렌더링)
   const rendererKey = useMemo(() => {
-    return `${scene.id}-${scene.updatedAt || Date.now()}`;
-  }, [scene]);
+    return `${currentScene.id}-${currentScene.updatedAt || Date.now()}`;
+  }, [currentScene]);
 
   return (
     <div className="light-simulator">
@@ -99,13 +104,13 @@ export function LightSimulatorLayout({ scene, onBack }: LightSimulatorLayoutProp
         <WebGPURenderer
           key={rendererKey}
           className="light-simulator__webgpu"
-          scene={scene}
+          scene={currentScene}
           onEngineReady={handleEngineReady}
         />
 
         {/* Canvas Overlay */}
         <CanvasOverlay
-          sceneName={scene.name}
+          sceneName={currentScene.name}
           timeString={currentTimeString}
           isSaved={isSaved}
           renderStats={renderStats}
@@ -116,7 +121,7 @@ export function LightSimulatorLayout({ scene, onBack }: LightSimulatorLayoutProp
       {/* Control Panel */}
       <div className="light-simulator__panel">
         <ControlPanel
-          scene={scene}
+          scene={currentScene}
           onSceneSelect={handleSceneSelect}
           onSunSettingsChange={handleSunSettingsChange}
         />

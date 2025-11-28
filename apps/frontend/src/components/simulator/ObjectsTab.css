@@ -1,18 +1,18 @@
 /**
- * ObjectsTab Component Styles
+ * ObjectsTab Component Styles (리디자인)
  */
 
 .objects-tab {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 12px;
 }
 
 /* Asset List */
 .objects-tab__list {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 /* Empty State */
@@ -20,16 +20,16 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: var(--space-3);
-  padding: var(--space-6);
+  gap: 12px;
+  padding: 24px 16px;
   text-align: center;
-  background-color: var(--bg-muted);
-  border-radius: var(--radius-lg);
+  background-color: var(--bg-surface);
+  border-radius: 10px;
   border: 1px dashed var(--border-default);
 }
 
 .objects-tab__empty p {
-  font-size: var(--text-sm);
+  font-size: 13px;
   color: var(--text-muted);
   margin: 0;
 }

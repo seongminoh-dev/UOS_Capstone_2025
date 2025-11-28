@@ -1,14 +1,14 @@
 /**
- * TimeOfDayCard - 시간/계절/방향 컨트롤 카드
+ * TimeOfDayCard - 시간 컨트롤 카드 (컴팩트)
  *
  * 구조:
  * ┌─────────────────────────────────────────┐
+ * │  [⚡ 실시간 반영]                        │
+ * ├─────────────────────────────────────────┤
  * │  ☀️  12:00                    [▶] [1x]  │  ← 상단: 아이콘 + 시간 + 재생/속도
  * ├─────────────────────────────────────────┤
- * │  ○━━━━━━━━━━━●━━━━━━━━━━━━━━━━━━━━━○    │  ← 중단: 시간 슬라이더
+ * │  ○━━━━━━━━━━━●━━━━━━━━━━━━━━━━━━━━━○    │  ← 하단: 시간 슬라이더
  * │  0시                              24시   │
- * ├─────────────────────────────────────────┤
- * │  [  여름  ▼]         [  남향  ▼]        │  ← 하단: 계절 + 방향 Select
  * └─────────────────────────────────────────┘
  */
 
@@ -16,29 +16,12 @@ import { Slider, Select, Button } from '../common';
 import type { SelectOption } from '../common';
 import './TimeOfDayCard.css';
 
-const SEASON_OPTIONS: SelectOption[] = [
-  { value: 'spring', label: '봄' },
-  { value: 'summer', label: '여름' },
-  { value: 'autumn', label: '가을' },
-  { value: 'winter', label: '겨울' },
-];
-
-const DIRECTION_OPTIONS: SelectOption[] = [
-  { value: 'east', label: '동향' },
-  { value: 'west', label: '서향' },
-  { value: 'south', label: '남향' },
-  { value: 'north', label: '북향' },
-];
-
 const SPEED_OPTIONS: SelectOption[] = [
   { value: '0.5', label: '0.5x' },
   { value: '1', label: '1x' },
   { value: '2', label: '2x' },
   { value: '4', label: '4x' },
 ];
-
-type Season = 'spring' | 'summer' | 'autumn' | 'winter';
-type Direction = 'north' | 'south' | 'east' | 'west';
 
 interface TimeOfDayCardProps {
   // 시간
@@ -51,14 +34,6 @@ interface TimeOfDayCardProps {
   onToggleAnimation: () => void;
   animationSpeed: number;
   onAnimationSpeedChange: (speed: number) => void;
-
-  // 계절
-  season: Season;
-  onSeasonChange: (season: Season) => void;
-
-  // 방향
-  direction: Direction;
-  onDirectionChange: (direction: Direction) => void;
 }
 
 export function TimeOfDayCard({
@@ -69,10 +44,6 @@ export function TimeOfDayCard({
   onToggleAnimation,
   animationSpeed,
   onAnimationSpeedChange,
-  season,
-  onSeasonChange,
-  direction,
-  onDirectionChange,
 }: TimeOfDayCardProps) {
   // 시간 슬라이더 값 변환 (0-100 → 0-1440분)
   const sliderValue = Math.round((timeOfDay / 100) * 1440);
@@ -82,6 +53,12 @@ export function TimeOfDayCard({
 
   return (
     <div className="time-of-day-card">
+      {/* 실시간 라벨 */}
+      <div className="time-of-day-card__realtime-label">
+        <span className="time-of-day-card__realtime-icon">⚡</span>
+        <span>실시간 반영</span>
+      </div>
+
       {/* 상단: 시간 표시 + 재생 컨트롤 */}
       <div className="time-of-day-card__header">
         <div className="time-of-day-card__time-display">
@@ -108,7 +85,7 @@ export function TimeOfDayCard({
         </div>
       </div>
 
-      {/* 중단: 시간 슬라이더 */}
+      {/* 하단: 시간 슬라이더 */}
       <div className="time-of-day-card__slider">
         <Slider
           value={sliderValue}
@@ -119,22 +96,6 @@ export function TimeOfDayCard({
           showLabels
           minLabel="0시"
           maxLabel="24시"
-        />
-      </div>
-
-      {/* 하단: 계절/방향 Select */}
-      <div className="time-of-day-card__options">
-        <Select
-          options={SEASON_OPTIONS}
-          value={season}
-          onChange={(v) => onSeasonChange(v as Season)}
-          size="sm"
-        />
-        <Select
-          options={DIRECTION_OPTIONS}
-          value={direction}
-          onChange={(v) => onDirectionChange(v as Direction)}
-          size="sm"
         />
       </div>
     </div>

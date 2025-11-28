@@ -1,19 +1,20 @@
 /**
- * EnvironmentTab Component Styles
+ * EnvironmentTab Component Styles (리디자인)
  */
 
 .environment-tab {
   display: flex;
   flex-direction: column;
-  gap: var(--space-5);
+  gap: 12px;
 }
 
-/* Button Group */
+/* Button Group - 하늘 품질 토글 */
 .environment-tab__button-group {
   display: flex;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .environment-tab__button-group .btn {
   flex: 1;
+  min-width: 0;
 }

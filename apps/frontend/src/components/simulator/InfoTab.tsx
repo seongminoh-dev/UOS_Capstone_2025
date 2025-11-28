@@ -1,7 +1,7 @@
 /**
- * InfoTab - Scene 정보 탭
+ * InfoTab - 공간 정보 탭
  *
- * Scene 메타데이터, 렌더링 설정 정보
+ * 공간 메타데이터 및 구성 요소 통계
  */
 
 import { useState } from 'react';
@@ -44,8 +44,8 @@ export function InfoTab({
     setIsEditing(false);
   };
 
-  // Asset 통계
-  const objectCount = scene.assets.filter((a) => a.type === 'object').length;
+  // 구성 요소 통계
+  const furnitureCount = scene.assets.filter((a) => a.type === 'object').length;
   const lightCount = scene.assets.filter((a) =>
     ['directional-light', 'point-light', 'rect-light'].includes(a.type)
   ).length;
@@ -58,9 +58,9 @@ export function InfoTab({
 
   return (
     <div className="info-tab">
-      {/* Scene 정보 */}
+      {/* 공간 정보 */}
       <PanelSection
-        title="Scene 정보"
+        title="공간 정보"
         action={
           !isEditing && (
             <Button variant="ghost" size="sm" onClick={handleStartEdit}>
@@ -78,7 +78,7 @@ export function InfoTab({
                 className="info-tab__input"
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
-                placeholder="Scene 이름"
+                placeholder="공간 이름"
               />
             </div>
             <div className="info-tab__field">
@@ -87,7 +87,7 @@ export function InfoTab({
                 className="info-tab__textarea"
                 value={editDescription}
                 onChange={(e) => setEditDescription(e.target.value)}
-                placeholder="Scene 설명 (선택사항)"
+                placeholder="공간에 대한 설명 (선택사항)"
                 rows={3}
               />
             </div>
@@ -103,17 +103,11 @@ export function InfoTab({
         ) : (
           <div className="info-tab__info-list">
             <div className="info-tab__info-item">
-              <span className="info-tab__info-label">ID</span>
-              <span className="info-tab__info-value info-tab__info-value--mono">
-                {scene.id}
-              </span>
-            </div>
-            <div className="info-tab__info-item">
               <span className="info-tab__info-label">이름</span>
               <span className="info-tab__info-value">{scene.name}</span>
             </div>
             <div className="info-tab__info-item">
-              <span className="info-tab__info-label">방</span>
+              <span className="info-tab__info-label">방 타입</span>
               <span className="info-tab__info-value">{roomDisplay}</span>
             </div>
             <div className="info-tab__info-item">
@@ -126,38 +120,16 @@ export function InfoTab({
         )}
       </PanelSection>
 
-      {/* Asset 통계 */}
-      <PanelSection title="Asset 통계">
+      {/* 구성 요소 */}
+      <PanelSection title="구성 요소">
         <div className="info-tab__stats">
           <div className="info-tab__stat">
-            <span className="info-tab__stat-value">{scene.assets.length}</span>
-            <span className="info-tab__stat-label">총 Asset</span>
-          </div>
-          <div className="info-tab__stat">
-            <span className="info-tab__stat-value">{objectCount}</span>
-            <span className="info-tab__stat-label">오브젝트</span>
+            <span className="info-tab__stat-value">{furnitureCount}</span>
+            <span className="info-tab__stat-label">가구</span>
           </div>
           <div className="info-tab__stat">
             <span className="info-tab__stat-value">{lightCount}</span>
             <span className="info-tab__stat-label">조명</span>
-          </div>
-        </div>
-      </PanelSection>
-
-      {/* 렌더링 정보 */}
-      <PanelSection title="렌더링 설정">
-        <div className="info-tab__info-list">
-          <div className="info-tab__info-item">
-            <span className="info-tab__info-label">해상도</span>
-            <span className="info-tab__info-value">1920 x 1080</span>
-          </div>
-          <div className="info-tab__info-item">
-            <span className="info-tab__info-label">샘플 수</span>
-            <span className="info-tab__info-value">256 SPP</span>
-          </div>
-          <div className="info-tab__info-item">
-            <span className="info-tab__info-label">렌더러</span>
-            <span className="info-tab__info-value">ReSTIR DI</span>
           </div>
         </div>
       </PanelSection>

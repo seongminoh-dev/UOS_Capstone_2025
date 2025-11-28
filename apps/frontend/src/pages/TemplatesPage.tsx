@@ -1,194 +1,327 @@
 /**
- * Templates Page - 씬 템플릿 갤러리
+ * TemplatesPage - 템플릿 갤러리
  *
- * 기본 제공 씬과 커뮤니티 씬을 탐색하는 페이지
- * - 기본 템플릿: 시스템 제공 씬
- * - 커뮤니티 템플릿: 다른 유저 공유 씬 (추후 확장)
+ * WorkspaceView와 동일한 레이아웃 구조:
+ * - Header (글로벌 네비게이션)
+ * - TopSection: Title + Description
+ * - ControlSection: Search | RightControls(Sort, ViewToggle, CreateBtn)
+ * - Grid: 4 columns, gapX=20, gapY=24
  */
 
-import { useState } from 'react';
+import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
 import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
+import { getAssetMetadata } from '../assets/AssetRegistry';
+import {
+  Button,
+  SearchIcon,
+  GridIcon,
+  ListIcon,
+  PlusIcon,
+  CubeIcon,
+  LightbulbIcon,
+  EmptyState,
+} from '../components/common';
 import './TemplatesPage.css';
 
-// 템플릿 카테고리
-type Category = 'all' | 'official' | 'community';
+type SortOption = 'name' | 'assets';
+type ViewMode = 'grid' | 'list';
 
-// 기본 제공 템플릿 (DUMMY_SCENES 기반)
-const OFFICIAL_TEMPLATES = DUMMY_SCENES.map((scene) => ({
+// 템플릿 데이터 (DUMMY_SCENES 기반)
+const TEMPLATES = DUMMY_SCENES.map((scene) => ({
   ...scene,
-  type: 'official' as const,
   author: 'Intery',
-  likes: 0,
-  thumbnail: null,
 }));
 
-// 커뮤니티 템플릿 (추후 API 연동, 현재는 플레이스홀더)
-const COMMUNITY_TEMPLATES: typeof OFFICIAL_TEMPLATES = [
-  // 추후 커뮤니티 기능 확장 시 API에서 로드
+const SORT_OPTIONS: { value: SortOption; label: string }[] = [
+  { value: 'name', label: '이름순' },
+  { value: 'assets', label: '오브젝트순' },
 ];
 
-function TemplatesPage() {
+/**
+ * Get room icon
+ */
+function getRoomIcon(meshName?: string): string {
+  const roomMeta = getAssetMetadata(meshName || '');
+  return roomMeta?.icon || '🏠';
+}
+
+export default function TemplatesPage() {
   const navigate = useNavigate();
-  const [category, setCategory] = useState<Category>('all');
   const [searchQuery, setSearchQuery] = useState('');
+  const [sortBy, setSortBy] = useState<SortOption>('name');
+  const [viewMode, setViewMode] = useState<ViewMode>('grid');
 
-  // 필터링된 템플릿
-  const filteredTemplates = [...OFFICIAL_TEMPLATES, ...COMMUNITY_TEMPLATES].filter(
-    (template) => {
-      // 카테고리 필터
-      if (category === 'official' && template.type !== 'official') return false;
-      if (category === 'community' && template.type !== 'community') return false;
+  const filteredTemplates = useMemo(() => {
+    let result = [...TEMPLATES];
 
-      // 검색 필터
-      if (searchQuery) {
-        const query = searchQuery.toLowerCase();
-        return (
-          template.name.toLowerCase().includes(query) ||
-          template.author.toLowerCase().includes(query)
-        );
-      }
-
-      return true;
+    // 검색 필터
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      result = result.filter(
+        (t) =>
+          t.name.toLowerCase().includes(query) ||
+          t.description?.toLowerCase().includes(query) ||
+          t.room?.meshName?.toLowerCase().includes(query)
+      );
     }
+
+    // 정렬
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case 'assets':
+          return b.assets.length - a.assets.length;
+        case 'name':
+        default:
+          return a.name.localeCompare(b.name, 'ko');
+      }
+    });
+
+    return result;
+  }, [searchQuery, sortBy]);
+
+  const handleTemplateClick = useCallback(
+    (template: (typeof TEMPLATES)[0]) => {
+      navigate('/simulator', { state: { templateId: template.id } });
+    },
+    [navigate]
   );
 
-  const handleTemplateClick = (template: (typeof OFFICIAL_TEMPLATES)[0]) => {
-    // 시뮬레이터로 이동하면서 템플릿 정보 전달
-    navigate('/simulator', { state: { templateId: template.id } });
-  };
-
-  const handleStartNew = () => {
+  const handleCreateNew = useCallback(() => {
     navigate('/edit', { state: { createNew: true } });
-  };
+  }, [navigate]);
+
+  const handleClearSearch = useCallback(() => {
+    setSearchQuery('');
+  }, []);
 
   return (
     <div className="templates-page">
       <Header />
 
-      <main className="templates-main">
-        <div className="templates-container">
-          {/* 페이지 헤더 */}
-          <div className="templates-header">
-            <div className="header-content">
-              <h1 className="templates-title">템플릿 갤러리</h1>
-              <p className="templates-description">
-                다양한 공간 템플릿으로 빠르게 시작하세요
-              </p>
+      <main className="templates">
+        <div className="templates__inner">
+          {/* TopSection */}
+          <section className="templates__top">
+            <div className="templates__title-row">
+              <h1 className="templates__title">템플릿 갤러리</h1>
+              <span className="templates__count">{TEMPLATES.length}개</span>
             </div>
-            <button className="btn-create-new" onClick={handleStartNew}>
-              <span className="btn-icon">+</span>
-              <span>새로 만들기</span>
-            </button>
-          </div>
+            <p className="templates__desc">
+              기본 제공 템플릿으로 빠르게 시작하세요
+            </p>
+          </section>
 
-          {/* 필터 & 검색 */}
-          <div className="templates-toolbar">
-            <div className="category-tabs">
-              <button
-                className={`category-tab ${category === 'all' ? 'active' : ''}`}
-                onClick={() => setCategory('all')}
-              >
-                전체
-              </button>
-              <button
-                className={`category-tab ${category === 'official' ? 'active' : ''}`}
-                onClick={() => setCategory('official')}
-              >
-                기본 템플릿
-              </button>
-              <button
-                className={`category-tab ${category === 'community' ? 'active' : ''}`}
-                onClick={() => setCategory('community')}
-                disabled={COMMUNITY_TEMPLATES.length === 0}
-              >
-                커뮤니티
-                {COMMUNITY_TEMPLATES.length === 0 && (
-                  <span className="coming-soon">Coming Soon</span>
-                )}
-              </button>
-            </div>
-
-            <div className="search-box">
-              <span className="search-icon">🔍</span>
+          {/* ControlSection */}
+          <section className="templates__controls">
+            {/* SearchInput */}
+            <div className="templates__search">
+              <SearchIcon size={16} className="templates__search-icon" />
               <input
                 type="text"
                 placeholder="템플릿 검색..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="search-input"
+                className="templates__search-input"
               />
-            </div>
-          </div>
-
-          {/* 템플릿 그리드 */}
-          {filteredTemplates.length > 0 ? (
-            <div className="templates-grid">
-              {filteredTemplates.map((template) => (
-                <div
-                  key={template.id}
-                  className="template-card"
-                  onClick={() => handleTemplateClick(template)}
+              {searchQuery && (
+                <button
+                  type="button"
+                  className="templates__search-clear"
+                  onClick={handleClearSearch}
                 >
-                  <div className="template-thumbnail">
-                    {template.thumbnail ? (
-                      <img src={template.thumbnail} alt={template.name} />
-                    ) : (
-                      <div className="thumbnail-placeholder">
-                        <span className="placeholder-icon">🏠</span>
-                      </div>
-                    )}
-                    <div className="template-overlay">
-                      <button className="btn-use-template">사용하기</button>
-                    </div>
-                  </div>
-                  <div className="template-info">
-                    <h3 className="template-name">{template.name}</h3>
-                    <div className="template-meta">
-                      <span className="template-author">
-                        {template.type === 'official' ? (
-                          <span className="official-badge">공식</span>
-                        ) : (
-                          template.author
-                        )}
-                      </span>
-                      {template.type === 'community' && (
-                        <span className="template-likes">❤️ {template.likes}</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                  ×
+                </button>
+              )}
             </div>
-          ) : (
-            <div className="templates-empty">
-              <div className="empty-icon">📭</div>
-              <p className="empty-message">
-                {searchQuery
-                  ? '검색 결과가 없습니다'
-                  : '아직 템플릿이 없습니다'}
-              </p>
-            </div>
-          )}
 
-          {/* 커뮤니티 CTA (추후 기능) */}
-          {category !== 'community' && (
-            <div className="community-cta">
-              <div className="cta-content">
-                <h3>나만의 공간을 공유하세요</h3>
-                <p>
-                  작업한 씬을 커뮤니티에 공유하고 다른 사용자들과 영감을 나눠보세요.
-                  <br />
-                  <span className="cta-note">커뮤니티 기능은 곧 출시됩니다!</span>
-                </p>
+            {/* RightControls */}
+            <div className="templates__right-controls">
+              {/* SortFilter */}
+              <select
+                value={sortBy}
+                onChange={(e) => setSortBy(e.target.value as SortOption)}
+                className="templates__select"
+              >
+                {SORT_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+
+              {/* ViewToggle */}
+              <div className="templates__view-toggle">
+                <button
+                  type="button"
+                  className={`templates__view-btn ${viewMode === 'grid' ? 'is-active' : ''}`}
+                  onClick={() => setViewMode('grid')}
+                  title="그리드 보기"
+                >
+                  <GridIcon size={16} />
+                </button>
+                <button
+                  type="button"
+                  className={`templates__view-btn ${viewMode === 'list' ? 'is-active' : ''}`}
+                  onClick={() => setViewMode('list')}
+                  title="리스트 보기"
+                >
+                  <ListIcon size={16} />
+                </button>
               </div>
+
+              {/* CreateButton */}
+              <Button
+                variant="primary"
+                size="sm"
+                leftIcon={<PlusIcon size={16} />}
+                onClick={handleCreateNew}
+              >
+                새로 만들기
+              </Button>
             </div>
-          )}
+          </section>
+
+          {/* Grid / List Content */}
+          <section className="templates__content">
+            {/* Grid View */}
+            {filteredTemplates.length > 0 && viewMode === 'grid' && (
+              <div className="templates__grid">
+                {filteredTemplates.map((template) => {
+                  const roomIcon = getRoomIcon(template.room?.meshName);
+                  const furnitureCount = template.assets.filter(
+                    (a) => a.type === 'object'
+                  ).length;
+                  const lightCount = template.assets.filter((a) =>
+                    ['directional-light', 'point-light', 'rect-light'].includes(a.type)
+                  ).length;
+
+                  return (
+                    <article
+                      key={template.id}
+                      className="template-card"
+                      onClick={() => handleTemplateClick(template)}
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && handleTemplateClick(template)}
+                    >
+                      {/* Thumbnail */}
+                      <div className="template-card__thumb">
+                        <div className="template-card__thumb-placeholder">
+                          <span className="template-card__thumb-icon">{roomIcon}</span>
+                        </div>
+                        <span className="template-card__badge">공식</span>
+                        <div className="template-card__overlay">
+                          <span className="template-card__use">사용하기</span>
+                        </div>
+                      </div>
+
+                      {/* Body */}
+                      <div className="template-card__body">
+                        <h3 className="template-card__title">{template.name}</h3>
+                        <div className="template-card__meta">
+                          <span className="template-card__stat">
+                            <CubeIcon size={12} />
+                            {furnitureCount}
+                          </span>
+                          <span className="template-card__stat">
+                            <LightbulbIcon size={12} />
+                            {lightCount}
+                          </span>
+                          <span className="template-card__author">{template.author}</span>
+                        </div>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* List View */}
+            {filteredTemplates.length > 0 && viewMode === 'list' && (
+              <div className="templates__list">
+                {filteredTemplates.map((template) => {
+                  const roomIcon = getRoomIcon(template.room?.meshName);
+                  const furnitureCount = template.assets.filter(
+                    (a) => a.type === 'object'
+                  ).length;
+                  const lightCount = template.assets.filter((a) =>
+                    ['directional-light', 'point-light', 'rect-light'].includes(a.type)
+                  ).length;
+
+                  return (
+                    <article
+                      key={template.id}
+                      className="template-card template-card--list"
+                      onClick={() => handleTemplateClick(template)}
+                      tabIndex={0}
+                      onKeyDown={(e) => e.key === 'Enter' && handleTemplateClick(template)}
+                    >
+                      {/* Thumbnail */}
+                      <div className="template-card__thumb template-card__thumb--sm">
+                        <span className="template-card__thumb-icon">{roomIcon}</span>
+                      </div>
+
+                      {/* Body */}
+                      <div className="template-card__body">
+                        <div className="template-card__title-row">
+                          <h3 className="template-card__title">{template.name}</h3>
+                          <span className="template-card__label">공식</span>
+                        </div>
+                        <div className="template-card__meta">
+                          <span className="template-card__stat">
+                            <CubeIcon size={12} />
+                            {furnitureCount}
+                          </span>
+                          <span className="template-card__stat">
+                            <LightbulbIcon size={12} />
+                            {lightCount}
+                          </span>
+                          <span className="template-card__author">{template.author}</span>
+                        </div>
+                      </div>
+
+                      {/* Action */}
+                      <button
+                        className="template-card__action"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleTemplateClick(template);
+                        }}
+                      >
+                        사용
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* Empty State */}
+            {filteredTemplates.length === 0 && (
+              <EmptyState
+                icon="🔍"
+                title="검색 결과 없음"
+                message={`"${searchQuery}"에 대한 템플릿이 없습니다.`}
+                action={
+                  <Button variant="ghost" size="sm" onClick={handleClearSearch}>
+                    검색 초기화
+                  </Button>
+                }
+              />
+            )}
+          </section>
+
+          {/* Info Section */}
+          <section className="templates__info">
+            <p className="templates__info-text">
+              템플릿을 선택하면 해당 공간으로 시뮬레이터가 열립니다.
+              <br />
+              원하는 대로 수정한 후 저장하면 내 공간으로 복사됩니다.
+            </p>
+          </section>
         </div>
       </main>
     </div>
   );
 }
-
-export default TemplatesPage;

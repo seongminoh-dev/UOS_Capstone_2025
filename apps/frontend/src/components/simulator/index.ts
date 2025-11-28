@@ -13,3 +13,4 @@ export { ObjectListItem } from './ObjectListItem';
 export { EnvironmentTab } from './EnvironmentTab';
 export { ObjectsTab } from './ObjectsTab';
 export { InfoTab } from './InfoTab';
+export { RenderModeHint } from './RenderModeHint';

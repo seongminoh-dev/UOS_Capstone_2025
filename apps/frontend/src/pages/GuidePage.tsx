@@ -162,48 +162,50 @@ function GuidePage() {
         <div className="guide-container">
           {/* 사이드바 네비게이션 */}
           <aside className="guide-sidebar">
-            <nav className="guide-nav">
-              <button
-                className={`nav-item ${activeSection === 'getting-started' ? 'active' : ''}`}
-                onClick={() => setActiveSection('getting-started')}
-              >
-                <span className="nav-icon">🚀</span>
-                <span>시작하기</span>
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'lighting' ? 'active' : ''}`}
-                onClick={() => setActiveSection('lighting')}
-              >
-                <span className="nav-icon">💡</span>
-                <span>조명 설정</span>
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'furniture' ? 'active' : ''}`}
-                onClick={() => setActiveSection('furniture')}
-              >
-                <span className="nav-icon">🛋️</span>
-                <span>가구 배치</span>
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'scene' ? 'active' : ''}`}
-                onClick={() => setActiveSection('scene')}
-              >
-                <span className="nav-icon">💾</span>
-                <span>씬 관리</span>
-              </button>
-              <button
-                className={`nav-item ${activeSection === 'faq' ? 'active' : ''}`}
-                onClick={() => setActiveSection('faq')}
-              >
-                <span className="nav-icon">❓</span>
-                <span>FAQ</span>
-              </button>
-            </nav>
+            <div className="guide-sidebar-inner">
+              <nav className="guide-nav">
+                <button
+                  className={`nav-item ${activeSection === 'getting-started' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('getting-started')}
+                >
+                  <span className="nav-icon">🚀</span>
+                  <span>시작하기</span>
+                </button>
+                <button
+                  className={`nav-item ${activeSection === 'lighting' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('lighting')}
+                >
+                  <span className="nav-icon">💡</span>
+                  <span>조명 설정</span>
+                </button>
+                <button
+                  className={`nav-item ${activeSection === 'furniture' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('furniture')}
+                >
+                  <span className="nav-icon">🛋️</span>
+                  <span>가구 배치</span>
+                </button>
+                <button
+                  className={`nav-item ${activeSection === 'scene' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('scene')}
+                >
+                  <span className="nav-icon">💾</span>
+                  <span>씬 관리</span>
+                </button>
+                <button
+                  className={`nav-item ${activeSection === 'faq' ? 'active' : ''}`}
+                  onClick={() => setActiveSection('faq')}
+                >
+                  <span className="nav-icon">❓</span>
+                  <span>FAQ</span>
+                </button>
+              </nav>
 
-            <div className="sidebar-cta">
-              <button className="btn-start" onClick={handleStartSimulator}>
-                시뮬레이터 시작
-              </button>
+              <div className="sidebar-cta">
+                <button className="btn-start" onClick={handleStartSimulator}>
+                  시뮬레이터 시작
+                </button>
+              </div>
             </div>
           </aside>
 

@@ -2,11 +2,13 @@
  * ObjectsTab - 오브젝트 탭 (가구 + 조명 통합)
  *
  * Scene에 배치된 가구와 조명을 통합 관리
+ * 저장 후 렌더링 필요
  */
 
 import { Button } from '../common';
 import { PanelSection } from './PanelSection';
 import { ObjectListItem } from './ObjectListItem';
+import { RenderModeHint } from './RenderModeHint';
 import type { SceneAsset } from '../../graphics-core/service/Scene';
 import './ObjectsTab.css';
 
@@ -92,6 +94,9 @@ export function ObjectsTab({
 
   return (
     <div className="objects-tab">
+      {/* 저장 후 렌더링 안내 */}
+      <RenderModeHint mode="save-required" />
+
       {/* 조명 섹션 */}
       <PanelSection title="조명" count={lightAssets.length}>
         <div className="objects-tab__list">

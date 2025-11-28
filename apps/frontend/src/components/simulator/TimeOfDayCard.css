@@ -1,15 +1,42 @@
 /**
- * TimeOfDayCard Component Styles
+ * TimeOfDayCard Component Styles (리디자인)
+ *
+ * 히어로 카드 스타일:
+ * - 배경색: #F5F5F7 (약한 중성 그레이)
+ * - border-radius: 12px
+ * - subtle shadow
+ * - 내부 여백: 20px
  */
 
 .time-of-day-card {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-  padding: var(--space-4);
-  background-color: var(--bg-page);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
+  gap: 16px;
+  padding: 20px;
+  background-color: #F5F5F7;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+/* ============================================
+   Realtime Label
+   ============================================ */
+.time-of-day-card__realtime-label {
+  display: inline-flex;
+  align-items: center;
+  align-self: flex-start;
+  gap: 4px;
+  padding: 4px 10px;
+  background-color: #ECFDF5;
+  border: 1px solid #A7F3D0;
+  border-radius: 20px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #065F46;
+}
+
+.time-of-day-card__realtime-icon {
+  font-size: 10px;
 }
 
 /* ============================================
@@ -19,52 +46,67 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  gap: 12px;
 }
 
 .time-of-day-card__time-display {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 10px;
 }
 
 .time-of-day-card__time-icon {
-  font-size: var(--text-xl);
+  font-size: 28px;
   line-height: 1;
 }
 
 .time-of-day-card__time-value {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-semibold);
+  font-size: 32px;
+  font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--text-primary);
+  letter-spacing: -0.5px;
 }
 
 .time-of-day-card__actions {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 6px;
 }
 
 .time-of-day-card__actions .select-wrapper {
-  width: 72px;
+  width: 68px;
+}
+
+/* 재생 버튼 커스텀 스타일 */
+.time-of-day-card__actions .btn {
+  min-width: 36px;
+  padding: 0 10px;
 }
 
 /* ============================================
    Slider - 시간 슬라이더
    ============================================ */
 .time-of-day-card__slider {
-  /* Slider 컴포넌트가 내부 스타일 처리 */
+  padding: 4px 0;
 }
 
-/* ============================================
-   Options - 계절/방향 Select
-   ============================================ */
-.time-of-day-card__options {
-  display: flex;
-  gap: var(--space-2);
+/* 슬라이더 트랙 커스텀 */
+.time-of-day-card__slider .slider__track {
+  height: 6px;
+  background: rgba(0, 0, 0, 0.08);
+  border-radius: 3px;
 }
 
-.time-of-day-card__options .select-wrapper {
-  flex: 1;
+.time-of-day-card__slider .slider__fill {
+  background: var(--accent-primary);
 }
+
+.time-of-day-card__slider .slider__thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--accent-primary);
+  border: 2px solid #fff;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+

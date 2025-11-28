@@ -2,9 +2,13 @@
  * ControlPanel - Editor 모드 우측 패널
  *
  * 구성:
- * - Header: Scene 이름 + 저장 상태 + 액션 버튼
- * - TimeOfDayCard: 시간/계절/방향 (항상 표시)
- * - Tabs: 환경/오브젝트/정보
+ * - Header: Scene 이름 + 저장 상태 + 액션 버튼 (한 줄 컴팩트)
+ * - TimeOfDayCard: 시간/계절/방향 (히어로 카드 스타일)
+ * - Tabs: 환경/오브젝트/정보 (언더라인 스타일)
+ *
+ * 렌더링 규칙:
+ * - 태양/환경: 실시간 반영
+ * - 오브젝트: 저장 후 렌더링
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -77,23 +81,24 @@ export function ControlPanel({
   const [pendingAction, setPendingAction] = useState<'workspace' | 'edit' | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | number | null>(null);
   const [dontShowDeleteConfirm, setDontShowDeleteConfirm] = useState(false);
-  const [isRendering, setIsRendering] = useState(false);
 
-  // 상태 계산
+  // 상태 계산 (rendering 상태 제거 - 저장 시 자동 렌더링)
   const getStatus = (): SimulatorStatus => {
-    if (isRendering) return 'rendering';
     if (hasUnsavedChanges) return 'modified';
     return 'synced';
   };
 
-  // 재렌더링 핸들러
-  const handleRerender = useCallback(() => {
-    setIsRendering(true);
-    // 렌더링 시뮬레이션 (실제로는 WebGPU 엔진에서 콜백 받아야 함)
-    setTimeout(() => setIsRendering(false), 1500);
-  }, []);
+  // Workspace로 돌아가기 (저장 확인)
+  const handleBackToWorkspace = () => {
+    if (hasUnsavedChanges) {
+      setPendingAction('workspace');
+      setShowSaveConfirm(true);
+    } else {
+      onSceneSelect(null);
+    }
+  };
 
-  // Scene 저장
+  // Scene 저장 (저장 = 자동 재렌더링)
   const handleSave = async () => {
     try {
       const saved = await saveScene(currentScene);
@@ -103,16 +108,6 @@ export function ControlPanel({
     } catch (error) {
       console.error('Failed to save:', error);
       toast.error('저장에 실패했습니다');
-    }
-  };
-
-  // Workspace로 이동 (저장 확인)
-  const handleBackToWorkspace = () => {
-    if (hasUnsavedChanges) {
-      setPendingAction('workspace');
-      setShowSaveConfirm(true);
-    } else {
-      onSceneSelect(null);
     }
   };
 
@@ -231,10 +226,9 @@ export function ControlPanel({
       <LightSimulatorHeader
         title={currentScene.name}
         status={getStatus()}
+        onBack={handleBackToWorkspace}
         onEditScene={handleEditPage}
-        onRerender={handleRerender}
         onSave={handleSave}
-        canRerender={hasUnsavedChanges}
         canSave={hasUnsavedChanges}
       />
 
@@ -248,16 +242,12 @@ export function ControlPanel({
           onToggleAnimation={sunSettings.toggleAnimation}
           animationSpeed={sunSettings.animationSpeed}
           onAnimationSpeedChange={sunSettings.setAnimationSpeed}
-          season={sunSettings.season}
-          onSeasonChange={sunSettings.setSeason}
-          direction={sunSettings.roomDirection}
-          onDirectionChange={sunSettings.setRoomDirection}
         />
       </div>
 
-      {/* Tabs */}
+      {/* Tabs - 언더라인 스타일 */}
       <div className="control-panel__tabs">
-        <Tabs value={activeTab} onChange={(v) => setActiveTab(v as TabType)}>
+        <Tabs value={activeTab} onChange={(v) => setActiveTab(v as TabType)} variant="underline">
           <Tabs.List>
             <Tabs.Tab value="environment" icon="🌤️">
               환경
@@ -276,6 +266,10 @@ export function ControlPanel({
               onSkyModeChange={sunSettings.setSkyMode}
               envIndirectMult={sunSettings.envIndirectMult}
               onEnvIndirectMultChange={sunSettings.setEnvIndirectMult}
+              direction={sunSettings.roomDirection}
+              onDirectionChange={sunSettings.setRoomDirection}
+              season={sunSettings.season}
+              onSeasonChange={sunSettings.setSeason}
             />
           </Tabs.Panel>
 
