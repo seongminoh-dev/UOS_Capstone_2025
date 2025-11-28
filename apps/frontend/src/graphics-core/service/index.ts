@@ -25,4 +25,4 @@ export type {
   InitializeOptions,
   OnProgressCallback,
 } from './types/InitProgress';
-export { PHASE_METADATA, TOTAL_INIT_STEPS } from './types/InitProgress';
+export { PHASE_METADATA, TOTAL_INIT_STEPS, isAssetLoadingProgress } from './types/InitProgress';

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { WebGPUEngine, PHASE_METADATA } from '../graphics-core/service';
+import { WebGPUEngine, PHASE_METADATA, isAssetLoadingProgress } from '../graphics-core/service';
 import type { InitProgress } from '../graphics-core/service';
 import { SceneAdapter } from '../adapters/SceneAdapter';
 import type { Scene, SceneFrontend } from '../graphics-core/service/Scene';
@@ -180,13 +180,27 @@ export default function WebGPURenderer({
         // 1. Mesh 이름 추출
         const meshNames = SceneAdapter.extractMeshNames(sceneFrontend);
 
-        // 2. Mesh 로드 및 MeshPool에 등록
-        for (const meshName of meshNames) {
-          // 이미 등록된 Mesh는 스킵
-          if (world.MeshPool.GetID(meshName) !== -1) {
-            console.log(`Mesh already loaded: ${meshName}`);
-            continue;
-          }
+        // 로딩이 필요한 mesh만 필터링
+        const meshesToLoad = meshNames.filter(
+          (name) => world.MeshPool.GetID(name) === -1
+        );
+        const totalMeshCount = meshesToLoad.length;
+
+        // 2. Mesh 로드 및 MeshPool에 등록 (Progress 포함)
+        for (let i = 0; i < meshesToLoad.length; i++) {
+          const meshName = meshesToLoad[i];
+
+          // 로딩 시작 전 Progress 보고
+          setInitProgress({
+            phase: 'loadAssets',
+            step: 5,
+            totalSteps: 7,
+            message: `메시 로딩 중: ${meshName}`,
+            loadedCount: i,
+            totalCount: totalMeshCount,
+            currentAssetName: meshName,
+            currentAssetPath: `/assets/${meshName}.glb`,
+          });
 
           try {
             const rawMesh = await world.LoadRawMesh(meshName);
@@ -195,6 +209,18 @@ export default function WebGPURenderer({
           } catch (err) {
             console.warn(`Failed to load mesh: ${meshName}`, err);
           }
+        }
+
+        // 모든 mesh 로딩 완료 보고
+        if (totalMeshCount > 0) {
+          setInitProgress({
+            phase: 'loadAssets',
+            step: 5,
+            totalSteps: 7,
+            message: '모든 메시 로딩 완료',
+            loadedCount: totalMeshCount,
+            totalCount: totalMeshCount,
+          });
         }
 
         // 3. SceneAdapter를 통해 World에 Scene 로드
@@ -331,7 +357,7 @@ export default function WebGPURenderer({
             zIndex: 200,
           }}
         >
-          <div style={{ textAlign: 'center', maxWidth: '280px' }}>
+          <div style={{ textAlign: 'center', maxWidth: '320px', width: '100%', padding: '0 20px' }}>
             {/* 스피너 */}
             <div
               style={{
@@ -369,22 +395,22 @@ export default function WebGPURenderer({
             {initProgress && (
               <div style={{
                 fontSize: '12px',
-                color: '#495057',
-                marginBottom: '8px',
+                color: '#868e96',
+                marginBottom: '6px',
                 fontFamily: 'monospace',
               }}>
-                {initProgress.step}/{initProgress.totalSteps}
+                Step {initProgress.step} / {initProgress.totalSteps}
               </div>
             )}
 
-            {/* 프로그레스 바 */}
+            {/* 메인 프로그레스 바 */}
             {initProgress && (
               <div style={{
                 width: '100%',
                 height: '4px',
                 backgroundColor: '#e9ecef',
                 borderRadius: '2px',
-                marginBottom: '16px',
+                marginBottom: '12px',
                 overflow: 'hidden',
               }}>
                 <div
@@ -404,7 +430,7 @@ export default function WebGPURenderer({
               fontSize: '15px',
               fontWeight: 600,
               color: '#1a1a1a',
-              marginBottom: '6px',
+              marginBottom: '8px',
             }}>
               {initProgress
                 ? PHASE_METADATA[initProgress.phase]?.labelKo || initProgress.message
@@ -412,21 +438,111 @@ export default function WebGPURenderer({
               }
             </div>
 
-            {/* 서브 텍스트 */}
-            <div style={{
-              fontSize: '13px',
-              color: '#868e96',
-            }}>
-              {initProgress
-                ? `${PHASE_METADATA[initProgress.phase]?.label || ''}`
-                : '잠시만 기다려주세요'
-              }
-            </div>
+            {/* Asset 로딩 세부 정보 (loadAssets 단계일 때만) */}
+            {initProgress && isAssetLoadingProgress(initProgress) && (
+              <div style={{
+                marginTop: '16px',
+                padding: '12px 16px',
+                backgroundColor: '#f1f3f4',
+                borderRadius: '8px',
+                textAlign: 'left',
+              }}>
+                {/* Asset 프로그레스 헤더 */}
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                }}>
+                  <span style={{ fontSize: '13px', color: '#495057' }}>
+                    메시 로딩
+                  </span>
+                  <span style={{
+                    fontSize: '13px',
+                    fontFamily: 'monospace',
+                    color: '#1a1a1a',
+                    fontWeight: 500,
+                  }}>
+                    {initProgress.loadedCount} / {initProgress.totalCount}
+                    <span style={{ color: '#868e96', marginLeft: '6px' }}>
+                      ({Math.round((initProgress.loadedCount / initProgress.totalCount) * 100)}%)
+                    </span>
+                  </span>
+                </div>
+
+                {/* Asset 전용 프로그레스 바 */}
+                <div style={{
+                  width: '100%',
+                  height: '6px',
+                  backgroundColor: '#dee2e6',
+                  borderRadius: '3px',
+                  overflow: 'hidden',
+                  marginBottom: '10px',
+                }}>
+                  <div
+                    style={{
+                      width: `${(initProgress.loadedCount / initProgress.totalCount) * 100}%`,
+                      height: '100%',
+                      backgroundColor: '#228be6',
+                      borderRadius: '3px',
+                      transition: 'width 0.2s ease-out',
+                    }}
+                  />
+                </div>
+
+                {/* 현재 로딩 중인 Asset */}
+                {initProgress.currentAssetName && (
+                  <div style={{
+                    fontSize: '12px',
+                    color: '#868e96',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                  }}>
+                    <span style={{
+                      display: 'inline-block',
+                      width: '6px',
+                      height: '6px',
+                      backgroundColor: '#228be6',
+                      borderRadius: '50%',
+                      animation: 'pulse 1s ease-in-out infinite',
+                    }} />
+                    <span>
+                      현재: <strong style={{ color: '#495057' }}>{initProgress.currentAssetName}</strong>
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 기본 서브 텍스트 (Asset 로딩이 아닐 때) */}
+            {initProgress && !isAssetLoadingProgress(initProgress) && (
+              <div style={{
+                fontSize: '13px',
+                color: '#868e96',
+              }}>
+                {PHASE_METADATA[initProgress.phase]?.label || ''}
+              </div>
+            )}
+
+            {/* 기본 상태 (progress 없을 때) */}
+            {!initProgress && (
+              <div style={{
+                fontSize: '13px',
+                color: '#868e96',
+              }}>
+                잠시만 기다려주세요
+              </div>
+            )}
           </div>
           <style>{`
             @keyframes spin {
               0% { transform: rotate(0deg); }
               100% { transform: rotate(360deg); }
+            }
+            @keyframes pulse {
+              0%, 100% { opacity: 1; }
+              50% { opacity: 0.4; }
             }
           `}</style>
         </div>
