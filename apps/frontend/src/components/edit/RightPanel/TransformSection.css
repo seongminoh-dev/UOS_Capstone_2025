@@ -1,0 +1,125 @@
+/**
+ * TransformSection Styles
+ * Balanced Compact - 3열 그리드 레이아웃
+ */
+
+.transform-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.transform-section__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.transform-section__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.transform-section__label-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.transform-section__label-dot--position {
+  background-color: #3b82f6; /* Blue */
+}
+
+.transform-section__label-dot--rotation {
+  background-color: #22c55e; /* Green */
+}
+
+.transform-section__label-dot--scale {
+  background-color: #f59e0b; /* Amber */
+}
+
+.transform-section__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.transform-section__row--single {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.transform-section__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.transform-section__axis {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding-left: 2px;
+}
+
+.transform-section__axis--x {
+  color: #ef4444; /* Red */
+}
+
+.transform-section__axis--y {
+  color: #22c55e; /* Green */
+}
+
+.transform-section__axis--z {
+  color: #3b82f6; /* Blue */
+}
+
+.transform-section__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  color: var(--text-primary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.12s ease;
+}
+
+.transform-section__input:hover {
+  border-color: var(--border-hover);
+}
+
+.transform-section__input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.transform-section__input--wide {
+  max-width: 100px;
+}
+
+/* Remove number input spinners */
+.transform-section__input[type='number']::-webkit-outer-spin-button,
+.transform-section__input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.transform-section__input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+.transform-section__hint {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}

@@ -1,0 +1,35 @@
+/**
+ * CameraHelpOverlay Styles
+ * Compact 전문 툴 스타일
+ */
+
+.camera-help-overlay {
+  position: absolute;
+  bottom: 20px;
+  left: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.camera-help-overlay__item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.camera-help-overlay__key {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.7);
+  min-width: 90px;
+}
+
+.camera-help-overlay__desc {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}

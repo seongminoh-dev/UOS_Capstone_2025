@@ -1,0 +1,40 @@
+/**
+ * MetadataSection Styles
+ * Balanced Compact - 전문 툴 + 적당한 여백
+ */
+
+.metadata-section {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.metadata-section__item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metadata-section__item--full {
+  grid-column: 1 / -1;
+}
+
+.metadata-section__label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.metadata-section__value {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.metadata-section__value--desc {
+  font-weight: 400;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}

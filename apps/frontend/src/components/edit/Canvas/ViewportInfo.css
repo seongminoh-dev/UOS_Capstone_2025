@@ -1,0 +1,35 @@
+/**
+ * ViewportInfo Styles
+ * Compact 전문 툴 스타일
+ */
+
+.viewport-info {
+  position: absolute;
+  bottom: 20px;
+  right: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 6px 10px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  border-radius: 4px;
+  z-index: 10;
+}
+
+.viewport-info__item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.viewport-info__label {
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+.viewport-info__value {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.9);
+}

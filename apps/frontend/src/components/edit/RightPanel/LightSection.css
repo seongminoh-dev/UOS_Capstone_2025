@@ -1,0 +1,244 @@
+/**
+ * LightSection Styles
+ * Balanced Compact - 3열 그리드 레이아웃
+ */
+
+.light-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.light-section__group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.light-section__label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.light-section__label-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.light-section__label-dot--position {
+  background-color: #3b82f6;
+}
+
+.light-section__label-dot--color {
+  background-color: #ec4899;
+}
+
+.light-section__label-dot--intensity {
+  background-color: #8b5cf6;
+}
+
+.light-section__label-dot--u {
+  background-color: #f97316;
+}
+
+.light-section__label-dot--v {
+  background-color: #14b8a6;
+}
+
+.light-section__row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+
+.light-section__row--single {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* Color Row - 한 줄 그리드 레이아웃 */
+.light-section__color-row {
+  display: grid;
+  grid-template-columns: 24px auto 1fr auto 1fr auto 1fr;
+  column-gap: 8px;
+  align-items: center;
+}
+
+.light-section__field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.light-section__field--small {
+  flex: 0 0 auto;
+}
+
+.light-section__axis {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: left;
+  padding-left: 2px;
+  color: var(--text-tertiary);
+}
+
+.light-section__axis--x {
+  color: #ef4444;
+}
+
+.light-section__axis--y {
+  color: #22c55e;
+}
+
+.light-section__axis--z {
+  color: #3b82f6;
+}
+
+.light-section__input {
+  width: 100%;
+  height: 34px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  color: var(--text-primary);
+  background: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 6px;
+  outline: none;
+  transition: all 0.12s ease;
+}
+
+.light-section__input:hover {
+  border-color: var(--border-hover);
+}
+
+.light-section__input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+.light-section__input--small {
+  flex: 0 0 60px;
+  width: 60px;
+}
+
+/* Remove number input spinners */
+.light-section__input[type='number']::-webkit-outer-spin-button,
+.light-section__input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.light-section__input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Color Chip (정사각형 24x24) */
+.light-section__color-chip {
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  background: none;
+}
+
+.light-section__color-chip::-webkit-color-swatch-wrapper {
+  padding: 0;
+}
+
+.light-section__color-chip::-webkit-color-swatch {
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+}
+
+/* Color Labels (R, G, B) */
+.light-section__color-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-tertiary);
+}
+
+.light-section__color-label--r {
+  color: #ef4444;
+}
+
+.light-section__color-label--g {
+  color: #22c55e;
+}
+
+.light-section__color-label--b {
+  color: #3b82f6;
+}
+
+/* Color Input (R/G/B 값 입력) */
+.light-section__color-input {
+  width: 100%;
+  min-width: 50px;
+  height: 32px;
+  padding: 0 8px;
+  font-size: 13px;
+  font-family: var(--font-mono, 'SF Mono', monospace);
+  color: var(--text-primary);
+  text-align: center;
+  background: var(--bg-muted);
+  border: 1px solid var(--border-default);
+  border-radius: 4px;
+  outline: none;
+  transition: all 0.12s ease;
+}
+
+.light-section__color-input:hover {
+  border-color: var(--border-hover);
+}
+
+.light-section__color-input:focus {
+  border-color: var(--accent-primary);
+  background: var(--bg-surface);
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.1);
+}
+
+/* Remove number input spinners */
+.light-section__color-input[type='number']::-webkit-outer-spin-button,
+.light-section__color-input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.light-section__color-input[type='number'] {
+  -moz-appearance: textfield;
+}
+
+/* Slider */
+.light-section__slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--border-default);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.light-section__slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: var(--accent-primary);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+
+.light-section__slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+}
