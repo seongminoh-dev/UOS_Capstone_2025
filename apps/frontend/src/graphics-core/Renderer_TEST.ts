@@ -3,6 +3,7 @@ import type { Mat4 }            from "wgpu-matrix";
 import      { Camera }          from "./Camera";
 import      { ComputePass }     from "./ComputePass";
 import      { World }           from "./World";
+import type { OnProgressCallback } from "./service/types/InitProgress";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/TEST_MCPT.wgsl?raw';
@@ -278,8 +279,17 @@ export class Renderer
         return;
     }
 
-    public async Initialize(InWorld : World) : Promise<void>
+    public async Initialize(InWorld : World, onProgress?: OnProgressCallback) : Promise<void>
     {
+        const totalSteps = 7; // 전체 초기화 단계 수
+
+        // Helper function to report progress
+        const reportProgress = (phase: 'loadAssets' | 'buildPipelines' | 'warmup', step: number, message?: string) => {
+            onProgress?.({ phase, step, totalSteps, message });
+        };
+
+        // Step 5: Asset loading (World serialization)
+        reportProgress('loadAssets', 5, '모델·텍스처 로딩 중...');
 
         // Prevent VRAM Leak
         this.DestroyGPUResources();
@@ -295,9 +305,14 @@ export class Renderer
             this.ResetFrameCount();
         }
 
+        // Step 6: Build GPU resources and pipelines
+        reportProgress('buildPipelines', 6, 'Shader/Pipeline 빌드 중...');
         this.CreateGPUResources();
         this.CreateRenderPass();
         await this.CreateComputePasses();
+
+        // Step 7: Warm-up complete
+        reportProgress('warmup', 7, '렌더러 준비 완료');
 
         return;
     }

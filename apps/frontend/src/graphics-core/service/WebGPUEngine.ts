@@ -5,6 +5,8 @@ import { InputController } from '../InputController';
 import { calculateSunLightParams, calculateEnvironmentParams } from '../../utils/SunCalculator';
 import type { SunSettings } from './Scene';
 import { RENDERER_CONFIG } from '../../config';
+import type { InitProgress, InitializeOptions, OnProgressCallback } from './types/InitProgress';
+import { TOTAL_INIT_STEPS } from './types/InitProgress';
 
 // Renderer Renderer_TEST
 import { Renderer } from '../Renderer_TEST';
@@ -55,9 +57,23 @@ export class WebGPUEngine {
      * WebGPU를 초기화합니다.
      * @param width - Canvas width
      * @param height - Canvas height
+     * @param options - 초기화 옵션 (onProgress 콜백 포함)
      */
-    public async initialize(width: number, height: number): Promise<void> {
-        // Check WebGPU support
+    public async initialize(
+        width: number,
+        height: number,
+        options?: InitializeOptions
+    ): Promise<void> {
+        const onProgress = options?.onProgress;
+        const totalSteps = 4; // Engine 초기화 단계 (checkSupport, createAdapter, initDevice, initContext)
+
+        // Helper function to report progress
+        const reportProgress = (phase: InitProgress['phase'], step: number, message?: string) => {
+            onProgress?.({ phase, step, totalSteps, message });
+        };
+
+        // Step 1: Check WebGPU support
+        reportProgress('checkSupport', 1, 'WebGPU 지원 확인 중...');
         if (!navigator.gpu) {
             throw new Error('WebGPU is not supported in this browser');
         }
@@ -66,18 +82,22 @@ export class WebGPUEngine {
         this.canvas.width = width;
         this.canvas.height = height;
 
-        // Create GPU resources
+        // Step 2: Create GPU adapter
+        reportProgress('createAdapter', 2, 'GPU 어댑터 생성 중...');
         this.adapter = await navigator.gpu.requestAdapter();
         if (!this.adapter) {
             throw new Error('Failed to get GPU adapter');
         }
 
+        // Step 3: Create GPU device
+        reportProgress('initDevice', 3, '디바이스 초기화 중...');
         this.device = await this.adapter.requestDevice();
         if (!this.device) {
             throw new Error('Failed to get GPU device');
         }
 
-        // Create Renderer
+        // Step 4: Create Renderer (includes context configuration)
+        reportProgress('initContext', 4, 'Context 구성 중...');
         this.renderer = new Renderer(this.adapter, this.device, this.canvas);
 
         // Note: Scene loading is now handled externally by WebGPURenderer
