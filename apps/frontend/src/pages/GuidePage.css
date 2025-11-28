@@ -11,12 +11,16 @@
    Page Container
    ============================================ */
 .guide-page {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background-color: var(--bg-page);
+  overflow: hidden;
 }
 
 .guide-main {
-  padding-top: var(--header-height);
+  flex: 1;
+  overflow: hidden;
 }
 
 .guide-container {
@@ -24,7 +28,7 @@
   max-width: 1280px;
   margin: 0 auto;
   padding: 0 40px;
-  min-height: calc(100vh - var(--header-height));
+  height: 100%;
 }
 
 /* ============================================
@@ -36,11 +40,11 @@
   padding: 32px 0 32px 0;
   padding-right: 32px;
   border-right: 1px solid var(--border-default);
+  overflow-y: auto;
 }
 
 .guide-sidebar-inner {
-  position: sticky;
-  top: calc(var(--header-height) + 32px);
+  /* No longer sticky since container handles scroll */
 }
 
 .guide-nav {
@@ -111,6 +115,7 @@
   flex: 1;
   padding: 32px 0 64px 48px;
   min-width: 0;
+  overflow-y: auto;
 }
 
 .content-section {

@@ -10,14 +10,24 @@
    Page Base
    ============================================ */
 .onboarding {
-  min-height: 100vh;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
   background: var(--bg-surface);
   opacity: 0;
   transition: opacity 0.5s ease;
+  overflow: hidden;
 }
 
 .onboarding.is-visible {
   opacity: 1;
+}
+
+/* Scrollable content area below header */
+.onboarding__scroll-area {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
 }
 
 /* Section Inner - Header와 일관된 max-width */
@@ -33,7 +43,6 @@
 .onboarding__hero {
   position: relative;
   min-height: calc(100vh - var(--header-height));
-  padding-top: var(--header-height);
   display: flex;
   align-items: center;
 }

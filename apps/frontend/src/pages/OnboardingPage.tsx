@@ -78,8 +78,10 @@ export default function OnboardingPage() {
     <div className={`onboarding ${isVisible ? 'is-visible' : ''}`}>
       <Header />
 
-      {/* Hero Section */}
-      <section className="onboarding__hero">
+      {/* Scrollable content area */}
+      <div className="onboarding__scroll-area">
+        {/* Hero Section */}
+        <section className="onboarding__hero">
         <div className="onboarding__hero-bg">
           <div className="onboarding__hero-gradient" />
           <div className="onboarding__hero-pattern" />
@@ -230,30 +232,31 @@ export default function OnboardingPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="onboarding__footer">
-        <div className="onboarding__section-inner">
-          <div className="onboarding__footer-content">
-            <div className="onboarding__footer-logo">
-              <div className="onboarding__footer-logo-icon">
-                <div className="onboarding__footer-logo-shape" />
+        {/* Footer */}
+        <footer className="onboarding__footer">
+          <div className="onboarding__section-inner">
+            <div className="onboarding__footer-content">
+              <div className="onboarding__footer-logo">
+                <div className="onboarding__footer-logo-icon">
+                  <div className="onboarding__footer-logo-shape" />
+                </div>
+                <span className="onboarding__footer-logo-text">Intery</span>
               </div>
-              <span className="onboarding__footer-logo-text">Intery</span>
+              <p className="onboarding__footer-desc">
+                PathTracing 기반 실시간 인테리어 조명 시뮬레이터
+              </p>
+              <nav className="onboarding__footer-nav">
+                <button onClick={() => navigate('/templates')}>템플릿</button>
+                <button onClick={() => navigate('/guide')}>가이드</button>
+                <button onClick={() => navigate('/simulator')}>시뮬레이터</button>
+              </nav>
+              <p className="onboarding__footer-copyright">
+                © 2025 UOS Capstone Project
+              </p>
             </div>
-            <p className="onboarding__footer-desc">
-              PathTracing 기반 실시간 인테리어 조명 시뮬레이터
-            </p>
-            <nav className="onboarding__footer-nav">
-              <button onClick={() => navigate('/templates')}>템플릿</button>
-              <button onClick={() => navigate('/guide')}>가이드</button>
-              <button onClick={() => navigate('/simulator')}>시뮬레이터</button>
-            </nav>
-            <p className="onboarding__footer-copyright">
-              © 2025 UOS Capstone Project
-            </p>
           </div>
-        </div>
-      </footer>
+        </footer>
+      </div>
     </div>
   );
 }

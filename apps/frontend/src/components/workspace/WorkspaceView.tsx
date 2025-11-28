@@ -250,9 +250,9 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
         </section>
 
         {/* ========================================
-            Grid / List Content
+            Grid / List Content (Scrollable)
             ======================================== */}
-        <main>
+        <div className="workspace__content">
           {/* Loading */}
           {isLoading && scenes.length === 0 && (
             <div className="workspace__loading">
@@ -337,7 +337,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
               }
             />
           )}
-        </main>
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}

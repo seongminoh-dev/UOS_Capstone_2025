@@ -310,15 +310,15 @@ export default function TemplatesPage() {
                 }
               />
             )}
-          </section>
 
-          {/* Info Section */}
-          <section className="templates__info">
-            <p className="templates__info-text">
-              템플릿을 선택하면 해당 공간으로 시뮬레이터가 열립니다.
-              <br />
-              원하는 대로 수정한 후 저장하면 내 공간으로 복사됩니다.
-            </p>
+            {/* Info Section */}
+            <div className="templates__info">
+              <p className="templates__info-text">
+                템플릿을 선택하면 해당 공간으로 시뮬레이터가 열립니다.
+                <br />
+                원하는 대로 수정한 후 저장하면 내 공간으로 복사됩니다.
+              </p>
+            </div>
           </section>
         </div>
       </main>
