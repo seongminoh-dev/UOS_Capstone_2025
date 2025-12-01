@@ -37,8 +37,8 @@ export const DUMMY_SCENE_1: SceneFrontend = {
 
   // ✅ 기본 카메라 위치
   camera: {
-    position: [6.83, 3.49, -0.33],
-    target: [0, 0, 0],
+    position: [12.0, 4.0, 0.0],
+    target: [13.0, 4.0, 0.0],
     fov: 60,
   },
 
