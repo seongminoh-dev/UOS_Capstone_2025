@@ -6,7 +6,7 @@ import      { World }           from "./World";
 import type { OnProgressCallback } from "./service/types/InitProgress";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
-import ShaderCode_MCPT              from './shaders/TEST_MCPT.wgsl?raw';
+import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
 
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
@@ -77,7 +77,8 @@ const EComputePassIndex =
     SpatialReuse            : 4,
     FinalShading            : 5,
     PostProcess             : 6,
-    SIZE                    : 7
+    MCPT                    : 7,
+    SIZE                    : 8
 } as const;
 
 
@@ -297,11 +298,7 @@ export class Renderer
         // Initialize Scene Datas
         {
             this.Camera = new Camera(this.Canvas.width, this.Canvas.height);
-            this.Camera.SetLocationFromXYZ(0,0,6);
-            this.Camera.SetYaw(0);
-            this.Camera.SetPitch(0);
-
-            this.World = InWorld;
+            this.World  = InWorld;
             this.ResetFrameCount();
         }
 
@@ -414,8 +411,10 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            
+            //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-    
             // this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             // this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
@@ -653,7 +652,6 @@ export class Renderer
                 ]
             ),
     
-
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
@@ -683,7 +681,6 @@ export class Renderer
                     
                 ]
             ),
-
 
             ComputePass.Create // Spatial Reuse
             (
@@ -759,6 +756,30 @@ export class Renderer
                 ],
                 [   // Write GPUTextureView
                     this.GPUTextures[ETextureIndex.History_Write].createView(),
+                ]
+            ),
+
+            ComputePass.Create // MCPT (Test Purpose)
+            (
+                this.Device, 
+                ShaderCode_MCPT, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.Radiance].createView(),
                 ]
             ),
 
