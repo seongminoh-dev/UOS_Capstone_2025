@@ -1332,6 +1332,11 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
 {
     var OutPath : Path;
 
+    if (InCompactPath.length < 2u) {
+        OutPath.length = 0u;
+        return OutPath;
+    }
+
     // 카메라/1번째 서페이스 세팅
     OutPath.Surface[0].Position = Get_X0(ThreadID);
     OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
@@ -1476,6 +1481,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // base path 재생성 & 유효성 체크
     var baseRes : Reservoir = ReservoirBuffer[curIdx]; //base path
     let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
+    
+
+    if (basePath.length < 2u) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
 
 
     /*Offset Path*/
@@ -1498,6 +1509,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let prevRes : Reservoir = PrevReservoirBuffer[prevIdx];
     var prevPath : Path = RegeneratePath(prevPixel, prevRes.Sample);
+    if (prevPath.length < 2u) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
 
     //  hybrid shift 
     var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);

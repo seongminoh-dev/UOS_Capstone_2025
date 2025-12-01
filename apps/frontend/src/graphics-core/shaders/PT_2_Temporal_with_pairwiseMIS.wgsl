@@ -1460,13 +1460,12 @@ fn calculate_J(InPath : Path, k : u32) -> f32
     return J;
 }
  
-// 커널 반경 (1 = 3x3, 2 = 5x5 ...)
-const KERNEL_RADIUS : i32 = 2;
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
-    /*Base Path*/
-    // 현재 픽셀 인덱스 계산 & 유효성 체크
+    //==========================================================================
+    // 0. 픽셀 인덱스 계산 & 유효성 체크
+    //==========================================================================
     let curPixel : vec2<u32> = ThreadID.xy;
 
     if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
@@ -1478,165 +1477,193 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         curPixel.y * UniformBuffer.Resolution_Source.x +
         curPixel.x;
 
-    // base path 재생성 & 유효성 체크
-    var baseRes : Reservoir = ReservoirBuffer[curIdx]; //base path
-    let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
-    if (basePath.length < 2u) {
+    //==========================================================================
+    // 1. Base path 재생성
+    //==========================================================================
+    var baseRes  : Reservoir = ReservoirBuffer[curIdx];
+    let basePath : Path      = RegeneratePath(curPixel, baseRes.Sample);
+
+    //==========================================================================
+    // 2. Reprojection 통해 이전 프레임 픽셀 찾기
+    //    (motion vector 기반)
+    //==========================================================================
+    let motionVector_raw : vec4<f32> = textureLoad(MotionVectorTex, vec2<i32>(curPixel));
+    let motionVector     : vec2<i32> = vec2<i32>(i32(motionVector_raw.x), i32(motionVector_raw.y));
+
+    let prevPixel_i : vec2<i32> = vec2<i32>(curPixel) - motionVector;
+    let resi_i      : vec2<i32> = vec2<i32>(UniformBuffer.Resolution_Source);
+
+    if (!(all(prevPixel_i >= vec2<i32>(0, 0)) && all(prevPixel_i < resi_i))) {
+        // 이전 프레임으로 재투영이 불가능하면 base 만 사용
         ReservoirBuffer[curIdx] = baseRes;
         return;
     }
 
+    let prevPixel : vec2<u32> = vec2<u32>(prevPixel_i);
+
+    let prevIdx : u32 =
+        prevPixel.y * UniformBuffer.Resolution_Source.x +
+        prevPixel.x;
+
+    let prevRes : Reservoir = PrevReservoirBuffer[prevIdx];
+    if (prevRes.C == 0u || prevRes.Sample.length < 2u) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    var prevPath : Path = RegeneratePath(prevPixel, prevRes.Sample);
+    if (prevPath.length < 2u) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    //==========================================================================
+    // 3. Hybrid shift: prevRes + baseRes → shiftCompact → offsetPath
+    //==========================================================================
+    var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);
+    if !(shiftCompact.length > 0u) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
+    if !(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    // offset path 의 Jacobian J(offset) 계산
+    var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
+    if !(J_val > 0.0) || !isFinite(J_val) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+    shiftCompact.J = J_val;
+
+    // shift 유효성 체크
+    let base_k : u32 = baseRes.Sample.k;
+    if !(IsSafeToReconnect(
+        prevPath.Surface[base_k - 1u], prevPath.Lobe[base_k - 1u],
+        basePath.Surface[base_k],      basePath.Lobe[base_k]
+    )) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    // detJ = J_prev / J_new
+    let det_J : f32 = baseRes.Sample.J / J_val;
+    if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    //==========================================================================
+    // 4. Base / Offset 경로의 기여도(L) 및 pdf 계산
+    //==========================================================================
+
+    // --- Base ---
     let contribBase : vec3<f32> = PathContribution(basePath);
     let P_hat_Base  : f32       = Luminance(contribBase);
-
-    if (!(P_hat_Base > 0.0) || !isFinite(P_hat_Base)) {
+    if !(P_hat_Base > 0.0) || !isFinite(P_hat_Base) {
         ReservoirBuffer[curIdx] = baseRes;
         return;
     }
 
     let p_base_raw : f32 = PathPDF(basePath);
-    if (!(p_base_raw > 0.0) || !isFinite(p_base_raw)) {
+    if !(p_base_raw > 0.0) || !isFinite(p_base_raw) {
         ReservoirBuffer[curIdx] = baseRes;
         return;
     }
-    let p_base : f32 = max(p_base_raw, EPS);
+    let p_base_can : f32 = max(p_base_raw, EPS);
 
-    var w_base : f32 = P_hat_Base / p_base;
-    w_base = clamp(w_base, 0.0, MAX_RIS);
-
-    // ------------------------------------------------------------
-    // Streaming merge 초기 상태
-    // ------------------------------------------------------------
-    var outRes        : Reservoir = baseRes;
-    var chosen_P_hat  : f32 = P_hat_Base;
-    var chosen_weight : f32 = w_base;     // ★ 중요: 선택된 후보의 weight 저장
-    var W_total       : f32 = w_base;
-    var totalC        : u32 = baseRes.C;
-
-    // RNG
-    var rng : u32 = GetHashValue(
-        curPixel.x * 1973u +
-        curPixel.y * 9277u +
-        UniformBuffer.FrameIndex * 26699u
-    );
-
-    // ------------------------------------------------------------
-    // 1. spatial reuse loop
-    // ------------------------------------------------------------
-    for (var dy : i32 = -KERNEL_RADIUS; dy <= KERNEL_RADIUS; dy = dy + 1) {
-        for (var dx : i32 = -KERNEL_RADIUS; dx <= KERNEL_RADIUS; dx = dx + 1) {
-
-            if (dx == 0 && dy == 0) {
-                continue;
-            }
-
-            let nx_i : i32 = i32(curPixel.x) + dx;
-            let ny_i : i32 = i32(curPixel.y) + dy;
-            if (nx_i < 0 || ny_i < 0 ||
-                nx_i >= i32(UniformBuffer.Resolution_Source.x) ||
-                ny_i >= i32(UniformBuffer.Resolution_Source.y)) {
-                continue;
-            }
-
-            let nx : u32 = u32(nx_i);
-            let ny : u32 = u32(ny_i);
-            let nIdx : u32 = ny * UniformBuffer.Resolution_Source.x + nx;
-
-            // neighbour reservoir
-            let neiRes : Reservoir = ReservoirBuffer[nIdx];
-            if (neiRes.C == 0u || neiRes.Sample.length < 2u) {
-                continue;
-            }
-
-            // neighbour path 생성
-            var neiPath : Path = RegeneratePath(vec2<u32>(nx, ny), neiRes.Sample);
-            if (neiPath.length < 2u) {
-                continue;
-            }
-
-            // hybrid shift
-            var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
-            if(!(shiftCompact.length > 0)){
-                continue;
-            }
-
-            var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
-            if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
-                continue;
-            }
-
-            // Jacobian J
-            var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
-            if (!(J_val > 0.0) || !isFinite(J_val)) {
-                continue;
-            }
-            shiftCompact.J = J_val;
-
-            let base_k = baseRes.Sample.k;
-            if(!(IsSafeToReconnect(neiPath.Surface[base_k - 1], neiPath.Lobe[base_k - 1],
-                                    basePath.Surface[base_k], basePath.Lobe[base_k])))
-            {
-                continue;
-            }
-
-            // detJ
-            let det_J : f32= baseRes.Sample.J / J_val;
-            if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
-                continue;
-            }
-
-            // contribution / pdf / weight
-            let contribOff : vec3<f32> = PathContribution(offsetPath);
-            let P_hat_Off : f32 = Luminance(contribOff);
-            if (!(P_hat_Off > 0.0) || !isFinite(P_hat_Off)) {
-                continue;
-            }
-
-            let p_prev_raw : f32 = PathPDF(offsetPath);
-            if (!(p_prev_raw > 0.0) || !isFinite(p_prev_raw)) {
-                continue;
-            }
-            let p_off : f32 = max(p_prev_raw, EPS);
-
-            var w_off : f32 = ((P_hat_Off/(P_hat_Off+P_hat_Base)) * P_hat_Off) / p_off;
-            w_off = clamp(w_off, 0.0, MAX_RIS);
-
-            if (!isFinite(w_off) || w_off <= 0.0) {
-                continue;
-            }
-
-            let W_sum : f32 = w_base + w_off;
-            if (!(W_sum > 0.0) || !isFinite(W_sum)) {
-                continue;
-            }
-
-            let p_choose_off : f32 = w_off / (W_total+w_off);
-            let r : f32 = Random(&rng);
-
-            if (r < p_choose_off) {
-                outRes.Sample = shiftCompact;
-                chosen_P_hat = P_hat_Off;
-                outRes.UCW = baseRes.UCW/det_J;
-                chosen_weight = w_off; 
-            }
-
-            W_total = min((W_total+w_off),1e12);
-            totalC = min(totalC + neiRes.C, 1000000u);
-        }
+    // --- Offset ---
+    let contribOff : vec3<f32> = PathContribution(offsetPath);
+    let P_hat_Off  : f32       = Luminance(contribOff);
+    if !(P_hat_Off > 0.0) || !isFinite(P_hat_Off) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
     }
 
-    // ------------------------------------------------------------
-    // 2. finalize
-    // ------------------------------------------------------------
+    // canonical pdf for offsetPath
+    let p_off_can_raw : f32 = PathPDF(offsetPath);
+    if !(p_off_can_raw > 0.0) || !isFinite(p_off_can_raw) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+    let p_off_can : f32 = max(p_off_can_raw, EPS);
 
+    // prev path pdf (shift 이전)
+    let p_prev_raw : f32 = PathPDF(prevPath);
+    if !(p_prev_raw > 0.0) || !isFinite(p_prev_raw) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+    let p_prev : f32 = max(p_prev_raw, EPS);
 
+    // shift sampler pdf: p_shift = p_prev * det_J
+    let p_shift_off : f32 = p_prev * det_J;
+    if (!isFinite(p_shift_off) || p_shift_off <= 0.0) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
 
-    if (!(W_total > 0.0) || !isFinite(W_total) ||
-        !(chosen_P_hat > 0.0) || !isFinite(chosen_P_hat)) {
-            ReservoirBuffer[curIdx] = baseRes;
-            return;
-    } else {
-        ReservoirBuffer[curIdx] = outRes;
-    }   
-     
+    // pairwise pdf for offset: canonical + shift
+    let p_off_mix_raw : f32 = p_off_can + p_shift_off;
+    if !(p_off_mix_raw > 0.0) || !isFinite(p_off_mix_raw) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+    let p_off_mix : f32 = max(p_off_mix_raw, EPS);
+
+    //==========================================================================
+    // 5. RIS weight 계산 (pairwise MIS)
+    //    - base : canonical 만 (p_shift_base ~ 0)
+    //    - offset : canonical + shift (pairwise)
+    //==========================================================================
+    var w_base : f32 = P_hat_Base / p_base_can;
+    w_base = clamp(w_base, 0.0, MAX_RIS);
+
+    var w_off : f32 = P_hat_Off / p_off_mix;
+    w_off = clamp(w_off, 0.0, MAX_RIS);
+
+    if (!isFinite(w_base) || !isFinite(w_off) ||
+        (w_base <= 0.0 && w_off <= 0.0)) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    let W_sum : f32 = w_base + w_off;
+    if !(W_sum > 0.0) || !isFinite(W_sum) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
+    }
+
+    //==========================================================================
+    // 6. Reservoir 업데이트 (2 후보: base vs offset)
+    //==========================================================================
+    let p_choose_off : f32 = w_off / W_sum;
+
+    var rng : u32 = GetHashValue(
+        ThreadID.x * 1973u +
+        ThreadID.y * 9277u +
+        UniformBuffer.FrameIndex * 26699u
+    );
+    let rnd : f32 = Random(&rng);
+
+    var outRes       : Reservoir = baseRes;
+    var chosen_P_hat : f32       = P_hat_Base;
+
+    if (rnd < p_choose_off) {
+        // offset(shifted) path 선택
+        outRes.Sample = shiftCompact;
+        chosen_P_hat  = P_hat_Off;
+    }
+
+    // sample count 합산 (clamp)
+    outRes.C = clamp(baseRes.C + prevRes.C, 1u, 1000000u);
+
+    // 최종 UCW 업데이트 : W_sum / E[L]
+    outRes.UCW = W_sum / max(chosen_P_hat, EPS);
+
+    ReservoirBuffer[curIdx] = outRes;
 }

@@ -1461,11 +1461,13 @@ fn calculate_J(InPath : Path, k : u32) -> f32
 }
  
 // 커널 반경 (1 = 3x3, 2 = 5x5 ...)
+// 커널 반경 (1 = 3x3, 2 = 5x5 ...)
 const KERNEL_RADIUS : i32 = 2;
+
 @compute @workgroup_size(8, 8, 1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
-    /*Base Path*/
+    /* Base Path */
     // 현재 픽셀 인덱스 계산 & 유효성 체크
     let curPixel : vec2<u32> = ThreadID.xy;
 
@@ -1479,8 +1481,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         curPixel.x;
 
     // base path 재생성 & 유효성 체크
-    var baseRes : Reservoir = ReservoirBuffer[curIdx]; //base path
+    var baseRes : Reservoir = ReservoirBuffer[curIdx]; // base path
     let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
+
     if (basePath.length < 2u) {
         ReservoirBuffer[curIdx] = baseRes;
         return;
@@ -1509,7 +1512,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // ------------------------------------------------------------
     var outRes        : Reservoir = baseRes;
     var chosen_P_hat  : f32 = P_hat_Base;
-    var chosen_weight : f32 = w_base;     // ★ 중요: 선택된 후보의 weight 저장
+    var chosen_weight : f32 = w_base;
     var W_total       : f32 = w_base;
     var totalC        : u32 = baseRes.C;
 
@@ -1556,49 +1559,70 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
             // hybrid shift
             var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
-            if(!(shiftCompact.length > 0)){
+            if !(shiftCompact.length > 0u) {
                 continue;
             }
 
             var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
-            if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
+            if !(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length) {
                 continue;
             }
 
             // Jacobian J
             var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
-            if (!(J_val > 0.0) || !isFinite(J_val)) {
+            if !(J_val > 0.0) || !isFinite(J_val) {
                 continue;
             }
             shiftCompact.J = J_val;
 
             let base_k = baseRes.Sample.k;
-            if(!(IsSafeToReconnect(neiPath.Surface[base_k - 1], neiPath.Lobe[base_k - 1],
-                                    basePath.Surface[base_k], basePath.Lobe[base_k])))
-            {
+            if !(IsSafeToReconnect(
+                neiPath.Surface[base_k - 1u], neiPath.Lobe[base_k - 1u],
+                basePath.Surface[base_k],    basePath.Lobe[base_k]
+            )) {
                 continue;
             }
 
             // detJ
-            let det_J : f32= baseRes.Sample.J / J_val;
+            let det_J : f32 = baseRes.Sample.J / J_val;
             if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
                 continue;
             }
 
-            // contribution / pdf / weight
+            // ------------------------------------------------------------
+            // contribution / pdf / pairwise MIS weight
+            // ------------------------------------------------------------
             let contribOff : vec3<f32> = PathContribution(offsetPath);
-            let P_hat_Off : f32 = Luminance(contribOff);
-            if (!(P_hat_Off > 0.0) || !isFinite(P_hat_Off)) {
+            let P_hat_Off  : f32       = Luminance(contribOff);
+            if !(P_hat_Off > 0.0) || !isFinite(P_hat_Off) {
                 continue;
             }
 
-            let p_prev_raw : f32 = PathPDF(offsetPath);
-            if (!(p_prev_raw > 0.0) || !isFinite(p_prev_raw)) {
+            // 1) canonical sampler pdf: offsetPath를 직접 샘플링했을 때의 pdf
+            let p_off_raw : f32 = PathPDF(offsetPath);
+            if !(p_off_raw > 0.0) || !isFinite(p_off_raw) {
                 continue;
             }
-            let p_off : f32 = max(p_prev_raw, EPS);
+            let p_off : f32 = max(p_off_raw, EPS);
 
-            var w_off : f32 = ((P_hat_Off/(P_hat_Off+P_hat_Base)) * P_hat_Off) / p_off;
+            // 2) prev path pdf: neiPath 의 pdf (shift 이전)
+            let p_prev_raw : f32 = PathPDF(neiPath);
+            if !(p_prev_raw > 0.0) || !isFinite(p_prev_raw) {
+                continue;
+            }
+            let p_prev : f32 = max(p_prev_raw, EPS);
+
+            // 3) shift sampler pdf: p_shift = p_prev * det_J
+            let p_shift : f32 = p_prev * det_J;
+            if (!isFinite(p_shift) || p_shift <= 0.0) {
+                continue;
+            }
+
+            // 4) pairwise MIS: p_mix = p_off + p_shift
+            let p_mix : f32 = max(p_off + p_shift, EPS);
+
+            // 최종 weight: w_off = L(x) / (p_off + p_shift)
+            var w_off : f32 = P_hat_Off / p_mix;
             w_off = clamp(w_off, 0.0, MAX_RIS);
 
             if (!isFinite(w_off) || w_off <= 0.0) {
@@ -1606,37 +1630,34 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             }
 
             let W_sum : f32 = w_base + w_off;
-            if (!(W_sum > 0.0) || !isFinite(W_sum)) {
+            if !(W_sum > 0.0) || !isFinite(W_sum) {
                 continue;
             }
 
-            let p_choose_off : f32 = w_off / (W_total+w_off);
+            // reservoir streaming update
+            let p_choose_off : f32 = w_off / (W_total + w_off);
             let r : f32 = Random(&rng);
 
             if (r < p_choose_off) {
                 outRes.Sample = shiftCompact;
-                chosen_P_hat = P_hat_Off;
-                outRes.UCW = baseRes.UCW/det_J;
-                chosen_weight = w_off; 
+                chosen_P_hat  = P_hat_Off;
+                outRes.UCW    = baseRes.UCW / det_J;
+                chosen_weight = w_off;
             }
 
-            W_total = min((W_total+w_off),1e12);
-            totalC = min(totalC + neiRes.C, 1000000u);
+            W_total = min(W_total + w_off, 1e12);
+            totalC  = min(totalC + neiRes.C, 1000000u);
         }
     }
 
     // ------------------------------------------------------------
     // 2. finalize
     // ------------------------------------------------------------
-
-
-
-    if (!(W_total > 0.0) || !isFinite(W_total) ||
-        !(chosen_P_hat > 0.0) || !isFinite(chosen_P_hat)) {
-            ReservoirBuffer[curIdx] = baseRes;
-            return;
+    if !(W_total > 0.0) || !isFinite(W_total) ||
+       !(chosen_P_hat > 0.0) || !isFinite(chosen_P_hat) {
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
     } else {
         ReservoirBuffer[curIdx] = outRes;
-    }   
-     
+    }
 }
