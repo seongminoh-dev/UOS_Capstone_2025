@@ -1,0 +1,74 @@
+/**
+ * StatusBadge - 저장 상태 배지 스타일
+ *
+ * 상태:
+ * - .status-badge--saved: 저장됨 (초록)
+ * - .status-badge--dirty: 변경됨 (주황)
+ *
+ * 크기:
+ * - default: 일반 크기 (Editor wide 레이아웃)
+ * - compact: 작은 크기 (Renderer narrow 레이아웃)
+ */
+
+.status-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+/* Dot */
+.status-badge__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* Label */
+.status-badge__label {
+  line-height: 1;
+}
+
+/* ============================================
+   Saved State - 저장됨 (초록)
+   ============================================ */
+.status-badge--saved {
+  background: #F0FDF4;
+  color: #166534;
+}
+
+.status-badge--saved .status-badge__dot {
+  background: #22C55E;
+}
+
+/* ============================================
+   Dirty State - 변경됨 (주황)
+   ============================================ */
+.status-badge--dirty {
+  background: #FEF3C7;
+  color: #92400E;
+}
+
+.status-badge--dirty .status-badge__dot {
+  background: #F59E0B;
+}
+
+/* ============================================
+   Compact Size - 작은 크기
+   ============================================ */
+.status-badge--compact {
+  padding: 3px 8px;
+  font-size: 11px;
+  gap: 5px;
+}
+
+.status-badge--compact .status-badge__dot {
+  width: 5px;
+  height: 5px;
+}

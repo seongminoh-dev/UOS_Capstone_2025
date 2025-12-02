@@ -213,3 +213,20 @@ export function EyeOffIcon({ size = 20, ...props }: IconProps) {
     </svg>
   );
 }
+
+export function PencilIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M13.5 3.5l3 3L6 17H3v-3L13.5 3.5z" />
+      <path d="M11 6l3 3" />
+    </svg>
+  );
+}
+
+export function PlayIcon({ size = 20, ...props }: IconProps) {
+  return (
+    <svg {...defaultProps} width={size} height={size} viewBox="0 0 20 20" {...props}>
+      <path d="M6 4l10 6-10 6V4z" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}

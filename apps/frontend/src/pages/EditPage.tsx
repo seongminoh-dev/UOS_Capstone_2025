@@ -20,6 +20,7 @@ import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ThreeRenderer from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast, Modal, Button } from '../components/common';
+import type { SceneMode } from '../components/common';
 import {
   EditPageHeader,
   AddObjectPalette,
@@ -265,6 +266,17 @@ export default function EditPage() {
     }
     navigate('/simulator/list');
   };
+
+  // 모드 변경 전 확인 (저장하지 않은 변경사항 경고)
+  const handleBeforeModeChange = useCallback(
+    (_newMode: SceneMode): boolean => {
+      if (isDirty) {
+        return confirm('저장하지 않은 변경사항이 있습니다. 이동하시겠습니까?');
+      }
+      return true;
+    },
+    [isDirty]
+  );
 
   const handleSave = async () => {
     if (!editingScene) return;
@@ -624,11 +636,13 @@ export default function EditPage() {
         {/* Header */}
         <EditPageHeader
           title={editingScene?.name || '공간'}
+          sceneId={currentSceneId}
           status={isDirty ? 'modified' : 'synced'}
           onBack={handleCancel}
           onCancel={handleCancel}
           onSave={handleSaveAndExit}
           canSave={isDirty}
+          onBeforeModeChange={handleBeforeModeChange}
         />
 
         <div className="edit-page__layout">

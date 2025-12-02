@@ -46,3 +46,15 @@ export { LoadingState } from './LoadingState';
 // Form
 export { Vec3Input, FormField, ColorInput } from './Form';
 export type { Vec3InputProps, Vec3Labels, FormFieldProps, ColorInputProps } from './Form';
+
+// SceneModeSwitch
+export { SceneModeSwitch } from './SceneModeSwitch';
+export type { SceneModeSwitchProps, SceneMode } from './SceneModeSwitch';
+
+// StatusBadge
+export { StatusBadge } from './StatusBadge';
+export type { StatusBadgeProps } from './StatusBadge';
+
+// SceneHeaderBar
+export { SceneHeaderBar } from './SceneHeaderBar';
+export type { SceneHeaderBarProps, SceneHeaderLayout } from './SceneHeaderBar';

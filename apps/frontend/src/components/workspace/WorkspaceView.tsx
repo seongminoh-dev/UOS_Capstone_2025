@@ -124,6 +124,13 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
     navigate('/editor/new', { state: { createNew: true } });
   }, [navigate]);
 
+  const handleEditScene = useCallback(
+    (scene: SceneFrontend) => {
+      navigate(`/editor/scene/${scene.id}`);
+    },
+    [navigate]
+  );
+
   const handleClearSearch = useCallback(() => {
     setSearchQuery('');
   }, []);
@@ -240,6 +247,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
                   scene={scene}
                   viewMode="grid"
                   onClick={() => onSelectScene(scene)}
+                  onEdit={() => handleEditScene(scene)}
                   onDelete={() => handleDeleteRequest(scene)}
                   isRecentlyModified={recentlyModifiedIds.has(scene.id)}
                 />
@@ -271,6 +279,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
                   scene={scene}
                   viewMode="list"
                   onClick={() => onSelectScene(scene)}
+                  onEdit={() => handleEditScene(scene)}
                   onDelete={() => handleDeleteRequest(scene)}
                   isRecentlyModified={recentlyModifiedIds.has(scene.id)}
                 />

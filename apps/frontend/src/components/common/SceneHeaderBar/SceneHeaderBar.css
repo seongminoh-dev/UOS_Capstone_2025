@@ -1,0 +1,289 @@
+/**
+ * SceneHeaderBar - 공용 상단 헤더 스타일
+ *
+ * 두 가지 레이아웃:
+ *
+ * [Wide] - Editor 페이지 (전체 화면) - 단일 행
+ * [Narrow] - Renderer 우측 패널 (~300-360px) - 3행
+ */
+
+/* ============================================
+   Base Styles
+   ============================================ */
+.scene-header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+/* Dirty 상태 좌측 강조 바 */
+.scene-header--dirty {
+  border-left: 3px solid var(--color-warning);
+}
+
+/* ============================================
+   Wide Layout - 단일 행 (Editor용)
+   ============================================ */
+.scene-header--wide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  height: 56px;
+  padding: 0 20px;
+}
+
+.scene-header--wide.scene-header--dirty {
+  padding-left: 17px;
+}
+
+/* Wide - Left */
+.scene-header--wide .scene-header__left {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Wide - Center */
+.scene-header--wide .scene-header__center {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex: 1;
+  min-width: 0;
+  justify-content: center;
+}
+
+.scene-header--wide .scene-header__title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Wide - Right */
+.scene-header--wide .scene-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Narrow Layout - 3행 (Renderer 패널용)
+   ============================================ */
+.scene-header--narrow {
+  display: flex;
+  flex-direction: column;
+}
+
+.scene-header--narrow.scene-header--dirty {
+  padding-left: 0;
+  border-left: none;
+}
+
+/* Narrow - Row Base */
+.scene-header__row {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+}
+
+/* Narrow - Row 1: Navigation + Save */
+.scene-header__row--nav {
+  justify-content: space-between;
+  height: 44px;
+  border-bottom: 1px solid var(--border-default);
+}
+
+.scene-header__nav-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Narrow - Row 2: Scene Info */
+.scene-header__row--info {
+  justify-content: space-between;
+  gap: 12px;
+  height: 40px;
+}
+
+.scene-header--narrow.scene-header--dirty .scene-header__row--info {
+  border-left: 3px solid var(--color-warning);
+  padding-left: 13px;
+}
+
+/* Narrow - Row 3: Mode Switch */
+.scene-header__row--mode {
+  padding: 8px 16px 12px;
+  border-top: 1px solid var(--border-default);
+}
+
+/* ============================================
+   Back Button
+   ============================================ */
+.scene-header__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-left: -10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.scene-header__back:hover {
+  color: var(--text-primary);
+  background: var(--bg-muted);
+}
+
+.scene-header__back svg {
+  flex-shrink: 0;
+}
+
+/* Compact Back Button (Narrow) */
+.scene-header__back--compact {
+  margin-left: -6px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* ============================================
+   Scene Name
+   ============================================ */
+.scene-header__name {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 300px;
+}
+
+.scene-header--narrow .scene-header__name {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 180px;
+}
+
+/* ============================================
+   Action Buttons
+   ============================================ */
+.scene-header__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 34px;
+  padding: 0 16px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.scene-header__btn--sm {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.scene-header__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scene-header__btn svg {
+  flex-shrink: 0;
+}
+
+/* Secondary Button */
+.scene-header__btn--secondary {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.scene-header__btn--secondary:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-hover);
+}
+
+/* Primary Button */
+.scene-header__btn--primary {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  min-width: 60px;
+}
+
+.scene-header__btn--primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+}
+
+/* ============================================
+   Responsive (Wide Layout Only)
+   ============================================ */
+@media (max-width: 768px) {
+  .scene-header--wide {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .scene-header--wide .scene-header__left {
+    order: 1;
+  }
+
+  .scene-header--wide .scene-header__center {
+    order: 3;
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+
+  .scene-header--wide .scene-header__right {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .scene-header--wide .scene-header__name {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 480px) {
+  .scene-header--wide .scene-header__center {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scene-header--wide .scene-header__title-group {
+    flex-wrap: wrap;
+  }
+
+  .scene-header--wide .scene-header__name {
+    max-width: 150px;
+    font-size: 14px;
+  }
+
+  .scene-header--wide .scene-header__btn {
+    height: 32px;
+    padding: 0 12px;
+    font-size: 12px;
+  }
+}

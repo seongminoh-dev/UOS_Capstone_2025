@@ -18,6 +18,7 @@ import {
   ConfirmModal,
   useToast,
 } from '../common';
+import type { SceneMode } from '../common';
 import { LightSimulatorHeader } from './LightSimulatorHeader';
 import type { SimulatorStatus } from './LightSimulatorHeader';
 import { TimeOfDayCard } from './TimeOfDayCard';
@@ -79,6 +80,7 @@ export function ControlPanel({
   const [editingAsset, setEditingAsset] = useState<SceneAsset | null>(null);
   const [showSaveConfirm, setShowSaveConfirm] = useState(false);
   const [pendingAction, setPendingAction] = useState<'workspace' | 'edit' | null>(null);
+  const [pendingEditMode, setPendingEditMode] = useState<SceneMode | null>(null);
   const [deletingAssetId, setDeletingAssetId] = useState<string | number | null>(null);
   const [dontShowDeleteConfirm, setDontShowDeleteConfirm] = useState(false);
 
@@ -111,15 +113,30 @@ export function ControlPanel({
     }
   };
 
-  // Edit 페이지로 이동 (저장 확인)
-  const handleEditPage = () => {
+  // 모드 변경 전 저장 확인
+  const handleBeforeModeChange = useCallback(
+    (newMode: SceneMode): boolean => {
+      if (!hasUnsavedChanges) return true; // 변경사항 없으면 바로 진행
+
+      // 저장 확인 모달 표시
+      setPendingAction('edit');
+      setPendingEditMode(newMode);
+      setShowSaveConfirm(true);
+      return false; // 네비게이션 취소 (모달에서 처리)
+    },
+    [hasUnsavedChanges]
+  );
+
+  // Edit 페이지로 이동 (ObjectsTab용 - 저장 확인 포함)
+  const handleEditPageNavigate = useCallback(() => {
     if (hasUnsavedChanges) {
       setPendingAction('edit');
+      setPendingEditMode('edit');
       setShowSaveConfirm(true);
     } else {
       navigate(`/editor/scene/${currentScene.id}`);
     }
-  };
+  }, [hasUnsavedChanges, navigate, currentScene.id]);
 
   // 저장 확인 모달 - 저장 후 진행
   const handleSaveAndProceed = async () => {
@@ -130,10 +147,11 @@ export function ControlPanel({
 
       if (pendingAction === 'workspace') {
         onSceneSelect(null);
-      } else if (pendingAction === 'edit') {
+      } else if (pendingAction === 'edit' && pendingEditMode === 'edit') {
         navigate(`/editor/scene/${saved.id}`);
       }
       setPendingAction(null);
+      setPendingEditMode(null);
     } catch (error) {
       console.error('Failed to save:', error);
       toast.error('저장에 실패했습니다');
@@ -146,10 +164,11 @@ export function ControlPanel({
 
     if (pendingAction === 'workspace') {
       onSceneSelect(null);
-    } else if (pendingAction === 'edit') {
+    } else if (pendingAction === 'edit' && pendingEditMode === 'edit') {
       navigate(`/editor/scene/${scene.id}`);
     }
     setPendingAction(null);
+    setPendingEditMode(null);
   };
 
   // Asset 편집 저장
@@ -225,11 +244,12 @@ export function ControlPanel({
       {/* Header */}
       <LightSimulatorHeader
         title={currentScene.name}
+        sceneId={currentScene.id}
         status={getStatus()}
         onBack={handleBackToWorkspace}
-        onEditScene={handleEditPage}
         onSave={handleSave}
         canSave={hasUnsavedChanges}
+        onBeforeModeChange={handleBeforeModeChange}
       />
 
       {/* Time of Day Card */}
@@ -278,7 +298,7 @@ export function ControlPanel({
               assets={currentScene.assets}
               onAssetClick={setEditingAsset}
               onAssetDelete={handleDeleteAssetRequest}
-              onEditPageNavigate={handleEditPage}
+              onEditPageNavigate={handleEditPageNavigate}
             />
           </Tabs.Panel>
 
