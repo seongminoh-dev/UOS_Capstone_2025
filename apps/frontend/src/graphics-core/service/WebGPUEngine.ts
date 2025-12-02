@@ -509,6 +509,62 @@ export class WebGPUEngine {
         this.updateLighting(sunSettings);
     }
 
+    // ─────────────────────────────────────────────
+    // 정적 렌더링 지원 메서드
+    // ─────────────────────────────────────────────
+
+    /**
+     * World를 초기화합니다 (새 Scene 로드 전 호출)
+     */
+    public clearWorld(): void {
+        this.world = new World();
+        console.log('[WebGPUEngine] World cleared');
+    }
+
+    /**
+     * Renderer가 초기화되었는지 확인합니다.
+     */
+    public isRendererInitialized(): boolean {
+        return this.renderer !== null;
+    }
+
+    /**
+     * 단일 프레임을 렌더링합니다 (정적 렌더링용)
+     * - 렌더 루프 없이 한 번만 렌더링
+     */
+    public renderOnce(): void {
+        if (!this.renderer) {
+            console.warn('[WebGPUEngine] Renderer not initialized');
+            return;
+        }
+
+        // 카메라 위치 콜백 업데이트
+        if (this.onCameraUpdate) {
+            const camera = this.renderer.GetCamera();
+            const cameraLocation = camera.GetLocation();
+            this.onCameraUpdate({
+                x: cameraLocation[0],
+                y: cameraLocation[1],
+                z: cameraLocation[2],
+            });
+        }
+
+        // 단일 프레임 렌더링
+        this.renderer.Update();
+        this.renderer.Render();
+
+        console.log('[WebGPUEngine] Rendered single frame');
+    }
+
+    /**
+     * 프레임 카운트를 리셋합니다 (Scene 변경 후 호출)
+     */
+    public resetFrameCount(): void {
+        if (this.renderer) {
+            this.renderer.ResetFrameCount();
+        }
+    }
+
     /**
      * 통합 Lighting 업데이트 (내부 메서드)
      * - Sun + Environment를 한 번에 계산하고 GPU 버퍼 업데이트

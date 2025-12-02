@@ -16,7 +16,7 @@
  */
 
 import { useState, useEffect, useCallback } from 'react';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ThreeRenderer from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast, Modal, Button } from '../components/common';
@@ -44,9 +44,14 @@ import type { SceneId } from '../stores/sceneRepository';
 import './EditPage.css';
 
 export default function EditPage() {
+  const { sceneId } = useParams<{ sceneId: string }>();
   const location = useLocation();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // URL 경로 분석
+  const isNewMode = location.pathname === '/editor/new' || location.pathname === '/edit';
+  const isSceneMode = location.pathname.startsWith('/editor/scene/') && !!sceneId;
 
   // ========== UI 상태 ==========
   const [gizmoMode, setGizmoMode] = useState<GizmoMode>('translate');
@@ -62,7 +67,7 @@ export default function EditPage() {
   const [selectedRoomMesh, setSelectedRoomMesh] = useState('');
 
   // ========== Scene 상태 (기존 비즈니스 로직 유지) ==========
-  const { scenes, loadScenes, cloneForEdit, saveScene } = useSceneRepository();
+  const { scenes, loadScenes, cloneForEdit, saveScene, getSceneById } = useSceneRepository();
   const [currentSceneId, setCurrentSceneId] = useState<SceneId | null>(null);
   const [editingScene, setEditingScene] = useState<SceneFrontend | null>(null);
   const [isDirty, setIsDirty] = useState(false);
@@ -84,26 +89,60 @@ export default function EditPage() {
   useEffect(() => {
     if (initialized) return;
 
-    if (location.state?.scene) {
-      const passedScene = location.state.scene as SceneFrontend;
-      setCurrentSceneId(passedScene.id);
-      setEditingScene(JSON.parse(JSON.stringify(passedScene)));
-      setShowSceneSelectModal(false);
-      setShowCreateSceneModal(false);
-      setIsDirty(false);
-      setInitialized(true);
-    } else if (location.state?.createNew) {
-      setNewSceneName(`새 Scene ${scenes.length + 1}`);
-      setNewSceneDescription('');
-      setSelectedRoomMesh(availableRooms[0]?.meshName || 'TestScene');
-      setShowSceneSelectModal(false);
-      setShowCreateSceneModal(true);
-      setInitialized(true);
-    } else {
-      setShowSceneSelectModal(true);
-      setInitialized(true);
+    // URL 기반 라우팅 우선
+    if (isSceneMode && sceneId) {
+      // /editor/scene/:sceneId → 기존 Scene 편집
+      const parsedId = /^\d+$/.test(sceneId) ? parseInt(sceneId, 10) : sceneId;
+      const foundScene = getSceneById(parsedId);
+
+      if (foundScene) {
+        setCurrentSceneId(foundScene.id);
+        setEditingScene(JSON.parse(JSON.stringify(foundScene)));
+        setShowSceneSelectModal(false);
+        setShowCreateSceneModal(false);
+        setIsDirty(false);
+        setInitialized(true);
+      } else if (scenes.length > 0) {
+        // scenes 로드 후에도 못 찾으면 모달 표시
+        toast.warning('해당 Scene을 찾을 수 없습니다.');
+        setShowSceneSelectModal(true);
+        setInitialized(true);
+      }
+      // scenes가 아직 로드 안됐으면 대기 (initialized = false 유지)
+      return;
     }
-  }, [location.state, scenes.length, availableRooms, initialized]);
+
+    if (isNewMode) {
+      // /editor/new 또는 /edit → 새 Scene 생성
+      // location.state?.createNew가 있으면 바로 생성 모달
+      if (location.state?.createNew) {
+        setNewSceneName(`새 Scene ${scenes.length + 1}`);
+        setNewSceneDescription('');
+        setSelectedRoomMesh(availableRooms[0]?.meshName || 'TestScene');
+        setShowSceneSelectModal(false);
+        setShowCreateSceneModal(true);
+        setInitialized(true);
+      } else if (location.state?.scene) {
+        // location.state로 Scene이 전달된 경우 (하위호환)
+        const passedScene = location.state.scene as SceneFrontend;
+        setCurrentSceneId(passedScene.id);
+        setEditingScene(JSON.parse(JSON.stringify(passedScene)));
+        setShowSceneSelectModal(false);
+        setShowCreateSceneModal(false);
+        setIsDirty(false);
+        setInitialized(true);
+      } else {
+        // 아무것도 없으면 선택 모달
+        setShowSceneSelectModal(true);
+        setInitialized(true);
+      }
+      return;
+    }
+
+    // 기본: 선택 모달
+    setShowSceneSelectModal(true);
+    setInitialized(true);
+  }, [location.state, location.pathname, scenes.length, availableRooms, initialized, isNewMode, isSceneMode, sceneId, getSceneById, toast]);
 
   // 브라우저 닫기 경고
   useEffect(() => {
@@ -224,7 +263,7 @@ export default function EditPage() {
     if (isDirty && !confirm('저장하지 않은 변경사항이 있습니다. 나가시겠습니까?')) {
       return;
     }
-    navigate('/simulator');
+    navigate('/simulator/list');
   };
 
   const handleSave = async () => {
@@ -235,6 +274,11 @@ export default function EditPage() {
       setEditingScene(cloneForEdit(saved.id));
       setIsDirty(false);
       toast.success('저장되었습니다.');
+
+      // URL 업데이트 (새 Scene이면 ID가 바뀔 수 있음)
+      if (isNewMode && saved.id !== editingScene.id) {
+        navigate(`/editor/scene/${saved.id}`, { replace: true });
+      }
     } catch (error) {
       console.error('Failed to save scene:', error);
       toast.error('Scene 저장에 실패했습니다.');
@@ -244,8 +288,9 @@ export default function EditPage() {
   const handleSaveAndExit = async () => {
     if (!editingScene) return;
     try {
-      await saveScene(editingScene);
-      navigate('/simulator');
+      const saved = await saveScene(editingScene);
+      // 저장 후 해당 Scene의 시뮬레이터로 이동
+      navigate(`/simulator/scene/${saved.id}`);
     } catch (error) {
       console.error('Failed to save scene:', error);
       toast.error('Scene 저장에 실패했습니다.');
@@ -488,7 +533,7 @@ export default function EditPage() {
   return (
     <>
       {/* 공간 선택 모달 */}
-      <Modal isOpen={showSceneSelectModal} onClose={() => navigate('/simulator')} title="공간 선택" size="md">
+      <Modal isOpen={showSceneSelectModal} onClose={() => navigate('/simulator/list')} title="공간 선택" size="md">
         <div className="scene-select-modal">
           <p className="scene-select-modal__description">편집할 공간을 선택하거나 새로 만드세요.</p>
           <Button variant="primary" fullWidth onClick={handleOpenCreateSceneModal}>
@@ -517,12 +562,12 @@ export default function EditPage() {
       {/* 새 공간 생성 모달 */}
       <Modal
         isOpen={showCreateSceneModal}
-        onClose={() => navigate('/simulator')}
+        onClose={() => navigate('/simulator/list')}
         title="새 공간 만들기"
         size="md"
         footer={
           <>
-            <Button variant="secondary" onClick={() => navigate('/simulator')}>
+            <Button variant="secondary" onClick={() => navigate('/simulator/list')}>
               취소
             </Button>
             <Button variant="primary" onClick={handleCreateNewScene}>

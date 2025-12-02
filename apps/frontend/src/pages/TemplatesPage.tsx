@@ -96,7 +96,7 @@ export default function TemplatesPage() {
         toast.success(`"${newScene.name}" 생성 완료`);
 
         // 새로 생성된 Scene으로 바로 시뮬레이터 이동
-        navigate('/simulator', { state: { scene: newScene } });
+        navigate(`/simulator/scene/${newScene.id}`);
       } catch (error) {
         console.error('Failed to create from template:', error);
         toast.error('템플릿 복사에 실패했습니다.');

@@ -117,7 +117,7 @@ export function ControlPanel({
       setPendingAction('edit');
       setShowSaveConfirm(true);
     } else {
-      navigate('/edit', { state: { scene: currentScene } });
+      navigate(`/editor/scene/${currentScene.id}`);
     }
   };
 
@@ -131,7 +131,7 @@ export function ControlPanel({
       if (pendingAction === 'workspace') {
         onSceneSelect(null);
       } else if (pendingAction === 'edit') {
-        navigate('/edit', { state: { scene: saved } });
+        navigate(`/editor/scene/${saved.id}`);
       }
       setPendingAction(null);
     } catch (error) {
@@ -147,7 +147,7 @@ export function ControlPanel({
     if (pendingAction === 'workspace') {
       onSceneSelect(null);
     } else if (pendingAction === 'edit') {
-      navigate('/edit', { state: { scene } });
+      navigate(`/editor/scene/${scene.id}`);
     }
     setPendingAction(null);
   };

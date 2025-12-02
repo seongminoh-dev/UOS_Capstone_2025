@@ -121,7 +121,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
   }, []);
 
   const handleCreateNew = useCallback(() => {
-    navigate('/edit', { state: { createNew: true } });
+    navigate('/editor/new', { state: { createNew: true } });
   }, [navigate]);
 
   const handleClearSearch = useCallback(() => {
