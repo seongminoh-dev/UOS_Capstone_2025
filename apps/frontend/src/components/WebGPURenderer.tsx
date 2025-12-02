@@ -288,15 +288,21 @@ export default function WebGPURenderer({
           });
         }
 
-        // 3. SceneAdapter를 통해 World에 Scene 로드
+        // 3. SceneAdapter를 통해 World에 Scene 로드 (Room, Assets만)
         SceneAdapter.loadSceneToWorld(sceneFrontend, world);
 
-        // 4. Renderer 재초기화 (with progress callback)
+        // 4. Sun/Environment 적용 (graphics-core에서 처리)
+        engine.applySunSettings(sceneFrontend.sunSettings);
+
+        // 5. Renderer 재초기화 (with progress callback)
         const renderer = engine.getRenderer();
         if (renderer) {
           await renderer.Initialize(world, (progress) => {
             setInitProgress(progress);
           });
+
+          // 6. Renderer 초기화 완료 후 Environment 파라미터 적용
+          engine.applyPendingLighting();
         }
 
         // 5. InputController에 카메라 설정

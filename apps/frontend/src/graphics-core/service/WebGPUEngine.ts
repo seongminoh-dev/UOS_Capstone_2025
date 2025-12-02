@@ -2,7 +2,6 @@ import { vec3 } from 'wgpu-matrix';
 import type { Vec3 } from 'wgpu-matrix';
 import { World } from '../World';
 import { InputController } from '../InputController';
-import { calculateSunLightParams, calculateEnvironmentParams } from '../../utils/SunCalculator';
 import type { SunSettings } from './Scene';
 import { RENDERER_CONFIG } from '../../config';
 import type { InitProgress, InitializeOptions, OnProgressCallback } from './types/InitProgress';
@@ -10,11 +9,17 @@ import { TOTAL_INIT_STEPS } from './types/InitProgress';
 import { WebGPUError } from './types/WebGPUError';
 import type { WebGPUErrorCode } from './types/WebGPUError';
 
-// Renderer Renderer_TEST
+// Renderer
 import { Renderer } from '../Renderer_TEST';
 
-// 태양 강도 배수 (SceneAdapter와 동일)
-const SUN_INTENSITY_MULTIPLIER = 15;
+// Lighting Module (새로운 통합 모듈)
+import {
+  computeLighting,
+  sunSettingsToLightingSettings,
+  extractDirectionalLightData,
+  extractEnvironmentUniformData,
+  lightingToDebugString,
+} from '../lighting';
 
 
 
@@ -46,6 +51,11 @@ export class WebGPUEngine {
     // WebGPU 에러 콜백 (런타임 에러 전달용)
     // ─────────────────────────────────────────────
     public onError: ((error: WebGPUError) => void) | null = null;
+
+    // ─────────────────────────────────────────────
+    // Pending SunSettings (Renderer 초기화 전 저장)
+    // ─────────────────────────────────────────────
+    private pendingSunSettings: SunSettings | null = null;
 
     constructor(canvas: HTMLCanvasElement) {
         this.canvas = canvas;
@@ -390,7 +400,103 @@ export class WebGPUEngine {
     }
 
     /**
-     * 태양 설정을 즉시 업데이트합니다 (재렌더링 없이).
+     * Scene 로딩 시 sunSettings를 적용합니다.
+     * - Sun → DirectionalLight 변환하여 World에 추가
+     * - Environment 파라미터 설정 (Renderer 초기화 후 적용됨)
+     *
+     * @param sunSettings - 태양 설정
+     */
+    public applySunSettings(sunSettings: SunSettings): void {
+        // 1. SunSettings → LightingSettings 변환
+        const lightingSettings = sunSettingsToLightingSettings(sunSettings);
+
+        // 2. 통합 Lighting 계산
+        const lighting = computeLighting(lightingSettings);
+
+        // 3. DirectionalLight를 World에 추가 (Renderer 초기화 전에도 동작)
+        const sunData = extractDirectionalLightData(lighting);
+
+        if (sunData) {
+            const direction: Vec3 = vec3.normalize(
+                vec3.fromValues(...sunData.direction)
+            );
+            const color: Vec3 = vec3.fromValues(...sunData.color);
+
+            this.world.AddDirectionalLight(direction, color, sunData.intensity);
+            console.log(`[WebGPUEngine] Sun applied: intensity=${sunData.intensity.toFixed(2)}`);
+        } else {
+            console.log('[WebGPUEngine] Sun is below horizon (night mode)');
+        }
+
+        // 4. 조명이 0개면 dummy light 추가 (렌더러 크래시 방지)
+        if (this.world.Lights.length === 0) {
+            const dummyDirection: Vec3 = vec3.fromValues(0, -1, 0);
+            const dummyColor: Vec3 = vec3.fromValues(0, 0, 0);
+            this.world.AddDirectionalLight(dummyDirection, dummyColor, 0.0);
+            console.log('[WebGPUEngine] No lights - added dummy light');
+        }
+
+        // 5. 환경 파라미터 저장 (Renderer 초기화 시 사용됨)
+        this.pendingSunSettings = sunSettings;
+
+        // 6. Renderer가 이미 초기화되어 있으면 Environment도 업데이트
+        if (this.renderer) {
+            const envData = extractEnvironmentUniformData(lighting);
+            this.renderer.UpdateEnvironment(
+                envData.skyColor,
+                envData.horizonColor,
+                envData.groundColor,
+                envData.sunDirection,
+                envData.sunIntensity,
+                envData.envIntensity,
+                envData.envMode,
+                envData.envIndirectMult
+            );
+            console.log(lightingToDebugString(lighting));
+        }
+    }
+
+    /**
+     * Renderer 초기화 완료 후, 대기 중인 lighting 파라미터를 적용합니다.
+     * - applySunSettings()에서 저장한 pendingSunSettings를 사용
+     * - Environment 파라미터(envIndirectMult * ENV_INDIRECT_INTENSITY 등)를 GPU에 전달
+     */
+    public applyPendingLighting(): void {
+        if (!this.renderer) {
+            console.warn('[WebGPUEngine] Renderer not initialized');
+            return;
+        }
+
+        if (!this.pendingSunSettings) {
+            console.warn('[WebGPUEngine] No pending sun settings');
+            return;
+        }
+
+        // pendingSunSettings를 사용하여 Environment 업데이트
+        const lightingSettings = sunSettingsToLightingSettings(this.pendingSunSettings);
+        const lighting = computeLighting(lightingSettings);
+        const envData = extractEnvironmentUniformData(lighting);
+
+        this.renderer.UpdateEnvironment(
+            envData.skyColor,
+            envData.horizonColor,
+            envData.groundColor,
+            envData.sunDirection,
+            envData.sunIntensity,
+            envData.envIntensity,
+            envData.envMode,
+            envData.envIndirectMult
+        );
+
+        console.log('[WebGPUEngine] Pending lighting applied');
+        console.log(lightingToDebugString(lighting));
+
+        // 적용 완료 후 초기화
+        this.pendingSunSettings = null;
+    }
+
+    /**
+     * 태양 설정을 즉시 업데이트합니다 (Renderer 초기화 후 사용).
      * @param sunSettings - 새로운 태양 설정
      */
     public updateSunLight(sunSettings: SunSettings): void {
@@ -399,56 +505,56 @@ export class WebGPUEngine {
             return;
         }
 
-        // 태양 파라미터 계산
-        const sunParams = calculateSunLightParams(
-            sunSettings.timeOfDay,
-            sunSettings.isDaytime,
-            sunSettings.season,
-            sunSettings.roomOrientation
-        );
+        // 새로운 Lighting 모듈 사용
+        this.updateLighting(sunSettings);
+    }
 
-        if (sunParams) {
+    /**
+     * 통합 Lighting 업데이트 (내부 메서드)
+     * - Sun + Environment를 한 번에 계산하고 GPU 버퍼 업데이트
+     * @param sunSettings - 태양 설정
+     */
+    private updateLighting(sunSettings: SunSettings): void {
+        // 1. SunSettings → LightingSettings 변환
+        const lightingSettings = sunSettingsToLightingSettings(sunSettings);
+
+        // 2. 통합 Lighting 계산
+        const lighting = computeLighting(lightingSettings);
+
+        // 3. DirectionalLight 업데이트
+        const sunData = extractDirectionalLightData(lighting);
+
+        if (sunData) {
             // 낮: DirectionalLight 업데이트
             const direction: Vec3 = vec3.normalize(
-                vec3.fromValues(...sunParams.direction)
+                vec3.fromValues(...sunData.direction)
             );
-            const color: Vec3 = vec3.fromValues(...sunParams.color);
-            const intensity: number = sunParams.intensity * SUN_INTENSITY_MULTIPLIER;
+            const color: Vec3 = vec3.fromValues(...sunData.color);
 
-            this.world.UpdateDirectionalLight(direction, color, intensity);
-            console.log(`[WebGPUEngine] Sun updated: direction=[${sunParams.direction}], intensity=${intensity.toFixed(2)}`);
+            this.world.UpdateDirectionalLight(direction, color, sunData.intensity);
         } else {
             // 밤: DirectionalLight 제거
             this.world.RemoveDirectionalLights();
-            console.log('[WebGPUEngine] Sun removed (night mode)');
         }
 
-        // GPU Light 버퍼 업데이트
-        this.renderer.UpdateLights(this.world);
+        // 4. GPU Light 버퍼 업데이트
+        this.renderer!.UpdateLights(this.world);
 
-        // 환경 파라미터 계산 및 업데이트 (Procedural Sky)
-        const envParams = calculateEnvironmentParams(
-            sunSettings.timeOfDay,
-            sunSettings.isDaytime,
-            sunSettings.season,
-            sunSettings.roomOrientation
+        // 5. Environment 업데이트
+        const envData = extractEnvironmentUniformData(lighting);
+
+        this.renderer!.UpdateEnvironment(
+            envData.skyColor,
+            envData.horizonColor,
+            envData.groundColor,
+            envData.sunDirection,
+            envData.sunIntensity,
+            envData.envIntensity,
+            envData.envMode,
+            envData.envIndirectMult
         );
 
-        // skyMode: 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
-        const skyMode = sunSettings.skyMode ?? 2;
-        const envIndirectMult = sunSettings.envIndirectMultiplier ?? 0.5;
-
-        this.renderer.UpdateEnvironment(
-            envParams.skyColor,
-            envParams.horizonColor,
-            envParams.groundColor,
-            envParams.sunDirection,
-            envParams.sunIntensity,
-            envParams.environmentIntensity,
-            skyMode,
-            envIndirectMult
-        );
-        const modeNames = ['없음', '일반', '고품질'];
-        console.log(`[WebGPUEngine] Environment: mode=${modeNames[skyMode]}, indirect=${(envIndirectMult * 100).toFixed(0)}%`);
+        // 6. 디버그 로그
+        console.log(lightingToDebugString(lighting));
     }
 }

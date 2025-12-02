@@ -16,8 +16,6 @@ import type { SceneFrontend, PointLightParams, RectLightParams } from '../graphi
 import type { World } from '../graphics-core/World';
 import type { Vec3, Quat } from 'wgpu-matrix';
 import { vec3, quat } from 'wgpu-matrix';
-import { calculateSunLightParams } from '../utils/SunCalculator';
-import { LIGHTING_CONFIG } from '../config';
 
 /**
  * Euler angles (degrees) → Quaternion 변환
@@ -52,27 +50,8 @@ export class SceneAdapter {
       console.warn(`Room mesh not found: ${scene.room.meshName}`);
     }
 
-    // 3. ✅ Sun → DirectionalLight 자동 변환
-    const sunParams = calculateSunLightParams(
-      scene.sunSettings.timeOfDay,
-      scene.sunSettings.isDaytime,
-      scene.sunSettings.season,
-      scene.sunSettings.roomOrientation
-    );
-
-    if (sunParams) {
-      const direction: Vec3 = vec3.normalize(vec3.fromValues(...sunParams.direction));
-      const color: Vec3 = vec3.fromValues(...sunParams.color);
-      // 태양광 강도 배수 적용 (from centralized config)
-      const intensity: number = sunParams.intensity * LIGHTING_CONFIG.SUN_INTENSITY_MULTIPLIER;
-
-      world.AddDirectionalLight(direction, color, intensity);
-      console.log(`Sun loaded: intensity=${sunParams.intensity} * ${LIGHTING_CONFIG.SUN_INTENSITY_MULTIPLIER} = ${intensity}`);
-    } else {
-      console.log('Sun is below horizon (night mode)');
-    }
-
-    // 4. ✅ Assets 로드 (Objects + Point/Rect Lights만)
+    // 3. ✅ Assets 로드 (Objects + Point/Rect Lights만)
+    // Note: Sun/DirectionalLight는 graphics-core(WebGPUEngine)에서 처리
     let objectCount = 0;
     let lightCount = 0;
 
@@ -130,19 +109,11 @@ export class SceneAdapter {
       // Note: directional-light는 sunSettings에서 자동 생성되므로 여기서 제외
     }
 
-    // 5. ✅ 조명이 0개면 dummy light 추가 (렌더러 크래시 방지)
-    if (world.Lights.length === 0) {
-      const dummyDirection: Vec3 = vec3.fromValues(0, -1, 0);
-      const dummyColor: Vec3 = vec3.fromValues(0, 0, 0);
-      world.AddDirectionalLight(dummyDirection, dummyColor, 0.0);
-      console.log('No lights in scene - added dummy light to prevent renderer crash');
-    }
-
+    // 4. ✅ 로딩 로그 (Sun/DirectionalLight는 graphics-core에서 추가됨)
     console.log(`Scene loaded: ${scene.name}`);
     console.log(`- Room: 1`);
-    console.log(`- Sun: ${sunParams ? '1 (DirectionalLight)' : '0 (night)'}`);
     console.log(`- Objects: ${objectCount}`);
-    console.log(`- Lights: ${lightCount}`);
+    console.log(`- Lights: ${lightCount} (Sun은 graphics-core에서 처리)`);
   }
 
   /**
