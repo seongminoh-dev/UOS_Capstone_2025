@@ -26,3 +26,7 @@ export type {
   OnProgressCallback,
 } from './types/InitProgress';
 export { PHASE_METADATA, TOTAL_INIT_STEPS, isAssetLoadingProgress } from './types/InitProgress';
+
+// WebGPUError 타입 및 유틸리티 export
+export type { WebGPUErrorCode } from './types/WebGPUError';
+export { WebGPUError, isWebGPUError, mapWebGPUErrorCodeToLegacy } from './types/WebGPUError';
