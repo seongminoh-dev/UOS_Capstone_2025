@@ -1,0 +1,335 @@
+/**
+ * SceneHeaderBar - 공용 상단 헤더 스타일
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * 레이아웃 구조
+ * ═══════════════════════════════════════════════════════════════════════════
+ *
+ * [Wide] - Editor 페이지 (전체 화면) - 단일 행, Center 2줄 블록
+ *   Left(Back) | Center(2줄: Name·Status / ModeSwitch) | Right(Cancel·Save)
+ *   전체 높이: 56px
+ *
+ * [Narrow] - Renderer 우측 패널 (~300-360px) - 3행
+ *   Row 1: Top Bar (Back + Save) - height 44px
+ *   Gap: 12-14px (Top bar와 Title 구분)
+ *   Row 2: Title (Name + Status) - height 40px
+ *   Row 3: Mode Switch - padding 12px
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * Back 버튼 규격
+ * ═══════════════════════════════════════════════════════════════════════════
+ * - 높이: 32px
+ * - 좌우 padding: 12-16px
+ * - 클릭 영역: 화살표 + 텍스트 전체
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * SceneName 규칙
+ * ═══════════════════════════════════════════════════════════════════════════
+ * - Wide: max-width 280px, 초과 시 ellipsis
+ * - Narrow: max-width 160px, 초과 시 ellipsis
+ * - 항상 title 속성으로 전체 이름 툴팁 제공
+ */
+
+/* ============================================
+   Base Styles
+   ============================================ */
+.scene-header {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-default);
+  flex-shrink: 0;
+}
+
+/* Dirty 상태 좌측 강조 바 - Wide 레이아웃에서만 */
+.scene-header--wide.scene-header--dirty {
+  border-left: 3px solid var(--color-warning);
+}
+
+/* ============================================
+   Wide Layout - 단일 행, Center 2줄 블록 (Editor용)
+   ============================================ */
+.scene-header--wide {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  height: 56px;
+  padding: 0 20px;
+}
+
+.scene-header--wide.scene-header--dirty {
+  padding-left: 17px;
+}
+
+/* Wide - Left */
+.scene-header--wide .scene-header__left {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* Wide - Center (2줄 블록) */
+.scene-header--wide .scene-header__center {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  min-width: 0;
+}
+
+/* Wide - Center Row (각 줄) */
+.scene-header__center-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.2;
+}
+
+/* Wide - Separator (중간점) */
+.scene-header__separator {
+  color: var(--text-muted);
+  font-size: 12px;
+  flex-shrink: 0;
+  user-select: none;
+}
+
+/* Wide - Right */
+.scene-header--wide .scene-header__right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+/* ============================================
+   Narrow Layout - 3행 (Renderer 패널용)
+   ============================================ */
+.scene-header--narrow {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Narrow - Row Base */
+.scene-header__row {
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+}
+
+/* ----------------------------------------
+   Row 1: Top Bar (앱 레벨 네비게이션)
+   ---------------------------------------- */
+.scene-header__row--top {
+  justify-content: space-between;
+  height: 44px;
+  background: var(--bg-muted);
+  border-bottom: 1px solid var(--border-default);
+}
+
+.scene-header__top-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* ----------------------------------------
+   Row 2: Title (Scene 레벨)
+   Row 1과 Row 2 사이 gap: 12-14px
+   ---------------------------------------- */
+.scene-header__row--title {
+  justify-content: space-between;
+  gap: 12px;
+  height: 40px;
+  margin-top: 12px;  /* Row 1과의 명확한 구분 */
+}
+
+/* Dirty 상태 강조 - Row 2에만 적용 */
+.scene-header__row--title-dirty {
+  border-left: 3px solid var(--color-warning);
+  padding-left: 13px;
+}
+
+/* ----------------------------------------
+   Row 3: Mode Switch
+   ---------------------------------------- */
+.scene-header__row--mode {
+  padding: 8px 16px 12px;
+}
+
+/* ============================================
+   Back Button - 통일된 hit area
+   높이 32px, 좌우 padding 12-16px
+   ============================================ */
+.scene-header__back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  margin-left: -14px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.scene-header__back:hover {
+  color: var(--text-primary);
+  background: rgba(0, 0, 0, 0.06);
+}
+
+.scene-header__back:active {
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.scene-header__back svg {
+  flex-shrink: 0;
+}
+
+/* Narrow에서 Back 버튼 - 동일 규격 유지 */
+.scene-header--narrow .scene-header__back {
+  margin-left: -12px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+/* ============================================
+   Scene Name
+   ============================================ */
+.scene-header__name {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 280px;
+  line-height: 1.2;
+}
+
+/* Narrow에서 Scene Name */
+.scene-header--narrow .scene-header__name {
+  font-size: 14px;
+  font-weight: 600;
+  max-width: 160px;
+}
+
+/* ============================================
+   Action Buttons
+   ============================================ */
+.scene-header__btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  height: 32px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.scene-header__btn--sm {
+  height: 28px;
+  padding: 0 12px;
+  font-size: 12px;
+}
+
+.scene-header__btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.scene-header__btn svg {
+  flex-shrink: 0;
+}
+
+/* Secondary Button */
+.scene-header__btn--secondary {
+  background: var(--bg-muted);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+}
+
+.scene-header__btn--secondary:hover:not(:disabled) {
+  background: var(--bg-subtle);
+  border-color: var(--border-hover);
+}
+
+/* Primary Button */
+.scene-header__btn--primary {
+  background: var(--accent-primary);
+  color: var(--text-inverse);
+  min-width: 52px;
+}
+
+.scene-header__btn--primary:hover:not(:disabled) {
+  background: var(--accent-primary-hover);
+}
+
+/* ============================================
+   Responsive (Wide Layout Only)
+   ============================================ */
+@media (max-width: 900px) {
+  .scene-header--wide .scene-header__name {
+    max-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .scene-header--wide {
+    height: auto;
+    min-height: 56px;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    gap: 12px;
+  }
+
+  .scene-header--wide .scene-header__left {
+    order: 1;
+  }
+
+  .scene-header--wide .scene-header__center {
+    order: 3;
+    width: 100%;
+    align-items: flex-start;
+    gap: 4px;
+  }
+
+  .scene-header--wide .scene-header__right {
+    order: 2;
+    margin-left: auto;
+  }
+
+  .scene-header--wide .scene-header__name {
+    max-width: 180px;
+  }
+}
+
+@media (max-width: 480px) {
+  .scene-header--wide .scene-header__name {
+    max-width: 140px;
+    font-size: 14px;
+  }
+
+  .scene-header--wide .scene-header__btn {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+
+  .scene-header__separator {
+    display: none;
+  }
+}

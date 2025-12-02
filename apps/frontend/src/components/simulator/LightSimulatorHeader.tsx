@@ -1,89 +1,60 @@
 /**
- * LightSimulatorHeader - 조명 시뮬레이터 헤더
+ * LightSimulatorHeader - 조명 시뮬레이터 헤더 래퍼
  *
- * 두 줄 레이아웃:
- * ┌──────────────────────────────────────────────────────────────┐
- * │ ← Workspace                                                  │  ← 상단: 네비게이션
- * ├──────────────────────────────────────────────────────────────┤
- * │ Scene 제목 [상태뱃지]                [씬 편집] [저장]         │  ← 하단: 제목 + 액션
- * └──────────────────────────────────────────────────────────────┘
+ * SceneHeaderBar(layout="narrow")를 사용하여 Renderer 우측 패널에 최적화된 3행 레이아웃 제공
+ *
+ * ┌─────────────────────────────────────┐
+ * │ ← 작업공간                   [저장] │  ← Row 1: Top Bar (bg-muted)
+ * ├─────────────────────────────────────┤
+ * │ SceneName               [저장됨]    │  ← Row 2: Title
+ * │                                     │
+ * │ [ 시뮬레이션  |  오브젝트 편집 ]     │  ← Row 3: Mode Switch
+ * └─────────────────────────────────────┘
+ *
+ * 특징:
+ * - Row 1과 Row 2 사이에 구분선으로 앱 레벨/Scene 레벨 분리
+ * - 저장 버튼은 Row 1 우측에 위치 (Scene 헤더의 책임)
+ * - Scene 이름이 길면 ellipsis 처리 (max-width: 160px)
  */
 
-import { ChevronLeftIcon, ExternalLinkIcon } from '../common';
-import './LightSimulatorHeader.css';
+import { SceneHeaderBar } from '../common';
+import type { SceneMode } from '../common';
 
 export type SimulatorStatus = 'synced' | 'modified' | 'rendering';
 
 interface LightSimulatorHeaderProps {
   title: string;
+  sceneId: string | number;
   status: SimulatorStatus;
   onBack: () => void;
-  onEditScene: () => void;
   onSave: () => void;
   canSave?: boolean;
+  /** 모드 변경 전 콜백 - false 반환 시 전환 취소 */
+  onBeforeModeChange?: (newMode: SceneMode) => boolean | void | Promise<boolean | void>;
 }
-
-const STATUS_CONFIG: Record<SimulatorStatus, { label: string; className: string }> = {
-  synced: { label: '저장됨', className: 'header__badge--synced' },
-  modified: { label: '변경됨', className: 'header__badge--modified' },
-  rendering: { label: '렌더링 중', className: 'header__badge--rendering' },
-};
 
 export function LightSimulatorHeader({
   title,
+  sceneId,
   status,
   onBack,
-  onEditScene,
   onSave,
   canSave = false,
+  onBeforeModeChange,
 }: LightSimulatorHeaderProps) {
-  const statusConfig = STATUS_CONFIG[status];
   const isDirty = status === 'modified';
 
   return (
-    <header className={`panel-header-v2 ${isDirty ? 'panel-header-v2--dirty' : ''}`}>
-      {/* Top Row: Navigation */}
-      <div className="header__nav">
-        <button
-          type="button"
-          className="header__back-btn"
-          onClick={onBack}
-        >
-          <ChevronLeftIcon size={14} />
-          <span>Workspace</span>
-        </button>
-      </div>
-
-      {/* Bottom Row: Title + Actions */}
-      <div className="header__main">
-        <div className="header__left">
-          <h2 className="header__title">{title}</h2>
-          <span className={`header__badge ${statusConfig.className}`}>
-            {status === 'rendering' && <span className="header__spinner" />}
-            {statusConfig.label}
-          </span>
-        </div>
-
-        <div className="header__actions">
-          <button
-            type="button"
-            className="header__btn header__btn--secondary"
-            onClick={onEditScene}
-          >
-            <span>씬 편집</span>
-            <ExternalLinkIcon size={12} />
-          </button>
-
-          <button
-            type="button"
-            className="header__btn header__btn--primary"
-            onClick={onSave}
-            disabled={!canSave}
-          >
-            저장
-          </button>
-        </div>
-      </div>
-    </header>
+    <SceneHeaderBar
+      layout="narrow"
+      mode="simulate"
+      sceneId={sceneId}
+      sceneName={title}
+      isDirty={isDirty}
+      onGoWorkspace={onBack}
+      onSave={onSave}
+      canSave={canSave}
+      onBeforeModeChange={onBeforeModeChange}
+    />
   );
 }

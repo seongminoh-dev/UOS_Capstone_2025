@@ -1,4 +1,11 @@
-import type { SceneFrontend, SunSettings } from '../service/Scene';
+/**
+ * SceneTemplates - 기본 제공 템플릿 Scene 데이터
+ *
+ * 템플릿은 읽기 전용이며, 사용자가 선택하면 복사되어 workspace에 추가됩니다.
+ * ID prefix: template_
+ */
+
+import type { SceneFrontend, SunSettings } from '../../graphics-core/service/Scene';
 
 /**
  * 기본 태양광 설정
@@ -11,17 +18,13 @@ const DEFAULT_SUN_SETTINGS: SunSettings = {
 };
 
 /**
- * Dummy Scene 데이터
- * - 읽기 전용 (수정 시 새 Scene으로 분기)
- * - ID prefix: dummy_
+ * 템플릿 Scene 1: 안방
  */
-
-export const DUMMY_SCENE_1: SceneFrontend = {
-  id: 'dummy_scene_1',
+export const TEMPLATE_SCENE_1: SceneFrontend = {
+  id: 'template_scene_1',
   name: '안방(기본)',
   description: '침대와, 옷장, 책상의 기본 가구와 조명을 포함한 방입니다.',
 
-  // ✅ Room 설정 (편집 불가능, assets에서 분리)
   room: {
     meshName: 'BedroomEdit',
     locked: true,
@@ -32,17 +35,14 @@ export const DUMMY_SCENE_1: SceneFrontend = {
     },
   },
 
-  // ✅ 태양광 설정 (DirectionalLight 자동 생성)
   sunSettings: { ...DEFAULT_SUN_SETTINGS },
 
-  // ✅ 기본 카메라 위치
   camera: {
     position: [12.0, 4.0, 0.0],
     target: [13.0, 4.0, 0.0],
     fov: 60,
   },
 
-  // ✅ 사용자 추가 가능한 Asset만 (가구 + Point/Rect Light)
   assets: [
     // Window Object
     {
@@ -66,7 +66,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 1.0,
       },
     },
-
     {
       id: 'bulb1',
       type: 'point-light',
@@ -76,7 +75,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
     {
       id: 'bulb2',
       type: 'point-light',
@@ -86,7 +84,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
     {
       id: 'bulb3',
       type: 'point-light',
@@ -96,7 +93,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
     {
       id: 'bulb4',
       type: 'point-light',
@@ -106,7 +102,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
     {
       id: 'bulb5',
       type: 'point-light',
@@ -116,7 +111,6 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
     {
       id: 'bulb6',
       type: 'point-light',
@@ -126,23 +120,20 @@ export const DUMMY_SCENE_1: SceneFrontend = {
         intensity: 15.0,
       },
     },
-
-    // Note: DirectionalLight는 sunSettings에서 자동 생성됨
   ],
 
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  createdAt: '2024-01-01T00:00:00.000Z',
+  updatedAt: '2024-01-01T00:00:00.000Z',
 };
 
 /**
- * 추가 Dummy Scene (의자 포함)
+ * 템플릿 Scene 2: 작은방
  */
-export const DUMMY_SCENE_2: SceneFrontend = {
-  id: 'dummy_scene_2',
+export const TEMPLATE_SCENE_2: SceneFrontend = {
+  id: 'template_scene_2',
   name: '작은방(기본)',
   description: '한쪽 벽이 없는 작은 방입니다.',
 
-  // ✅ Room 설정
   room: {
     meshName: 'TestScene',
     locked: true,
@@ -153,17 +144,14 @@ export const DUMMY_SCENE_2: SceneFrontend = {
     },
   },
 
-  // ✅ 태양광 설정
   sunSettings: { ...DEFAULT_SUN_SETTINGS },
 
-  // ✅ 기본 카메라 위치
   camera: {
     position: [0.06, 2.12, 7.38],
     target: [-0.1, -0.22, 0.06],
     fov: 50,
   },
 
-  // ✅ 사용자 추가 가능한 Asset만
   assets: [
     // Chair Object
     {
@@ -189,20 +177,27 @@ export const DUMMY_SCENE_2: SceneFrontend = {
         intensity: 50,
       },
     },
-
-    // Note: DirectionalLight는 sunSettings에서 자동 생성됨
   ],
 
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
+  createdAt: '2024-01-01T00:00:00.000Z',
+  updatedAt: '2024-01-01T00:00:00.000Z',
 };
 
 /**
- * Dummy Scene 목록 (SceneRepository에서 사용)
+ * 전체 템플릿 목록
  */
-export const DUMMY_SCENES: SceneFrontend[] = [DUMMY_SCENE_1, DUMMY_SCENE_2];
+export const SCENE_TEMPLATES: SceneFrontend[] = [TEMPLATE_SCENE_1, TEMPLATE_SCENE_2];
 
 /**
- * @deprecated DUMMY_SCENES 사용
+ * 템플릿 ID로 템플릿 조회
  */
-export const AVAILABLE_SCENES: SceneFrontend[] = DUMMY_SCENES;
+export function getTemplateById(id: string): SceneFrontend | null {
+  return SCENE_TEMPLATES.find((t) => t.id === id) || null;
+}
+
+/**
+ * 기본 템플릿 반환 (새 Scene 생성 시 기본값)
+ */
+export function getDefaultTemplate(): SceneFrontend {
+  return TEMPLATE_SCENE_1;
+}

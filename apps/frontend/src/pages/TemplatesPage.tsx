@@ -2,14 +2,15 @@
  * TemplatesPage - 템플릿 갤러리
  *
  * 목적: 제공 템플릿에서 출발점 고르기
- * - 사용자가 카드를 선택하면 해당 템플릿으로 새 Scene 시작
- * - "새로 만들기" 버튼 제거 (템플릿 선택이 주 목적)
+ * - 사용자가 카드를 선택하면 템플릿을 복사하여 workspace에 추가
+ * - 복사된 Scene으로 시뮬레이터 이동
  */
 
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Header from '../components/Header';
-import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
+import { SCENE_TEMPLATES } from '../data/templates';
+import { useSceneRepository } from '../stores/sceneRepository';
 import { getAssetMetadata } from '../assets/AssetRegistry';
 import {
   Button,
@@ -19,14 +20,15 @@ import {
   CubeIcon,
   LightbulbIcon,
   EmptyState,
+  useToast,
 } from '../components/common';
 import './TemplatesPage.css';
 
 type SortOption = 'name' | 'recent';
 type ViewMode = 'grid' | 'list';
 
-// 템플릿 데이터 (DUMMY_SCENES 기반)
-const TEMPLATES = DUMMY_SCENES.map((scene) => ({
+// 템플릿 데이터
+const TEMPLATES = SCENE_TEMPLATES.map((scene) => ({
   ...scene,
   author: 'Intery',
 }));
@@ -46,9 +48,13 @@ function getRoomIcon(meshName?: string): string {
 
 export default function TemplatesPage() {
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const { createFromTemplate } = useSceneRepository();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
+  const [isCreating, setIsCreating] = useState(false);
 
   const filteredTemplates = useMemo(() => {
     let result = [...TEMPLATES];
@@ -80,10 +86,25 @@ export default function TemplatesPage() {
   }, [searchQuery, sortBy]);
 
   const handleTemplateClick = useCallback(
-    (template: (typeof TEMPLATES)[0]) => {
-      navigate('/simulator', { state: { templateId: template.id } });
+    async (template: (typeof TEMPLATES)[0]) => {
+      if (isCreating) return;
+
+      setIsCreating(true);
+      try {
+        // 템플릿을 복사하여 workspace에 추가
+        const newScene = await createFromTemplate(template);
+        toast.success(`"${newScene.name}" 생성 완료`);
+
+        // 새로 생성된 Scene으로 바로 시뮬레이터 이동
+        navigate(`/simulator/scene/${newScene.id}`);
+      } catch (error) {
+        console.error('Failed to create from template:', error);
+        toast.error('템플릿 복사에 실패했습니다.');
+      } finally {
+        setIsCreating(false);
+      }
     },
-    [navigate]
+    [createFromTemplate, navigate, toast, isCreating]
   );
 
   const handleClearSearch = useCallback(() => {
@@ -184,7 +205,7 @@ export default function TemplatesPage() {
                   return (
                     <article
                       key={template.id}
-                      className="template-card"
+                      className={`template-card ${isCreating ? 'is-disabled' : ''}`}
                       onClick={() => handleTemplateClick(template)}
                       tabIndex={0}
                       onKeyDown={(e) => e.key === 'Enter' && handleTemplateClick(template)}
@@ -202,8 +223,9 @@ export default function TemplatesPage() {
                               e.stopPropagation();
                               handleTemplateClick(template);
                             }}
+                            disabled={isCreating}
                           >
-                            이 템플릿으로 시작
+                            {isCreating ? '생성 중...' : '이 템플릿으로 시작'}
                           </button>
                         </div>
                       </div>
@@ -246,7 +268,7 @@ export default function TemplatesPage() {
                   return (
                     <article
                       key={template.id}
-                      className="template-card template-card--list"
+                      className={`template-card template-card--list ${isCreating ? 'is-disabled' : ''}`}
                       onClick={() => handleTemplateClick(template)}
                       tabIndex={0}
                       onKeyDown={(e) => e.key === 'Enter' && handleTemplateClick(template)}
@@ -281,8 +303,9 @@ export default function TemplatesPage() {
                           e.stopPropagation();
                           handleTemplateClick(template);
                         }}
+                        disabled={isCreating}
                       >
-                        사용하기
+                        {isCreating ? '생성 중...' : '사용하기'}
                       </button>
                     </article>
                   );
@@ -311,9 +334,9 @@ export default function TemplatesPage() {
                 <div className="templates__info-content">
                   <h4 className="templates__info-title">템플릿 사용 방법</h4>
                   <p className="templates__info-text">
-                    템플릿을 선택하면 해당 공간이 시뮬레이터에서 열립니다.
+                    템플릿을 선택하면 복사본이 내 작업공간에 추가되고 편집 화면으로 이동합니다.
                     <br />
-                    원하는 대로 수정한 뒤 저장하면 내 작업공간에 새 장면으로 복사됩니다.
+                    원본 템플릿은 변경되지 않으므로 자유롭게 수정하세요.
                   </p>
                 </div>
               </div>

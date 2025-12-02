@@ -1,23 +1,32 @@
 /**
  * SceneCard - 공간 카드 컴포넌트
  *
+ * IA(Information Architecture):
+ * - 카드 전체 클릭: "시뮬레이션 열기" → Simulator로 이동
+ * - 연필 아이콘 클릭: "오브젝트 편집" → Editor로 이동
+ *
  * Features:
  * - Grid/List view modes
  * - Template/Recently modified badges
  * - Delete action with hover reveal
  * - Relative time display
+ *
+ * 아이콘/용어 일관성:
+ * - PlayIcon: 시뮬레이션 (SceneModeSwitch와 동일)
+ * - PencilIcon: 오브젝트 편집 (SceneModeSwitch와 동일)
  */
 
 import type { SceneFrontend } from '../../graphics-core/service/Scene';
-import { isDummyScene } from '../../utils/sceneId';
+import { isTemplateScene } from '../../utils/sceneId';
 import { getAssetMetadata } from '../../assets/AssetRegistry';
-import { TrashIcon, CubeIcon, LightbulbIcon } from '../common';
+import { TrashIcon, CubeIcon, LightbulbIcon, PencilIcon } from '../common';
 import './SceneCard.css';
 
 interface SceneCardProps {
   scene: SceneFrontend;
   viewMode: 'grid' | 'list';
   onClick: () => void;
+  onEdit?: () => void;
   onDelete?: () => void;
   isSelected?: boolean;
   isRecentlyModified?: boolean;
@@ -60,18 +69,24 @@ export default function SceneCard({
   scene,
   viewMode,
   onClick,
+  onEdit,
   onDelete,
   isSelected,
   isRecentlyModified,
 }: SceneCardProps) {
   const roomIcon = getRoomIcon(scene);
-  const canDelete = !isDummyScene(scene.id);
-  const isTemplate = isDummyScene(scene.id);
+  const canDelete = !isTemplateScene(scene.id);
+  const isTemplate = isTemplateScene(scene.id);
 
   const furnitureCount = scene.assets.filter((a) => a.type === 'object').length;
   const lightCount = scene.assets.filter((a) =>
     ['directional-light', 'point-light', 'rect-light'].includes(a.type)
   ).length;
+
+  const handleEdit = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    onEdit?.();
+  };
 
   const handleDelete = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -124,6 +139,17 @@ export default function SceneCard({
 
         {/* Actions */}
         <div className="scene-card__actions">
+          {onEdit && (
+            <button
+              type="button"
+              className="scene-card__edit"
+              onClick={handleEdit}
+              aria-label="오브젝트 편집"
+              title="오브젝트 편집"
+            >
+              <PencilIcon size={14} />
+            </button>
+          )}
           {canDelete && onDelete && (
             <button
               type="button"
@@ -163,17 +189,30 @@ export default function SceneCard({
           <span className="scene-card__badge scene-card__badge--accent">최근</span>
         )}
 
-        {/* Delete */}
-        {canDelete && onDelete && (
-          <button
-            type="button"
-            className="scene-card__delete"
-            onClick={handleDelete}
-            aria-label="삭제"
-          >
-            <TrashIcon size={14} />
-          </button>
-        )}
+        {/* Edit & Delete Buttons */}
+        <div className="scene-card__thumb-actions">
+          {onEdit && (
+            <button
+              type="button"
+              className="scene-card__action-btn scene-card__edit"
+              onClick={handleEdit}
+              aria-label="오브젝트 편집"
+              title="오브젝트 편집"
+            >
+              <PencilIcon size={14} />
+            </button>
+          )}
+          {canDelete && onDelete && (
+            <button
+              type="button"
+              className="scene-card__action-btn scene-card__delete"
+              onClick={handleDelete}
+              aria-label="삭제"
+            >
+              <TrashIcon size={14} />
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Body */}

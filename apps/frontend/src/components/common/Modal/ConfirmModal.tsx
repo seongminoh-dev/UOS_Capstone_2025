@@ -12,6 +12,8 @@ export interface ConfirmModalProps {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
+  /** 취소 버튼 클릭 시 호출 (미지정 시 onClose 호출) */
+  onCancel?: () => void;
   title: string;
   message: ReactNode;
   confirmText?: string;
@@ -30,6 +32,7 @@ export function ConfirmModal({
   isOpen,
   onClose,
   onConfirm,
+  onCancel,
   title,
   message,
   confirmText = '확인',
@@ -38,6 +41,8 @@ export function ConfirmModal({
   isLoading = false,
   checkbox,
 }: ConfirmModalProps) {
+  const handleCancel = onCancel ?? onClose;
+
   return (
     <Modal
       isOpen={isOpen}
@@ -46,7 +51,7 @@ export function ConfirmModal({
       size="sm"
       footer={
         <>
-          <Button variant="secondary" onClick={onClose} disabled={isLoading}>
+          <Button variant="secondary" onClick={handleCancel} disabled={isLoading}>
             {cancelText}
           </Button>
           <Button

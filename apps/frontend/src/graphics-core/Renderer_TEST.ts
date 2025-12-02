@@ -3,31 +3,46 @@ import type { Mat4 }            from "wgpu-matrix";
 import      { Camera }          from "./Camera";
 import      { ComputePass }     from "./ComputePass";
 import      { World }           from "./World";
+import      { Utils }           from "./Utils";
+
 import type { OnProgressCallback } from "./service/types/InitProgress";
+
+// Lighting 상수 (중앙화된 값 사용)
+import {
+    ZENITH_BLUE,
+    HORIZON_BLUE,
+    DEFAULT_SKY_MODE,
+    DEFAULT_ENV_INDIRECT_MULT,
+} from "./lighting";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
-
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
-
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
-
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
-import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
-
-import ShaderCode_Temporal_PairMIS          from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
-import ShaderCode_Spatial_PairMIS          from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
-
-
-
+import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
+import ShaderCode_Temporal_PairMIS  from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_Spatial_PairMIS   from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
-
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
-import { Utils } from "./Utils";
 
+
+// -------------------------------------------------
+
+const TEST_MCPT             = 0; // ex) 50 ms
+const TEST_MIS              = 1; // ex) 18 ms
+const TEST_ReSTIR_GBH       = 2; // ex) 48 ms
+const TEST_ReSTIR_Pairwise  = 3; // ex) 49 ms
+
+let SelectedTest            = TEST_MCPT;
+
+const TemporalReuseCode     = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Temporal_PairMIS   : ShaderCode_Temporal;
+const SpatialReuseCode      = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Spatial_PairMIS    : ShaderCode_Spatial;
+
+// -------------------------------------------------
 
 const EBufferIndex =
 {
@@ -171,15 +186,15 @@ export class Renderer
             this.FrameCount         = 0;
             this.Prev_VPMat         = mat4.create();
 
-            // 환경 파라미터 기본값 (정오 맑은 하늘)
-            this.EnvSkyColor        = [0.15, 0.35, 0.65];
-            this.EnvHorizonColor    = [0.5, 0.6, 0.75];
+            // 환경 파라미터 기본값 (정오 맑은 하늘 - lighting 모듈 상수 사용)
+            this.EnvSkyColor        = [...ZENITH_BLUE] as [number, number, number];
+            this.EnvHorizonColor    = [...HORIZON_BLUE] as [number, number, number];
             this.EnvGroundColor     = [0.1, 0.15, 0.1];
             this.EnvSunDirection    = [0, -1, 0];
             this.EnvSunIntensity    = 1.0;
             this.EnvIntensity       = 1.0;
-            this.EnvMode            = 2; // 기본값: 고품질 하늘
-            this.EnvIndirectMult    = 0.5; // 기본값: 50% 간접광
+            this.EnvMode            = DEFAULT_SKY_MODE;
+            this.EnvIndirectMult    = DEFAULT_ENV_INDIRECT_MULT;
         }
 
     }
@@ -265,8 +280,8 @@ export class Renderer
         sunDirection: [number, number, number],
         sunIntensity: number,
         environmentIntensity: number,
-        envMode: number = 2,
-        envIndirectMult: number = 0.5
+        envMode: number = DEFAULT_SKY_MODE,
+        envIndirectMult: number = DEFAULT_ENV_INDIRECT_MULT
     ): void {
         this.EnvSkyColor = skyColor;
         this.EnvHorizonColor = horizonColor;
@@ -415,12 +430,28 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             
+            if ( SelectedTest === TEST_MCPT )
+            {
+                this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+            else if ( SelectedTest === TEST_MIS )
+            {
+                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+            else
+            {
+                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+
             //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            
-            this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
 
@@ -658,7 +689,7 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_Temporal_PairMIS, 
+                TemporalReuseCode, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -688,7 +719,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                ShaderCode_Spatial_PairMIS, 
+                SpatialReuseCode, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],

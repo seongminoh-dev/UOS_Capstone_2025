@@ -1,0 +1,276 @@
+/**
+ * SimulatorLayout - /simulator 공용 레이아웃 스타일
+ */
+
+.simulator-layout {
+  width: 100%;
+  height: calc(100vh - var(--header-height));
+  margin-top: var(--header-height);
+  overflow: hidden;
+  position: relative;
+}
+
+/* ============================================
+   Canvas Container (숨김 처리용)
+   ============================================ */
+.simulator-layout__canvas-container {
+  position: absolute;
+  left: -9999px;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ============================================
+   Loading Overlay
+   ============================================ */
+.simulator-layout__loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #f8f9fa;
+  z-index: 200;
+}
+
+.simulator-layout__loading-content {
+  text-align: center;
+  max-width: 320px;
+  width: 100%;
+  padding: 0 20px;
+}
+
+/* Spinner */
+.simulator-layout__spinner {
+  width: 56px;
+  height: 56px;
+  position: relative;
+  margin: 0 auto 20px;
+}
+
+.simulator-layout__spinner-ring {
+  position: absolute;
+  inset: 0;
+  border: 3px solid #e9ecef;
+  border-top-color: #1a1a1a;
+  border-radius: 50%;
+  animation: simulator-spin 0.8s linear infinite;
+}
+
+.simulator-layout__spinner-icon {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+}
+
+@keyframes simulator-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Progress */
+.simulator-layout__progress-step {
+  font-size: 12px;
+  color: #868e96;
+  margin-bottom: 6px;
+  font-family: monospace;
+}
+
+.simulator-layout__progress-bar {
+  width: 100%;
+  height: 4px;
+  background-color: #e9ecef;
+  border-radius: 2px;
+  margin-bottom: 12px;
+  overflow: hidden;
+}
+
+.simulator-layout__progress-fill {
+  height: 100%;
+  background-color: #1a1a1a;
+  border-radius: 2px;
+  transition: width 0.3s ease-out;
+}
+
+.simulator-layout__loading-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1a1a1a;
+  margin-bottom: 8px;
+}
+
+/* Asset Progress */
+.simulator-layout__asset-progress {
+  margin-top: 16px;
+  padding: 12px 16px;
+  background-color: #f1f3f4;
+  border-radius: 8px;
+  text-align: left;
+}
+
+.simulator-layout__asset-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #495057;
+}
+
+.simulator-layout__asset-header span:last-child {
+  font-family: monospace;
+  font-weight: 500;
+  color: #1a1a1a;
+}
+
+.simulator-layout__asset-bar {
+  width: 100%;
+  height: 6px;
+  background-color: #dee2e6;
+  border-radius: 3px;
+  overflow: hidden;
+  margin-bottom: 10px;
+}
+
+.simulator-layout__asset-fill {
+  height: 100%;
+  background-color: #228be6;
+  border-radius: 3px;
+  transition: width 0.2s ease-out;
+}
+
+.simulator-layout__asset-current {
+  font-size: 12px;
+  color: #868e96;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.simulator-layout__asset-current strong {
+  color: #495057;
+}
+
+.simulator-layout__asset-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #228be6;
+  border-radius: 50%;
+  animation: simulator-pulse 1s ease-in-out infinite;
+}
+
+@keyframes simulator-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+
+/* ============================================
+   Error View
+   ============================================ */
+.simulator-layout__error {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #f8f9fa;
+  padding: 20px;
+  z-index: 300;
+}
+
+.simulator-layout__error-card {
+  max-width: 480px;
+  width: 100%;
+  background-color: #ffffff;
+  border-radius: 16px;
+  padding: 32px;
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.08);
+  border: 1px solid #e9ecef;
+  text-align: center;
+}
+
+.simulator-layout__error-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  background-color: #fff5f5;
+  border-radius: 50%;
+  margin-bottom: 20px;
+}
+
+.simulator-layout__error-title {
+  color: #212529;
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 8px 0;
+  line-height: 1.4;
+}
+
+.simulator-layout__error-desc {
+  color: #868e96;
+  font-size: 14px;
+  margin: 0 0 24px 0;
+  line-height: 1.5;
+}
+
+.simulator-layout__error-solutions {
+  background-color: #f8f9fa;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.simulator-layout__error-solutions h3 {
+  color: #495057;
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 12px 0;
+}
+
+.simulator-layout__error-solutions ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.simulator-layout__error-solutions li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #495057;
+  font-size: 13px;
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+.simulator-layout__error-solutions li:last-child {
+  margin-bottom: 0;
+}
+
+.simulator-layout__error-solutions li span:first-child {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  background-color: #e9ecef;
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 600;
+  color: #495057;
+  flex-shrink: 0;
+}
+
+.simulator-layout__error-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+}

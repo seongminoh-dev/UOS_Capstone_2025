@@ -1,20 +1,29 @@
 /**
  * Scene ID 유틸리티
  * - ID 형식으로 Scene 출처 구분
- * - dummy_* : DummyScene (읽기 전용)
- * - local_* : LocalScene (비회원, localStorage)
- * - number  : ServerScene (회원, Backend API)
+ * - template_* : TemplateScene (읽기 전용, 복사해서 사용)
+ * - local_*    : LocalScene (비회원, localStorage)
+ * - number     : ServerScene (회원, Backend API)
+ * - new_*      : NewScene (아직 저장되지 않은 새 Scene)
  */
 
 export type SceneId = string | number;
 
 /**
- * DummyScene 여부 확인
+ * TemplateScene 여부 확인
  * @param id Scene ID
- * @returns dummy_ prefix로 시작하면 true
+ * @returns template_ prefix로 시작하면 true
+ */
+export function isTemplateScene(id: SceneId): boolean {
+  return typeof id === 'string' && id.startsWith('template_');
+}
+
+/**
+ * @deprecated Use isTemplateScene instead
+ * DummyScene 여부 확인 (하위 호환성)
  */
 export function isDummyScene(id: SceneId): boolean {
-  return typeof id === 'string' && id.startsWith('dummy_');
+  return isTemplateScene(id) || (typeof id === 'string' && id.startsWith('dummy_'));
 }
 
 /**

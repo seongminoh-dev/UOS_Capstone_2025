@@ -91,11 +91,26 @@
   background: rgba(82, 82, 82, 0.9);
 }
 
-/* Delete Button */
-.scene-card--grid .scene-card__delete {
+/* Action Buttons Container (Grid View) */
+.scene-card__thumb-actions {
   position: absolute;
   top: 8px;
   right: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  transform: translateY(-4px);
+  transition: all 0.15s;
+}
+
+.scene-card--grid:hover .scene-card__thumb-actions {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Common Action Button Style (Grid View) */
+.scene-card--grid .scene-card__action-btn {
   width: 28px;
   height: 28px;
   border: none;
@@ -103,8 +118,6 @@
   border-radius: 6px;
   color: var(--text-secondary);
   cursor: pointer;
-  opacity: 0;
-  transform: translateY(-4px);
   transition: all 0.15s;
   display: flex;
   align-items: center;
@@ -112,11 +125,13 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
 }
 
-.scene-card--grid:hover .scene-card__delete {
-  opacity: 1;
-  transform: translateY(0);
+/* Edit Button (Grid View) */
+.scene-card--grid .scene-card__edit:hover {
+  background: var(--bg-subtle);
+  color: var(--text-primary);
 }
 
+/* Delete Button (Grid View) */
 .scene-card--grid .scene-card__delete:hover {
   background: var(--color-error-bg);
   color: var(--color-error);
@@ -262,11 +277,13 @@
 
 /* List Actions */
 .scene-card__actions {
-  width: 28px;
-  height: 28px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
 }
 
+.scene-card--list .scene-card__edit,
 .scene-card--list .scene-card__delete {
   width: 28px;
   height: 28px;
@@ -282,8 +299,14 @@
   justify-content: center;
 }
 
+.scene-card--list:hover .scene-card__edit,
 .scene-card--list:hover .scene-card__delete {
   opacity: 1;
+}
+
+.scene-card--list .scene-card__edit:hover {
+  background: var(--bg-muted);
+  color: var(--text-primary);
 }
 
 .scene-card--list .scene-card__delete:hover {

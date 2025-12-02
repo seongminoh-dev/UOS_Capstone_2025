@@ -1,0 +1,104 @@
+/**
+ * SceneModeSwitch - Pill 형태 세그먼트 컨트롤
+ *
+ * 디자인:
+ * [ ▶ 시뮬레이션 ] [ ✎ 오브젝트 편집 ]
+ *
+ * 특징:
+ * - 완전 둥근 pill 형태 (border-radius: 999px)
+ * - SceneName보다 시각적 우선순위가 낮음
+ * - 높이 28-32px의 작은 사이즈
+ * - 활성: 흰색 배경 + 진한 텍스트 + 미묘한 그림자
+ * - 비활성: 투명 배경 + 회색 텍스트
+ */
+
+.scene-mode-switch {
+  display: inline-flex;
+  align-items: center;
+  background-color: var(--bg-subtle);
+  border-radius: var(--radius-full);
+  padding: 3px;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+/* Full Width - 패널 전체 폭 사용 */
+.scene-mode-switch--full-width {
+  display: flex;
+  width: 100%;
+}
+
+.scene-mode-switch--full-width .scene-mode-switch__item {
+  flex: 1;
+  justify-content: center;
+}
+
+/* 개별 버튼 아이템 */
+.scene-mode-switch__item {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-full);
+  cursor: pointer;
+  transition: background-color var(--transition-fast),
+              color var(--transition-fast),
+              box-shadow var(--transition-fast);
+  white-space: nowrap;
+}
+
+/* 호버 상태 (비활성 버튼만) */
+.scene-mode-switch__item:hover:not(.scene-mode-switch__item--active) {
+  color: var(--text-primary);
+  background-color: rgba(255, 255, 255, 0.6);
+}
+
+/* 활성 상태 */
+.scene-mode-switch__item--active {
+  color: var(--text-primary);
+  background-color: var(--bg-surface);
+  box-shadow: var(--shadow-button);
+  cursor: default;
+}
+
+/* 아이콘 */
+.scene-mode-switch__icon {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+  color: inherit;
+}
+
+/* 활성 상태 아이콘 색상 강조 */
+.scene-mode-switch__item--active .scene-mode-switch__icon {
+  color: var(--accent-primary);
+}
+
+/* 라벨 */
+.scene-mode-switch__label {
+  white-space: nowrap;
+}
+
+/* ============================================
+   반응형: 좁은 화면
+   ============================================ */
+@media (max-width: 480px) {
+  .scene-mode-switch__item {
+    padding: 0 10px;
+    font-size: 12px;
+    height: 28px;
+  }
+
+  .scene-mode-switch__icon {
+    width: 12px;
+    height: 12px;
+  }
+}

@@ -15,7 +15,7 @@ export default function Header() {
 
   const handleLogout = () => {
     logout();
-    navigate('/simulator');
+    navigate('/simulator/list');
   };
 
   return (
@@ -31,7 +31,7 @@ export default function Header() {
 
         {/* Navigation */}
         <nav className="header-nav">
-          <Link to="/simulator" className={`nav-link ${location.pathname === '/simulator' ? 'active' : ''}`}>
+          <Link to="/simulator/list" className={`nav-link ${location.pathname.startsWith('/simulator') ? 'active' : ''}`}>
             시뮬레이터
           </Link>
           <Link to="/templates" className={`nav-link ${location.pathname === '/templates' ? 'active' : ''}`}>

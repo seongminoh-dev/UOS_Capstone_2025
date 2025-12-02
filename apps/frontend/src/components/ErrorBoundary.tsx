@@ -1,59 +1,121 @@
 import { Component, ReactNode } from 'react';
+import { isWebGPUError, mapWebGPUErrorCodeToLegacy } from '../graphics-core/service/types/WebGPUError';
+import type { WebGPUErrorCode } from '../graphics-core/service/types/WebGPUError';
 
+// ─────────────────────────────────────────────
 // 에러 타입별 해결책 정의
-interface ErrorSolution {
+// ─────────────────────────────────────────────
+
+/**
+ * 에러 해결책 인터페이스
+ */
+export interface ErrorSolution {
+  /** 에러 제목 (한 줄) */
   title: string;
+  /** 에러 설명 */
   description: string;
+  /** 해결 방법 목록 */
   solutions: string[];
+  /** 재시도 가능 여부 */
   canRetry: boolean;
 }
 
-const ERROR_SOLUTIONS: Record<string, ErrorSolution> = {
-  // WebGPU 관련 에러
-  webgpu_not_supported: {
-    title: 'WebGPU를 지원하지 않는 브라우저',
-    description: '이 브라우저는 WebGPU를 지원하지 않습니다.',
+/**
+ * WebGPU 에러 코드별 해결책 매핑
+ * WebGPURenderer.tsx 등에서 import하여 사용할 수 있도록 export
+ */
+export const WEBGPU_ERROR_SOLUTIONS: Record<WebGPUErrorCode, ErrorSolution> = {
+  WEBGPU_NOT_SUPPORTED: {
+    title: '이 브라우저는 시뮬레이터를 지원하지 않아요',
+    description: 'WebGPU 기능이 없어 인테리어 시뮬레이터를 실행할 수 없습니다.',
     solutions: [
-      'Chrome 113 이상 버전으로 업데이트하세요',
-      'Edge 113 이상 버전을 사용하세요',
-      'Firefox Nightly에서 dom.webgpu.enabled 플래그를 활성화하세요',
-      'Safari 17 이상 (macOS Sonoma)을 사용하세요',
+      'Chrome 113 이상 또는 Edge 113 이상 버전을 사용해주세요',
+      'Safari 17 이상 (macOS Sonoma)을 사용해주세요',
+      '모바일이 아닌 PC 환경에서 접속해주세요',
+      'Firefox는 about:config에서 dom.webgpu.enabled를 활성화해주세요',
     ],
     canRetry: false,
   },
-  webgpu_device_lost: {
-    title: 'GPU 연결이 끊어졌습니다',
-    description: 'GPU 디바이스와의 연결이 끊어졌습니다.',
+  ADAPTER_NOT_FOUND: {
+    title: 'GPU 장치를 찾을 수 없어요',
+    description: '현재 환경에서 WebGPU용 그래픽 장치를 찾지 못했습니다.',
     solutions: [
-      '페이지를 새로고침하세요',
-      '다른 GPU 집약적인 프로그램을 종료해보세요',
-      '그래픽 드라이버를 최신 버전으로 업데이트하세요',
-      '브라우저를 재시작하세요',
+      '브라우저 설정에서 "하드웨어 가속"을 켜주세요',
+      '원격 데스크톱/가상 머신 대신 로컬 PC에서 시도해주세요',
+      '그래픽 드라이버를 최신 버전으로 업데이트해주세요',
+      '내장 그래픽이 비활성화되어 있다면 활성화해주세요',
     ],
     canRetry: true,
   },
-  webgpu_out_of_memory: {
-    title: 'GPU 메모리 부족',
+  DEVICE_REQUEST_FAILED: {
+    title: 'GPU 디바이스를 사용할 수 없어요',
+    description: 'GPU 어댑터는 발견했지만 디바이스 초기화에 실패했습니다.',
+    solutions: [
+      '페이지를 새로고침해주세요',
+      '다른 GPU 사용 프로그램을 종료해주세요',
+      '그래픽 드라이버를 최신 버전으로 업데이트해주세요',
+      '브라우저를 재시작해주세요',
+    ],
+    canRetry: true,
+  },
+  GPU_LOST: {
+    title: 'GPU 연결이 끊어졌어요',
+    description: 'GPU 디바이스와의 연결이 끊어졌습니다. 하드웨어 리셋이나 드라이버 문제일 수 있습니다.',
+    solutions: [
+      '페이지를 새로고침해주세요',
+      '다른 GPU 집약적인 프로그램을 종료해보세요',
+      '그래픽 드라이버를 최신 버전으로 업데이트해주세요',
+      '브라우저를 재시작해주세요',
+    ],
+    canRetry: true,
+  },
+  SHADER_COMPILE_ERROR: {
+    title: '그래픽 처리 중 오류가 발생했어요',
+    description: '셰이더 컴파일 또는 그래픽 파이프라인 생성에 실패했습니다.',
+    solutions: [
+      '페이지를 새로고침해주세요',
+      '그래픽 드라이버를 업데이트해주세요',
+      '다른 브라우저에서 시도해보세요',
+      '문제가 지속되면 개발팀에 문의해주세요',
+    ],
+    canRetry: true,
+  },
+  OUT_OF_MEMORY: {
+    title: 'GPU 메모리가 부족해요',
     description: 'GPU 메모리가 부족하여 렌더링할 수 없습니다.',
     solutions: [
-      '다른 탭이나 GPU 사용 프로그램을 종료하세요',
-      '더 작은 씬을 선택하세요',
-      '페이지를 새로고침하세요',
-      '브라우저를 재시작하세요',
+      '다른 탭이나 GPU 사용 프로그램을 종료해주세요',
+      '더 작은 씬을 선택해주세요',
+      '페이지를 새로고침해주세요',
+      '브라우저를 재시작해주세요',
     ],
     canRetry: true,
   },
-  shader_compilation: {
-    title: '셰이더 컴파일 오류',
-    description: '그래픽 셰이더 컴파일에 실패했습니다.',
+  UNKNOWN: {
+    title: '예상치 못한 GPU 오류가 발생했어요',
+    description: '분류되지 않은 GPU 관련 오류입니다.',
     solutions: [
-      '페이지를 새로고침하세요',
-      '그래픽 드라이버를 업데이트하세요',
+      '페이지를 새로고침해주세요',
+      '브라우저 캐시를 삭제해보세요',
       '다른 브라우저에서 시도해보세요',
-      '문제가 지속되면 개발팀에 문의하세요',
+      '문제가 지속되면 개발팀에 문의해주세요',
     ],
     canRetry: true,
   },
+};
+
+/**
+ * 레거시 에러 키를 위한 매핑 (기존 코드 호환성)
+ */
+const ERROR_SOLUTIONS: Record<string, ErrorSolution> = {
+  // WebGPU 에러 - WEBGPU_ERROR_SOLUTIONS와 동기화
+  webgpu_not_supported: WEBGPU_ERROR_SOLUTIONS.WEBGPU_NOT_SUPPORTED,
+  adapter_not_found: WEBGPU_ERROR_SOLUTIONS.ADAPTER_NOT_FOUND,
+  device_request_failed: WEBGPU_ERROR_SOLUTIONS.DEVICE_REQUEST_FAILED,
+  webgpu_device_lost: WEBGPU_ERROR_SOLUTIONS.GPU_LOST,
+  shader_compilation: WEBGPU_ERROR_SOLUTIONS.SHADER_COMPILE_ERROR,
+  webgpu_out_of_memory: WEBGPU_ERROR_SOLUTIONS.OUT_OF_MEMORY,
+
   // Three.js 관련 에러
   webgl_not_supported: {
     title: 'WebGL을 지원하지 않는 브라우저',
@@ -101,8 +163,21 @@ const ERROR_SOLUTIONS: Record<string, ErrorSolution> = {
   },
 };
 
-// 에러 메시지에서 에러 타입 추론
+/**
+ * 에러 메시지에서 에러 타입을 추론합니다.
+ * WebGPUError인 경우 code를 직접 사용하고, 일반 Error인 경우 메시지 파싱으로 분류합니다.
+ */
 function detectErrorType(error: Error): string {
+  // ─────────────────────────────────────────────
+  // WebGPUError인 경우 code를 직접 사용
+  // ─────────────────────────────────────────────
+  if (isWebGPUError(error)) {
+    return mapWebGPUErrorCodeToLegacy(error.code);
+  }
+
+  // ─────────────────────────────────────────────
+  // 일반 Error인 경우 메시지 파싱으로 분류 (기존 로직)
+  // ─────────────────────────────────────────────
   const message = error.message.toLowerCase();
   const name = error.name.toLowerCase();
 
@@ -110,13 +185,19 @@ function detectErrorType(error: Error): string {
   if (message.includes('webgpu') && (message.includes('not supported') || message.includes('unavailable'))) {
     return 'webgpu_not_supported';
   }
+  if (message.includes('adapter') && (message.includes('not found') || message.includes('failed'))) {
+    return 'adapter_not_found';
+  }
   if (message.includes('device') && message.includes('lost')) {
     return 'webgpu_device_lost';
+  }
+  if (message.includes('device') && (message.includes('failed') || message.includes('request'))) {
+    return 'device_request_failed';
   }
   if (message.includes('out of memory') || message.includes('allocation failed')) {
     return 'webgpu_out_of_memory';
   }
-  if (message.includes('shader') || message.includes('compilation') || message.includes('wgsl')) {
+  if (message.includes('shader') || message.includes('compilation') || message.includes('wgsl') || message.includes('validation')) {
     return 'shader_compilation';
   }
 
@@ -134,6 +215,14 @@ function detectErrorType(error: Error): string {
   }
 
   return 'unknown';
+}
+
+/**
+ * WebGPUErrorCode에 해당하는 ErrorSolution을 반환합니다.
+ * WebGPURenderer.tsx 등에서 직접 사용할 수 있도록 export
+ */
+export function getWebGPUErrorSolution(code: WebGPUErrorCode): ErrorSolution {
+  return WEBGPU_ERROR_SOLUTIONS[code];
 }
 
 interface ErrorBoundaryProps {
