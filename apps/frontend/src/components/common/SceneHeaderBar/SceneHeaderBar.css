@@ -1,33 +1,10 @@
 /**
  * SceneHeaderBar - 공용 상단 헤더 스타일
  *
- * ═══════════════════════════════════════════════════════════════════════════
- * 레이아웃 구조
- * ═══════════════════════════════════════════════════════════════════════════
+ * 두 가지 레이아웃:
  *
- * [Wide] - Editor 페이지 (전체 화면) - 단일 행, Center 2줄 블록
- *   Left(Back) | Center(2줄: Name·Status / ModeSwitch) | Right(Cancel·Save)
- *   전체 높이: 56px
- *
+ * [Wide] - Editor 페이지 (전체 화면) - 단일 행
  * [Narrow] - Renderer 우측 패널 (~300-360px) - 3행
- *   Row 1: Top Bar (Back + Save) - height 44px
- *   Gap: 12-14px (Top bar와 Title 구분)
- *   Row 2: Title (Name + Status) - height 40px
- *   Row 3: Mode Switch - padding 12px
- *
- * ═══════════════════════════════════════════════════════════════════════════
- * Back 버튼 규격
- * ═══════════════════════════════════════════════════════════════════════════
- * - 높이: 32px
- * - 좌우 padding: 12-16px
- * - 클릭 영역: 화살표 + 텍스트 전체
- *
- * ═══════════════════════════════════════════════════════════════════════════
- * SceneName 규칙
- * ═══════════════════════════════════════════════════════════════════════════
- * - Wide: max-width 280px, 초과 시 ellipsis
- * - Narrow: max-width 160px, 초과 시 ellipsis
- * - 항상 title 속성으로 전체 이름 툴팁 제공
  */
 
 /* ============================================
@@ -39,19 +16,19 @@
   flex-shrink: 0;
 }
 
-/* Dirty 상태 좌측 강조 바 - Wide 레이아웃에서만 */
-.scene-header--wide.scene-header--dirty {
+/* Dirty 상태 좌측 강조 바 */
+.scene-header--dirty {
   border-left: 3px solid var(--color-warning);
 }
 
 /* ============================================
-   Wide Layout - 단일 행, Center 2줄 블록 (Editor용)
+   Wide Layout - 단일 행 (Editor용)
    ============================================ */
 .scene-header--wide {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px;
+  gap: 24px;
   height: 56px;
   padding: 0 20px;
 }
@@ -67,31 +44,20 @@
   flex-shrink: 0;
 }
 
-/* Wide - Center (2줄 블록) */
+/* Wide - Center */
 .scene-header--wide .scene-header__center {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 2px;
+  gap: 20px;
   flex: 1;
   min-width: 0;
+  justify-content: center;
 }
 
-/* Wide - Center Row (각 줄) */
-.scene-header__center-row {
+.scene-header--wide .scene-header__title-group {
   display: flex;
   align-items: center;
-  gap: 8px;
-  line-height: 1.2;
-}
-
-/* Wide - Separator (중간점) */
-.scene-header__separator {
-  color: var(--text-muted);
-  font-size: 12px;
-  flex-shrink: 0;
-  user-select: none;
+  gap: 12px;
 }
 
 /* Wide - Right */
@@ -110,6 +76,11 @@
   flex-direction: column;
 }
 
+.scene-header--narrow.scene-header--dirty {
+  padding-left: 0;
+  border-left: none;
+}
+
 /* Narrow - Row Base */
 .scene-header__row {
   display: flex;
@@ -117,57 +88,46 @@
   padding: 0 16px;
 }
 
-/* ----------------------------------------
-   Row 1: Top Bar (앱 레벨 네비게이션)
-   ---------------------------------------- */
-.scene-header__row--top {
+/* Narrow - Row 1: Navigation + Save */
+.scene-header__row--nav {
   justify-content: space-between;
   height: 44px;
-  background: var(--bg-muted);
   border-bottom: 1px solid var(--border-default);
 }
 
-.scene-header__top-actions {
+.scene-header__nav-actions {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-/* ----------------------------------------
-   Row 2: Title (Scene 레벨)
-   Row 1과 Row 2 사이 gap: 12-14px
-   ---------------------------------------- */
-.scene-header__row--title {
+/* Narrow - Row 2: Scene Info */
+.scene-header__row--info {
   justify-content: space-between;
   gap: 12px;
   height: 40px;
-  margin-top: 12px;  /* Row 1과의 명확한 구분 */
 }
 
-/* Dirty 상태 강조 - Row 2에만 적용 */
-.scene-header__row--title-dirty {
+.scene-header--narrow.scene-header--dirty .scene-header__row--info {
   border-left: 3px solid var(--color-warning);
   padding-left: 13px;
 }
 
-/* ----------------------------------------
-   Row 3: Mode Switch
-   ---------------------------------------- */
+/* Narrow - Row 3: Mode Switch */
 .scene-header__row--mode {
   padding: 8px 16px 12px;
+  border-top: 1px solid var(--border-default);
 }
 
 /* ============================================
-   Back Button - 통일된 hit area
-   높이 32px, 좌우 padding 12-16px
+   Back Button
    ============================================ */
 .scene-header__back {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  height: 32px;
-  padding: 0 14px;
-  margin-left: -14px;
+  gap: 4px;
+  padding: 6px 10px;
+  margin-left: -10px;
   font-size: 13px;
   font-weight: 500;
   color: var(--text-secondary);
@@ -181,21 +141,17 @@
 
 .scene-header__back:hover {
   color: var(--text-primary);
-  background: rgba(0, 0, 0, 0.06);
-}
-
-.scene-header__back:active {
-  background: rgba(0, 0, 0, 0.1);
+  background: var(--bg-muted);
 }
 
 .scene-header__back svg {
   flex-shrink: 0;
 }
 
-/* Narrow에서 Back 버튼 - 동일 규격 유지 */
-.scene-header--narrow .scene-header__back {
-  margin-left: -12px;
-  padding: 0 12px;
+/* Compact Back Button (Narrow) */
+.scene-header__back--compact {
+  margin-left: -6px;
+  padding: 4px 8px;
   font-size: 12px;
 }
 
@@ -203,22 +159,20 @@
    Scene Name
    ============================================ */
 .scene-header__name {
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 280px;
-  line-height: 1.2;
+  max-width: 300px;
 }
 
-/* Narrow에서 Scene Name */
 .scene-header--narrow .scene-header__name {
   font-size: 14px;
   font-weight: 600;
-  max-width: 160px;
+  max-width: 180px;
 }
 
 /* ============================================
@@ -229,8 +183,8 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
-  height: 32px;
-  padding: 0 14px;
+  height: 34px;
+  padding: 0 16px;
   font-size: 13px;
   font-weight: 500;
   border-radius: var(--radius-md);
@@ -241,7 +195,7 @@
 }
 
 .scene-header__btn--sm {
-  height: 28px;
+  height: 30px;
   padding: 0 12px;
   font-size: 12px;
 }
@@ -271,7 +225,7 @@
 .scene-header__btn--primary {
   background: var(--accent-primary);
   color: var(--text-inverse);
-  min-width: 52px;
+  min-width: 60px;
 }
 
 .scene-header__btn--primary:hover:not(:disabled) {
@@ -281,12 +235,6 @@
 /* ============================================
    Responsive (Wide Layout Only)
    ============================================ */
-@media (max-width: 900px) {
-  .scene-header--wide .scene-header__name {
-    max-width: 200px;
-  }
-}
-
 @media (max-width: 768px) {
   .scene-header--wide {
     height: auto;
@@ -303,8 +251,9 @@
   .scene-header--wide .scene-header__center {
     order: 3;
     width: 100%;
-    align-items: flex-start;
-    gap: 4px;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+    gap: 12px;
   }
 
   .scene-header--wide .scene-header__right {
@@ -313,23 +262,28 @@
   }
 
   .scene-header--wide .scene-header__name {
-    max-width: 180px;
+    max-width: 200px;
   }
 }
 
 @media (max-width: 480px) {
+  .scene-header--wide .scene-header__center {
+    flex-direction: column;
+    align-items: flex-start;
+  }
+
+  .scene-header--wide .scene-header__title-group {
+    flex-wrap: wrap;
+  }
+
   .scene-header--wide .scene-header__name {
-    max-width: 140px;
+    max-width: 150px;
     font-size: 14px;
   }
 
   .scene-header--wide .scene-header__btn {
-    height: 30px;
-    padding: 0 10px;
+    height: 32px;
+    padding: 0 12px;
     font-size: 12px;
-  }
-
-  .scene-header__separator {
-    display: none;
   }
 }

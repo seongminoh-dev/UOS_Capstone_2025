@@ -8,32 +8,26 @@
  * 크기:
  * - default: 일반 크기 (Editor wide 레이아웃)
  * - compact: 작은 크기 (Renderer narrow 레이아웃)
- *
- * 색상 대비:
- * - 렌더링 캔버스 위에서도 잘 보이도록 채도/명도 조정
- * - 점(dot)은 더 선명한 색상 사용
  */
 
 .status-badge {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 10px;
+  padding: 4px 10px;
   font-size: 12px;
   font-weight: 500;
   border-radius: var(--radius-full);
   flex-shrink: 0;
   white-space: nowrap;
-  line-height: 1.2;
 }
 
-/* Dot - 더 선명하게 보이도록 크기와 그림자 추가 */
+/* Dot */
 .status-badge__dot {
-  width: 7px;
-  height: 7px;
+  width: 6px;
+  height: 6px;
   border-radius: 50%;
   flex-shrink: 0;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
 
 /* Label */
@@ -43,42 +37,38 @@
 
 /* ============================================
    Saved State - 저장됨 (초록)
-   채도/명도 높임: #10B981 → #059669 (더 진한 초록)
    ============================================ */
 .status-badge--saved {
-  background: rgba(16, 185, 129, 0.12);
-  color: #047857;
+  background: #F0FDF4;
+  color: #166534;
 }
 
 .status-badge--saved .status-badge__dot {
-  background: #10B981;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 0 4px rgba(16, 185, 129, 0.4);
+  background: #22C55E;
 }
 
 /* ============================================
    Dirty State - 변경됨 (주황)
-   채도/명도 높임: #F59E0B → #D97706 (더 진한 주황)
    ============================================ */
 .status-badge--dirty {
-  background: rgba(245, 158, 11, 0.15);
-  color: #B45309;
+  background: #FEF3C7;
+  color: #92400E;
 }
 
 .status-badge--dirty .status-badge__dot {
   background: #F59E0B;
-  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.5), 0 0 4px rgba(245, 158, 11, 0.5);
 }
 
 /* ============================================
    Compact Size - 작은 크기
    ============================================ */
 .status-badge--compact {
-  padding: 2px 8px;
+  padding: 3px 8px;
   font-size: 11px;
   gap: 5px;
 }
 
 .status-badge--compact .status-badge__dot {
-  width: 6px;
-  height: 6px;
+  width: 5px;
+  height: 5px;
 }

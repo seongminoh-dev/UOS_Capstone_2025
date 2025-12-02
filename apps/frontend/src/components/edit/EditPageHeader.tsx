@@ -1,20 +1,12 @@
 /**
- * EditPageHeader - Editor 페이지 헤더 래퍼
+ * EditPageHeader - Edit 페이지 헤더
  *
- * SceneHeaderBar(layout="wide")를 사용하여 전체 화면에 최적화된 단일 행 레이아웃 제공
+ * SceneHeaderBar 공용 컴포넌트를 사용 (wide 레이아웃)
+ * 전체 화면에 맞춘 단일 행 레이아웃:
  *
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ ← 작업공간  │  SceneName · [저장됨] · [시뮬|편집]  │     [취소] [저장] │
+ * │ ← 작업공간  │ SceneName [저장됨] [시뮬레이션|편집]  │     [취소] [저장] │
  * └─────────────────────────────────────────────────────────────────────────┘
- *
- * 구조: Left(Back) | Center(Name·Status·Mode) | Right(Cancel·Save)
- *
- * 특징:
- * - 단일 행에서 모든 정보와 액션 표시
- * - SceneName이 가장 눈에 띄게 (16px, semibold)
- * - 저장/취소 버튼은 항상 우측 끝에 위치
- * - Scene 이름이 길면 ellipsis 처리 (max-width: 280px)
- * - 768px 이하에서는 2행으로 wrap
  */
 
 import { SceneHeaderBar } from '../common';
