@@ -1,20 +1,31 @@
 /**
  * SceneHeaderBar - Simulator/Editor 공용 상단 헤더
  *
- * 두 가지 레이아웃 지원:
+ * Scene 단위 저장/취소/Back은 이 헤더 내부에서만 관리한다.
+ * 글로벌 네비게이션에는 이러한 버튼을 두지 않는다.
  *
- * [Wide Layout] - Editor (전체 화면)
+ * ═══════════════════════════════════════════════════════════════════════════
+ * [Wide Layout] - Editor (전체 화면) - 단일 행, Center 2줄 블록
+ * ═══════════════════════════════════════════════════════════════════════════
  * ┌─────────────────────────────────────────────────────────────────────────┐
- * │ ← 작업공간  │ SceneName [저장됨] [시뮬레이션|편집]  │     [취소] [저장] │
+ * │                      │  SceneName · [저장됨]   │                        │
+ * │ ← 작업공간           │  [시뮬레이션 | 편집]    │            [취소][저장] │
  * └─────────────────────────────────────────────────────────────────────────┘
  *
- * [Narrow Layout] - Renderer RightPanel (~300-360px)
+ * 구조: Left(Back) | Center(2줄 블록) | Right(Cancel·Save)
+ * - Center 1행: SceneName · StatusBadge
+ * - Center 2행: ModeSwitch
+ * - 전체 헤더는 한 줄 높이(56px) 안에 수용
+ *
+ * ═══════════════════════════════════════════════════════════════════════════
+ * [Narrow Layout] - Renderer RightPanel (~300-360px) - 3행
+ * ═══════════════════════════════════════════════════════════════════════════
  * ┌─────────────────────────────────────┐
- * │ ← 작업공간                   [저장] │  ← Row 1: Navigation + Save
- * ├─────────────────────────────────────┤
- * │ SceneName               [저장됨]    │  ← Row 2: Scene Info
- * ├─────────────────────────────────────┤
- * │ [ 시뮬레이션  |  오브젝트 편집 ]     │  ← Row 3: Mode Switch (full width)
+ * │ ← 작업공간                   [저장] │  ← Row 1: Top Bar
+ * │                                     │  ← gap 12-14px
+ * │ SceneName               [저장됨]    │  ← Row 2: Title
+ * │                                     │
+ * │ [ 시뮬레이션  |  오브젝트 편집 ]     │  ← Row 3: Mode Switch
  * └─────────────────────────────────────┘
  */
 
@@ -65,7 +76,9 @@ export function SceneHeaderBar({
   onBeforeModeChange,
   rightExtra,
 }: SceneHeaderBarProps) {
-  // Wide Layout - Editor 전체 화면용
+  // ═══════════════════════════════════════════════════════════════════════
+  // Wide Layout - Editor 전체 화면용 (단일 행, Center 2줄 블록)
+  // ═══════════════════════════════════════════════════════════════════════
   if (layout === 'wide') {
     return (
       <header className={`scene-header scene-header--wide ${isDirty ? 'scene-header--dirty' : ''}`}>
@@ -81,18 +94,23 @@ export function SceneHeaderBar({
           </button>
         </div>
 
-        {/* Center: Scene Name + Status + Mode Switch */}
+        {/* Center: 2줄 블록 (1행: Name·Status, 2행: ModeSwitch) */}
         <div className="scene-header__center">
-          <div className="scene-header__title-group">
-            <h1 className="scene-header__name">{sceneName}</h1>
+          <div className="scene-header__center-row">
+            <h1 className="scene-header__name" title={sceneName}>
+              {sceneName}
+            </h1>
+            <span className="scene-header__separator">·</span>
             <StatusBadge isDirty={isDirty} />
           </div>
           {sceneId && (
-            <SceneModeSwitch
-              mode={mode}
-              sceneId={sceneId}
-              onBeforeChange={onBeforeModeChange}
-            />
+            <div className="scene-header__center-row">
+              <SceneModeSwitch
+                mode={mode}
+                sceneId={sceneId}
+                onBeforeChange={onBeforeModeChange}
+              />
+            </div>
           )}
         </div>
 
@@ -123,20 +141,22 @@ export function SceneHeaderBar({
     );
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
   // Narrow Layout - Renderer RightPanel용 (3행 구조)
+  // ═══════════════════════════════════════════════════════════════════════
   return (
     <header className={`scene-header scene-header--narrow ${isDirty ? 'scene-header--dirty' : ''}`}>
-      {/* Row 1: Back + Save */}
-      <div className="scene-header__row scene-header__row--nav">
+      {/* Row 1: Top Bar - Back + Save */}
+      <div className="scene-header__row scene-header__row--top">
         <button
           type="button"
-          className="scene-header__back scene-header__back--compact"
+          className="scene-header__back"
           onClick={onGoWorkspace}
         >
           <ChevronLeftIcon size={14} />
           <span>작업공간</span>
         </button>
-        <div className="scene-header__nav-actions">
+        <div className="scene-header__top-actions">
           {rightExtra}
           {onSave && (
             <button
@@ -151,13 +171,15 @@ export function SceneHeaderBar({
         </div>
       </div>
 
-      {/* Row 2: Scene Name + Status */}
-      <div className="scene-header__row scene-header__row--info">
-        <h1 className="scene-header__name">{sceneName}</h1>
+      {/* Row 2: Title - Scene Name + Status */}
+      <div className={`scene-header__row scene-header__row--title ${isDirty ? 'scene-header__row--title-dirty' : ''}`}>
+        <h1 className="scene-header__name" title={sceneName}>
+          {sceneName}
+        </h1>
         <StatusBadge isDirty={isDirty} size="compact" />
       </div>
 
-      {/* Row 3: Mode Switch (full width) */}
+      {/* Row 3: Mode Switch */}
       {sceneId && (
         <div className="scene-header__row scene-header__row--mode">
           <SceneModeSwitch

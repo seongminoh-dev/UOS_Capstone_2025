@@ -1,16 +1,20 @@
 /**
- * LightSimulatorHeader - 조명 시뮬레이터 헤더
+ * LightSimulatorHeader - 조명 시뮬레이터 헤더 래퍼
  *
- * SceneHeaderBar 공용 컴포넌트를 사용 (narrow 레이아웃)
- * Renderer 우측 패널 (~300-360px)에 맞춘 3행 레이아웃:
+ * SceneHeaderBar(layout="narrow")를 사용하여 Renderer 우측 패널에 최적화된 3행 레이아웃 제공
  *
  * ┌─────────────────────────────────────┐
- * │ ← 작업공간                   [저장] │  ← Row 1: Navigation + Save
+ * │ ← 작업공간                   [저장] │  ← Row 1: Top Bar (bg-muted)
  * ├─────────────────────────────────────┤
- * │ SceneName               [저장됨]    │  ← Row 2: Scene Info
- * ├─────────────────────────────────────┤
+ * │ SceneName               [저장됨]    │  ← Row 2: Title
+ * │                                     │
  * │ [ 시뮬레이션  |  오브젝트 편집 ]     │  ← Row 3: Mode Switch
  * └─────────────────────────────────────┘
+ *
+ * 특징:
+ * - Row 1과 Row 2 사이에 구분선으로 앱 레벨/Scene 레벨 분리
+ * - 저장 버튼은 Row 1 우측에 위치 (Scene 헤더의 책임)
+ * - Scene 이름이 길면 ellipsis 처리 (max-width: 160px)
  */
 
 import { SceneHeaderBar } from '../common';
