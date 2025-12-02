@@ -1,15 +1,17 @@
 /**
  * SceneRepository (Zustand Store)
  * - Scene 데이터의 단일 진실 공급원(SSOT)
- * - Dummy/Local/Server Scene 통합 관리
+ * - Local/Server Scene 통합 관리
  * - 편집 시 깊은 복사본 제공 (cloneForEdit)
+ *
+ * Note: 템플릿은 workspace에 포함되지 않음.
+ * 템플릿 사용 시 복사하여 새 Scene으로 저장됨.
  */
 
 import { create } from 'zustand';
-import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
 import * as sceneApi from '../api/scene.api';
 import {
-  isDummyScene,
+  isTemplateScene,
   isLocalScene,
   isServerScene,
   isNewScene,
@@ -19,7 +21,7 @@ import {
 import { useAuthStore } from './authStore';
 import type { SceneFrontend } from '../graphics-core/service/Scene';
 
-// SceneRepository 인터페이스 (store 내부 정의)
+// SceneRepository 인터페이스
 interface SceneRepository {
   scenes: SceneFrontend[];
   isLoading: boolean;
@@ -32,6 +34,7 @@ interface SceneRepository {
   deleteScene(id: SceneId): Promise<void>;
   loadScenes(): Promise<void>;
   syncLocalToServer(): Promise<void>;
+  createFromTemplate(template: SceneFrontend): Promise<SceneFrontend>;
 }
 
 export type { SceneId };
@@ -151,8 +154,54 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
   },
 
   /**
+   * 템플릿에서 새 Scene 생성
+   * - 템플릿을 복사하여 workspace에 추가
+   * - 새 ID 생성 (local_ 또는 server)
+   */
+  createFromTemplate: async (template: SceneFrontend) => {
+    const authStore = useAuthStore.getState();
+    const isLoggedIn = !authStore.isGuest && authStore.user !== null;
+    const now = new Date().toISOString();
+
+    if (isLoggedIn) {
+      // 회원: ServerScene 생성
+      const username = authStore.user!.username;
+      const newScene: SceneFrontend = {
+        ...JSON.parse(JSON.stringify(template)),
+        id: 0, // 서버가 할당
+        name: `${template.name} (복사본)`,
+        username,
+        createdAt: now,
+        updatedAt: now,
+      };
+      const created = await sceneApi.createScene(newScene, username);
+      set((state) => ({
+        scenes: [...state.scenes, created],
+      }));
+      return created;
+    } else {
+      // 비회원: LocalScene 생성
+      const newId = generateLocalId();
+      const newScene: SceneFrontend = {
+        ...JSON.parse(JSON.stringify(template)),
+        id: newId,
+        name: `${template.name} (복사본)`,
+        createdAt: now,
+        updatedAt: now,
+      };
+
+      const localScenes = get().scenes.filter((s) => isLocalScene(s.id));
+      const updatedLocals = [...localScenes, newScene];
+      saveLocalScenes(updatedLocals);
+
+      set({ scenes: updatedLocals });
+      return newScene;
+    }
+  },
+
+  /**
    * Scene 저장
-   * - DummyScene 수정 시 → 새 Scene 생성 (ID 변경)
+   * - TemplateScene 수정 시 → 새 Scene 생성 (ID 변경)
    * - NewScene (new_* prefix) → 새 Scene 생성
    * - LocalScene → localStorage 저장
    * - ServerScene → API 호출
@@ -161,8 +210,8 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
     const authStore = useAuthStore.getState();
     const isLoggedIn = !authStore.isGuest && authStore.user !== null;
 
-    // DummyScene 또는 NewScene 수정 시 새 Scene으로 분기
-    if (isDummyScene(scene.id) || isNewScene(scene.id)) {
+    // TemplateScene 또는 NewScene 수정 시 새 Scene으로 분기
+    if (isTemplateScene(scene.id) || isNewScene(scene.id)) {
       if (isLoggedIn) {
         // 회원: 새 ServerScene 생성
         const username = authStore.user!.username;
@@ -192,9 +241,7 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
         const updatedLocals = [...localScenes, newScene];
         saveLocalScenes(updatedLocals);
 
-        set((state) => ({
-          scenes: [...DUMMY_SCENES, ...updatedLocals],
-        }));
+        set({ scenes: updatedLocals });
         return newScene;
       }
     }
@@ -222,9 +269,7 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
       );
       saveLocalScenes(updatedLocals);
 
-      set((state) => ({
-        scenes: [...DUMMY_SCENES, ...updatedLocals],
-      }));
+      set({ scenes: updatedLocals });
       return updatedScene;
     }
 
@@ -233,11 +278,11 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
 
   /**
    * Scene 삭제
-   * - DummyScene은 삭제 불가
+   * - TemplateScene은 삭제 불가
    */
   deleteScene: async (id: SceneId) => {
-    if (isDummyScene(id)) {
-      throw new Error('DummyScene은 삭제할 수 없습니다');
+    if (isTemplateScene(id)) {
+      throw new Error('템플릿은 삭제할 수 없습니다');
     }
 
     const authStore = useAuthStore.getState();
@@ -259,9 +304,9 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
 
   /**
    * Scene 목록 로드
-   * - DummyScenes는 항상 포함
    * - 회원: ServerScenes (API)
    * - 비회원: LocalScenes (localStorage)
+   * - 템플릿은 포함하지 않음
    */
   loadScenes: async () => {
     set({ isLoading: true, error: null });
@@ -270,18 +315,17 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
       const authStore = useAuthStore.getState();
       const isLoggedIn = !authStore.isGuest && authStore.user !== null;
 
-      // DummyScenes는 항상 포함
-      let allScenes: SceneFrontend[] = [...DUMMY_SCENES];
+      let allScenes: SceneFrontend[] = [];
 
       if (isLoggedIn) {
         // 회원: 서버에서 Scene 로드
         const username = authStore.user!.username;
         const serverScenes = await sceneApi.getScenesByUsername(username);
-        allScenes = [...allScenes, ...serverScenes];
+        allScenes = serverScenes;
       } else {
         // 비회원: localStorage에서 Scene 로드
         const localScenes = loadLocalScenes();
-        allScenes = [...allScenes, ...localScenes];
+        allScenes = localScenes;
       }
 
       set({ scenes: allScenes, isLoading: false });
@@ -290,7 +334,7 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
       set({
         error: (error as Error).message,
         isLoading: false,
-        scenes: [...DUMMY_SCENES], // 에러 시 최소한 DummyScenes는 표시
+        scenes: [], // 에러 시 빈 배열
       });
     }
   },
@@ -336,7 +380,7 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
       scenes: [...state.scenes.filter((s) => !isLocalScene(s.id)), ...uploaded],
     }));
 
-    // 동기화 결과 반환 (토스트 알림용)
+    // 동기화 결과 로그
     if (uploaded.length > 0) {
       console.log(`${uploaded.length}개의 Scene이 계정에 동기화되었습니다`);
     }

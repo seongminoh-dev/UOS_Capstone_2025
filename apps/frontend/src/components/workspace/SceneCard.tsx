@@ -9,7 +9,7 @@
  */
 
 import type { SceneFrontend } from '../../graphics-core/service/Scene';
-import { isDummyScene } from '../../utils/sceneId';
+import { isTemplateScene } from '../../utils/sceneId';
 import { getAssetMetadata } from '../../assets/AssetRegistry';
 import { TrashIcon, CubeIcon, LightbulbIcon } from '../common';
 import './SceneCard.css';
@@ -65,8 +65,8 @@ export default function SceneCard({
   isRecentlyModified,
 }: SceneCardProps) {
   const roomIcon = getRoomIcon(scene);
-  const canDelete = !isDummyScene(scene.id);
-  const isTemplate = isDummyScene(scene.id);
+  const canDelete = !isTemplateScene(scene.id);
+  const isTemplate = isTemplateScene(scene.id);
 
   const furnitureCount = scene.assets.filter((a) => a.type === 'object').length;
   const lightCount = scene.assets.filter((a) =>

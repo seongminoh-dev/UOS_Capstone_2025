@@ -24,7 +24,6 @@ import {
   ListIcon,
   PlusIcon,
 } from '../common';
-import { isDummyScene } from '../../utils/sceneId';
 import './WorkspaceView.css';
 
 interface WorkspaceViewProps {
@@ -32,19 +31,12 @@ interface WorkspaceViewProps {
 }
 
 type SortOption = 'recent' | 'name' | 'created';
-type FilterOption = 'all' | 'templates' | 'my-scenes';
 type ViewMode = 'grid' | 'list';
 
 const SORT_OPTIONS: { value: SortOption; label: string }[] = [
   { value: 'recent', label: '최근 수정순' },
   { value: 'created', label: '생성일순' },
   { value: 'name', label: '이름순' },
-];
-
-const FILTER_OPTIONS: { value: FilterOption; label: string }[] = [
-  { value: 'all', label: '전체' },
-  { value: 'templates', label: '템플릿' },
-  { value: 'my-scenes', label: '내 공간' },
 ];
 
 const RECENT_THRESHOLD_MS = 24 * 60 * 60 * 1000;
@@ -57,18 +49,17 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
 
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<SortOption>('recent');
-  const [filterBy, setFilterBy] = useState<FilterOption>('all');
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [deletingScene, setDeletingScene] = useState<SceneFrontend | null>(null);
-  const [hiddenDummyIds, setHiddenDummyIds] = useState<Set<string | number>>(new Set());
 
   useEffect(() => {
     loadScenes();
   }, [loadScenes]);
 
   const filteredScenes = useMemo(() => {
-    let result = scenes.filter((s) => !hiddenDummyIds.has(s.id));
+    let result = [...scenes];
 
+    // 검색 필터
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -79,12 +70,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
       );
     }
 
-    if (filterBy === 'templates') {
-      result = result.filter((s) => isDummyScene(s.id));
-    } else if (filterBy === 'my-scenes') {
-      result = result.filter((s) => !isDummyScene(s.id));
-    }
-
+    // 정렬
     result.sort((a, b) => {
       switch (sortBy) {
         case 'name':
@@ -101,7 +87,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
     });
 
     return result;
-  }, [scenes, searchQuery, filterBy, sortBy, hiddenDummyIds]);
+  }, [scenes, searchQuery, sortBy]);
 
   const recentlyModifiedIds = useMemo(() => {
     const now = Date.now();
@@ -122,11 +108,7 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
   const handleConfirmDelete = useCallback(async () => {
     if (!deletingScene) return;
     try {
-      if (isDummyScene(deletingScene.id)) {
-        setHiddenDummyIds((prev) => new Set(prev).add(deletingScene.id));
-      } else {
-        await deleteScene(deletingScene.id);
-      }
+      await deleteScene(deletingScene.id);
       toast.success('삭제되었습니다.');
     } catch {
       toast.error('삭제에 실패했습니다.');
@@ -148,7 +130,6 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
 
   const handleResetFilters = useCallback(() => {
     setSearchQuery('');
-    setFilterBy('all');
     setSortBy('recent');
   }, []);
 
@@ -195,17 +176,6 @@ export default function WorkspaceView({ onSelectScene }: WorkspaceViewProps) {
 
           {/* RightControls */}
           <div className="workspace__right-controls">
-            {/* SelectFilter */}
-            <select
-              value={filterBy}
-              onChange={(e) => setFilterBy(e.target.value as FilterOption)}
-              className="workspace__select"
-            >
-              {FILTER_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>{opt.label}</option>
-              ))}
-            </select>
-
             {/* SortFilter */}
             <select
               value={sortBy}

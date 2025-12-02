@@ -38,7 +38,7 @@ import type {
   DirectionalLightParams,
 } from '../graphics-core/service/Scene';
 import { useSceneRepository } from '../stores/sceneRepository';
-import { DUMMY_SCENES } from '../graphics-core/data/DummyScenes';
+import { getDefaultTemplate } from '../data/templates';
 import { getAssetsByCategory, getAssetMetadata, getRoomConfig } from '../assets/AssetRegistry';
 import type { SceneId } from '../stores/sceneRepository';
 import './EditPage.css';
@@ -175,8 +175,7 @@ export default function EditPage() {
       return;
     }
 
-    const template = DUMMY_SCENES[0];
-    if (!template) return;
+    const template = getDefaultTemplate();
 
     const roomConfig = getRoomConfig(selectedRoomMesh);
 

@@ -309,6 +309,7 @@ export function ControlPanel({
           setPendingAction(null);
         }}
         onConfirm={handleSaveAndProceed}
+        onCancel={handleDiscardAndProceed}
         title="저장하지 않은 변경사항"
         message="변경사항을 저장하시겠습니까?"
         confirmText="저장"
