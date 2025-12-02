@@ -1534,21 +1534,21 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     //==========================================================================
     var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);
     if !(shiftCompact.length > 0u) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
     if !(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     // offset path 의 Jacobian J(offset) 계산
     var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
     if !(J_val > 0.0) || !isFinite(J_val) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
     shiftCompact.J = J_val;
 
@@ -1565,8 +1565,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // detJ = J_prev / J_new
     let det_J : f32 = baseRes.Sample.J / J_val;
     if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     //==========================================================================
@@ -1577,14 +1577,14 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let contribBase : vec3<f32> = PathContribution(basePath);
     let P_hat_Base  : f32       = Luminance(contribBase);
     if !(P_hat_Base > 0.0) || !isFinite(P_hat_Base) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     let p_base_raw : f32 = PathPDF(basePath);
     if !(p_base_raw > 0.0) || !isFinite(p_base_raw) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
     let p_base_can : f32 = max(p_base_raw, EPS);
 
@@ -1592,38 +1592,38 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let contribOff : vec3<f32> = PathContribution(offsetPath);
     let P_hat_Off  : f32       = Luminance(contribOff);
     if !(P_hat_Off > 0.0) || !isFinite(P_hat_Off) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     // canonical pdf for offsetPath
     let p_off_can_raw : f32 = PathPDF(offsetPath);
     if !(p_off_can_raw > 0.0) || !isFinite(p_off_can_raw) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
     let p_off_can : f32 = max(p_off_can_raw, EPS);
 
     // prev path pdf (shift 이전)
     let p_prev_raw : f32 = PathPDF(prevPath);
     if !(p_prev_raw > 0.0) || !isFinite(p_prev_raw) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
     let p_prev : f32 = max(p_prev_raw, EPS);
 
     // shift sampler pdf: p_shift = p_prev * det_J
     let p_shift_off : f32 = p_prev * det_J;
     if (!isFinite(p_shift_off) || p_shift_off <= 0.0) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
 
     // pairwise pdf for offset: canonical + shift
     let p_off_mix_raw : f32 = p_off_can + p_shift_off;
     if !(p_off_mix_raw > 0.0) || !isFinite(p_off_mix_raw) {
-        ReservoirBuffer[curIdx] = baseRes;
-        return;
+        //ReservoirBuffer[curIdx] = baseRes;
+        //return;
     }
     let p_off_mix : f32 = max(p_off_mix_raw, EPS);
 
@@ -1653,7 +1653,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     //==========================================================================
     // 6. Reservoir 업데이트 (2 후보: base vs offset)
     //==========================================================================
-    let p_choose_off : f32 = w_off / W_sum;
+    let p_choose_off_NotP : f32 = w_off / W_sum;
+
+    let p_choose_off : f32 = (f32(prevRes.C) * P_hat_Off) / (f32(prevRes.C) * P_hat_Off + f32(baseRes.C) * P_hat_Base);
 
     var rng : u32 = GetHashValue(
         ThreadID.x * 1973u +

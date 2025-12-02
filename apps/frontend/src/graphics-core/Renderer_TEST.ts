@@ -505,7 +505,7 @@ export class Renderer
         this.Device.queue.submit( [ CommandEncoder.finish() ] );
 
         // ★ 추가: CaptureInterval 간격으로 캔버스 PNG 저장
-        if (this.CaptureInterval > 0 && (this.FrameCount % this.CaptureInterval === 0))
+        if (this.FrameCount == 2)
         {
             const a = document.createElement('a');
             a.href = this.Canvas.toDataURL('image/png');
@@ -719,7 +719,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                SpatialReuseCode, 
+                ShaderCode_Spatial_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],

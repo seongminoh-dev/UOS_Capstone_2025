@@ -1577,8 +1577,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // Compute Final Color
     let PathSample : Path       = RegeneratePath( ThreadID.xy, Reservoir.Sample );
     let FrameColor : vec3<f32>  = Reservoir.UCW * PathContribution( PathSample );
+    let test : vec3<f32> = vec3<f32>(Reservoir.Padding, 0.1);
 
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(test, 1.0));
 
     return;
 }
