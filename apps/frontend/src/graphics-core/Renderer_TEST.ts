@@ -3,8 +3,6 @@ import type { Mat4 }            from "wgpu-matrix";
 import      { Camera }          from "./Camera";
 import      { ComputePass }     from "./ComputePass";
 import      { World }           from "./World";
-import      { Utils }           from "./Utils";
-
 import type { OnProgressCallback } from "./service/types/InitProgress";
 
 // Lighting 상수 (중앙화된 값 사용)
@@ -17,32 +15,27 @@ import {
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
+
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
+
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
+
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
-import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
-import ShaderCode_Temporal_PairMIS  from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
-import ShaderCode_Spatial_PairMIS   from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
+
+import ShaderCode_Temporal_PairMIS          from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_Spatial_PairMIS          from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
+
+
+
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
+
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
+import { Utils } from "./Utils";
 
-
-// -------------------------------------------------
-
-const TEST_MCPT             = 0; // ex) 50 ms
-const TEST_MIS              = 1; // ex) 18 ms
-const TEST_ReSTIR_GBH       = 2; // ex) 48 ms
-const TEST_ReSTIR_Pairwise  = 3; // ex) 49 ms
-
-let SelectedTest            = TEST_MCPT;
-
-const TemporalReuseCode     = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Temporal_PairMIS   : ShaderCode_Temporal;
-const SpatialReuseCode      = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Spatial_PairMIS    : ShaderCode_Spatial;
-
-// -------------------------------------------------
 
 const EBufferIndex =
 {
@@ -430,28 +423,12 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             
-            if ( SelectedTest === TEST_MCPT )
-            {
-                this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-            else if ( SelectedTest === TEST_MIS )
-            {
-                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-            else
-            {
-                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-
             //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            //this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            //this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            
+            this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
 
@@ -689,7 +666,7 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                TemporalReuseCode, 
+                ShaderCode_Temporal_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -719,7 +696,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                SpatialReuseCode, 
+                ShaderCode_Spatial_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
