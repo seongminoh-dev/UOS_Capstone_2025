@@ -636,10 +636,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>)
 {
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
-
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
+        //let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
+//
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     // 1. Ray Trace 수행
@@ -658,6 +658,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID: vec3<u32>)
         G_BufferValue.b = HitSurface.SurfaceInfo.Barycentric.x;
         G_BufferValue.a = HitSurface.SurfaceInfo.Barycentric.y;
     }
+   
+    textureBarrier();
 
     // 3. G_Buffer 에 작성
     textureStore(G_Buffer, ThreadID.xy, G_BufferValue);

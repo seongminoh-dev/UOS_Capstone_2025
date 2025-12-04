@@ -394,12 +394,14 @@ fn ClampHistoryColor(PixelUV_Center : vec2<f32>, HistoryColor : vec3<f32>) -> ve
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
+    storageBarrier();
+    workgroupBarrier();
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
+        //let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
+        //let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     let UV              : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
@@ -416,8 +418,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     //let mv = textureLoad(MotionVectorTexture, vec2<i32>(i32(ThreadID.x),i32(ThreadID.y)), 0).xy;
     //textureStore(ResultTexture, ThreadID.xy, vec4<f32>(mv, 0.0, 1.0));
+
+    workgroupBarrier();
+    textureBarrier();
     
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
+    
 
     return;
 }
