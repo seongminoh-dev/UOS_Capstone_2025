@@ -45,7 +45,6 @@ const TemporalReuseCode     = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? Shader
 const SpatialReuseCode      = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Spatial_PairMIS    : ShaderCode_Spatial;
 
 // -------------------------------------------------
-
 const EBufferIndex =
 {
     Uniform         : 0,
@@ -433,6 +432,8 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            
+            //this.ComputePasses[EComputePassIndex.ReSTIR_DI].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
                
             
             if ( SelectedTest === TEST_MCPT )
@@ -511,7 +512,7 @@ export class Renderer
         this.Device.queue.submit( [ CommandEncoder.finish() ] );
 
         // ★ 추가: CaptureInterval 간격으로 캔버스 PNG 저장
-        if (this.FrameCount == 1)
+        if (this.FrameCount == 2)
         {
             //const a = document.createElement('a');
             //a.href = this.Canvas.toDataURL('image/png');
@@ -593,7 +594,7 @@ export class Renderer
 
         this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
         this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba32float");
-        this.GPUTextures[ETextureIndex.ReSTIR_DI]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+        this.GPUTextures[ETextureIndex.DI_tex]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
 
         this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
         this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
@@ -690,7 +691,7 @@ export class Renderer
                 [   // Write GPUBuffer
                 ],
                 [   // Write GPUTextureView
-                    this.GPUTextures[ETextureIndex.ReSTIR_DI].createView(),
+                    this.GPUTextures[ETextureIndex.DI_tex].createView(),
                 ]
             ),
 
@@ -792,7 +793,7 @@ export class Renderer
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-                    this.GPUTextures[ETextureIndex.ReSTIR_DI].createView(),
+                    this.GPUTextures[ETextureIndex.DI_tex].createView(),
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Default],
