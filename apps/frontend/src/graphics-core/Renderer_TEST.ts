@@ -19,6 +19,8 @@ import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
+
+import ShaderCode_ReSTIR_DI   from './shaders/PT_03_ReSTIR_DI.wgsl?raw';
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
 import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
@@ -37,7 +39,7 @@ const TEST_MIS              = 1; // ex) 18 ms
 const TEST_ReSTIR_GBH       = 2; // ex) 48 ms
 const TEST_ReSTIR_Pairwise  = 3; // ex) 49 ms
 
-let SelectedTest            = TEST_MCPT;
+let SelectedTest            = TEST_ReSTIR_Pairwise;
 
 const TemporalReuseCode     = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Temporal_PairMIS   : ShaderCode_Temporal;
 const SpatialReuseCode      = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Spatial_PairMIS    : ShaderCode_Spatial;
@@ -63,7 +65,8 @@ const ETextureIndex =
     Radiance        : 3,
     History_Read    : 4,
     History_Write   : 5,
-    SIZE            : 6
+    DI_tex          : 6,
+    SIZE            : 7
 } as const;
 
 const ESamplerIndex =
@@ -90,13 +93,14 @@ const EComputePassIndex =
 {
     GBufferCreation         : 0,
     MotionVectorCreation    : 1,
-    Initialize              : 2,
-    TemporalReuse           : 3,
-    SpatialReuse            : 4,
-    FinalShading            : 5,
-    PostProcess             : 6,
-    MCPT                    : 7,
-    SIZE                    : 8
+    ReSTIR_DI               : 2,
+    Initialize              : 3,
+    TemporalReuse           : 4,
+    SpatialReuse            : 5,
+    FinalShading            : 6,
+    PostProcess             : 7,
+    MCPT                    : 8,
+    SIZE                    : 9
 } as const;
 
 
@@ -429,6 +433,8 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.ReSTIR_DI].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                
             
             if ( SelectedTest === TEST_MCPT )
             {
@@ -458,6 +464,24 @@ export class Renderer
             ComputePassEncoder.end();
         }
 
+                // Copy GPU Resources
+        {
+
+            CommandEncoder.copyTextureToTexture
+            ( 
+                { texture : this.GPUTextures[ETextureIndex.History_Write] },
+                { texture : this.GPUTextures[ETextureIndex.History_Read] },
+                { width : this.Canvas.width, height : this.Canvas.height }
+            );
+
+            CommandEncoder.copyBufferToBuffer
+            (
+                this.GPUBuffers[EBufferIndex.Reservoir],
+                this.GPUBuffers[EBufferIndex.PrevReservoir]
+            );
+
+        }
+
         // RenderPass (Draw ResultTexture)
         {
             const RenderPassDescriptor : GPURenderPassDescriptor =
@@ -482,35 +506,18 @@ export class Renderer
             RenderPass.end();
         }
 
-        // Copy GPU Resources
-        {
 
-            CommandEncoder.copyTextureToTexture
-            ( 
-                { texture : this.GPUTextures[ETextureIndex.History_Write] },
-                { texture : this.GPUTextures[ETextureIndex.History_Read] },
-                { width : this.Canvas.width, height : this.Canvas.height }
-            );
-
-            CommandEncoder.copyBufferToBuffer
-            (
-                this.GPUBuffers[EBufferIndex.Reservoir], 0,
-                this.GPUBuffers[EBufferIndex.PrevReservoir], 0,
-                4 * 32 * this.Canvas.width * this.Canvas.height
-            );
-
-        }
 
         // Submit Encoder
         this.Device.queue.submit( [ CommandEncoder.finish() ] );
 
         // ★ 추가: CaptureInterval 간격으로 캔버스 PNG 저장
-        if (this.FrameCount == 2)
+        if (this.FrameCount == 1)
         {
-            const a = document.createElement('a');
-            a.href = this.Canvas.toDataURL('image/png');
-            a.download = `frame_${this.FrameCount}.png`;
-            a.click();
+            //const a = document.createElement('a');
+            //a.href = this.Canvas.toDataURL('image/png');
+            //a.download = `frame_${this.FrameCount}.png`;
+            //a.click();
         }
 
         return;
@@ -587,6 +594,8 @@ export class Renderer
 
         this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
         this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba32float");
+        this.GPUTextures[ETextureIndex.ReSTIR_DI]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+
         this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
         this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
         this.GPUTextures[ETextureIndex.History_Read]    = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height, "rgba16float");
@@ -665,6 +674,31 @@ export class Renderer
             ComputePass.Create // Initialize
             (
                 this.Device, 
+                ShaderCode_ReSTIR_DI, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.ReSTIR_DI].createView(),
+                ]
+            ),
+
+
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
                 ShaderCode_Initialize, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
@@ -685,6 +719,8 @@ export class Renderer
                 [   // Write GPUTextureView
                 ]
             ),
+
+
     
             ComputePass.Create // Temporal Reuse
             (
@@ -719,7 +755,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                ShaderCode_Spatial_PairMIS, 
+                SpatialReuseCode, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -757,6 +793,7 @@ export class Renderer
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                    this.GPUTextures[ETextureIndex.ReSTIR_DI].createView(),
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Default],

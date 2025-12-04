@@ -1546,7 +1546,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
         let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
 
@@ -1658,6 +1658,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
     }
+    storageBarrier();
+    workgroupBarrier();
 
     return;
 }
