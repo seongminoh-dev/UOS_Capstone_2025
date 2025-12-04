@@ -176,15 +176,12 @@ struct CompactPath
     RcVertex    : vec4<f32>,
 
     k           : u32,
-    Lobe_km1    : u32,
+    Lobe_k_1    : u32,
     Lobe_k      : u32,
+    length      : u32,
+
+    Padding     : vec3<u32>,
     J           : f32,
-
-    L           : vec3<f32>,
-    Padding_0   : u32,
-
-    Radiance    : vec3<f32>,
-    Padding_1   : u32,
 };
 
 struct Path
@@ -236,85 +233,7 @@ const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
 
-const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
-const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
-const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
-const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
-const MIN_J      : f32 = 1e-4;
-const MAX_J      : f32 = 1e+4;
-
-//==========================================================================
-// Procedural Sky (물리 기반 환경광)
-//==========================================================================
-
-fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
-{
-    // Uniform에서 환경 파라미터 가져오기
-    let skyColor     = UniformBuffer.EnvSkyColor;
-    let horizonColor = UniformBuffer.EnvHorizonColor.xyz;
-    let groundColor  = UniformBuffer.EnvGroundColor.xyz;
-    let sunDir       = UniformBuffer.EnvSunDirection;
-    let sunIntensity = UniformBuffer.EnvSunIntensity;
-    let envIntensity = UniformBuffer.EnvIntensity;
-
-    // 시선 방향의 수직 성분 (y = 1: 천정, y = 0: 지평선, y = -1: 지면)
-    let cosTheta = rayDir.y;
-
-    // === 하늘/지면 구분 ===
-    if (cosTheta < 0.0) {
-        // 지면 방향: 지면 반사색 반환
-        let groundFactor = clamp(-cosTheta, 0.0, 1.0);
-        return groundColor * envIntensity * (0.5 + groundFactor * 0.5);
-    }
-
-    // === Rayleigh 산란 근사 ===
-    // 천정(cosTheta=1)에서 skyColor, 지평선(cosTheta=0)에서 horizonColor
-    let heightFactor = pow(cosTheta, 0.4); // 비선형 보간 (지평선 근처에서 더 넓게)
-    var skyResult = mix(horizonColor, skyColor, heightFactor);
-
-    // === Mie 산란 근사 (태양 광채/aureole) ===
-    if (sunIntensity > 0.0) {
-        let cosSun = dot(rayDir, -sunDir); // 태양 방향과의 각도
-
-        // 태양 디스크 (매우 밝은 중심)
-        let sunDisk = smoothstep(0.9995, 0.9999, cosSun) * 50.0;
-
-        // 태양 주변 광채 (Mie forward scattering)
-        let aureole = pow(max(cosSun, 0.0), 64.0) * 2.0;
-
-        // 태양빛 색상 (색온도 기반 - Uniform에서 계산된 값 사용)
-        // 여기서는 단순히 따뜻한 흰색 사용
-        let sunColor = vec3<f32>(1.0, 0.95, 0.9);
-
-        skyResult += sunColor * (sunDisk + aureole) * sunIntensity;
-    }
-
-    return skyResult * envIntensity;
-}
-
-// 기본 회색 환경색 (없음 모드용)
-const DEFAULT_ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
-
-fn GetEnvironmentColor(rayDir : vec3<f32>) -> vec3<f32>
-{
-    var EnvColor : vec3<f32>;
-
-    switch ( UniformBuffer.EnvMode )
-    {
-        case 0u : { EnvColor = DEFAULT_ENV_COLOR; }
-        case 1u : { EnvColor = UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity; }
-        case default : { EnvColor = SampleProceduralSky(rayDir); }
-    }
-
-    return EnvColor;
-}
-
-// 간접광용 환경색 (EnvIndirectMult 적용)
-fn GetEnvironmentColorIndirect(rayDir : vec3<f32>) -> vec3<f32>
-{
-    return GetEnvironmentColor(rayDir) * UniformBuffer.EnvIndirectMult;
-}
 
 //==========================================================================
 // Enums
@@ -336,17 +255,18 @@ const LOBE_LIGHT    : u32 = 3u;
 // GPU Bindings
 //==========================================================================
 
-@group(0) @binding(0) var<uniform>          UniformBuffer   : Uniform;
-@group(0) @binding(1) var<storage, read>    SceneBuffer     : array<u32>;
-@group(0) @binding(2) var<storage, read>    GeometryBuffer  : array<u32>;
-@group(0) @binding(3) var<storage, read>    AccelBuffer     : array<u32>;
+@group(0) @binding(0) var<uniform>          UniformBuffer           : Uniform;
+@group(0) @binding(1) var<storage, read>    SceneBuffer             : array<u32>;
+@group(0) @binding(2) var<storage, read>    GeometryBuffer          : array<u32>;
+@group(0) @binding(3) var<storage, read>    AccelBuffer             : array<u32>;
+@group(0) @binding(4) var<storage, read>    ReservoirBuffer_Read    : array<Reservoir>;
 
 @group(0) @binding(10) var TexturePool      : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer         : texture_2d<f32>;
 
 @group(0) @binding(20) var TextureSampler   : sampler;
 
-@group(1) @binding(0) var<storage, read_write> ReservoirBuffer : array<Reservoir>;
+@group(1) @binding(0) var<storage, read_write> ReservoirBuffer_Write : array<Reservoir>;
 
 
 
@@ -751,10 +671,16 @@ fn TBNMatrix(N : vec3<f32>) -> mat3x3<f32>
 // Utils
 //==========================================================================
 
+fn LoadReservoir(ThreadID : vec2<u32>) -> Reservoir
+{
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
+    return ReservoirBuffer_Read[idx];
+}
+
 fn StoreReservoir(ThreadID : vec2<u32>, pReservoir : ptr<function, Reservoir>)
 {
     let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
-    ReservoirBuffer[idx] = (*pReservoir);
+    ReservoirBuffer_Write[idx] = (*pReservoir);
 
     return;
 }
@@ -1471,7 +1397,7 @@ fn GetEnvironmentColorIndirect(rayDir : vec3<f32>) -> vec3<f32>
 
 
 //==========================================================================
-// Functions
+// Path Functions
 //==========================================================================
 
 fn L_emit(XL : LightSample, X : Surface) -> vec3<f32>
@@ -1504,21 +1430,6 @@ fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
     return bFarEnough && bRoughEnough;
 }
 
-fn SafeReconnectionIndex(InPath : Path) -> u32
-{
-    for (var k = 2u; k < InPath.length; k++)
-    {
-        if ( IsSafeToReconnect(
-            InPath.Surface[k - 1], InPath.Lobe[k - 1], 
-            InPath.Surface[k    ], InPath.Lobe[k    ]
-            ) ) { return k; }
-    }
-
-    if ( IsSafeToReconnect_Light( InPath.Surface[InPath.length - 1], InPath.XL ) ) { return InPath.length; }
-
-    return 0u;
-}
-
 fn UpdateReservoir(
     pRandomSeed : ptr<function, u32>, 
     pReservoir  : ptr<function, PathReservoir>, 
@@ -1536,29 +1447,75 @@ fn UpdateReservoir(
 
     if ( !bChangeSample ) { return; }
 
-
     (*pReservoir).Sample    = Sample;
     (*pReservoir).P_hat     = P_hat;
 
     return;
 }
 
-fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
+fn PartialJacobian(InPath : Path, k : u32) -> f32
 {
+    let bIsLight_Xk : bool = ( k == InPath.length );
 
-    if ( k == InPath.length - 1 )
+    let X_Prev : Surface = InPath.Surface[k - 2];
+    let X_Curr : Surface = InPath.Surface[k - 1];
+    let X_Next : Surface = InPath.Surface[k    ];
+
+    let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+    let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+    let r : vec3<f32> = X_Next.Position - X_Curr.Position;
+
+    var PDF : f32;
+    var Cos : f32;
+
+    if ( bIsLight_Xk )
     {
-        let X_k : Surface = InPath.Surface[InPath.length - 1];
-        return L_emit(InPath.XL, X_k) * Visibility(X_k.Position, InPath.XL.Position);
+        PDF = PDF_LIGHT(X_Curr, V, InPath.XL);
+        Cos = max( dot( InPath.XL.Direction, -L ), 0.0 );
     }
-    else if ( k == InPath.length )
-    {
-        return vec3f(1.0);
+    else 
+    { 
+        PDF = PDF_BSDF(X_Curr, V, L); 
+        Cos = max( dot( X_Next.Normal, -L ), 0.0 );
     }
 
+    return PDF * Cos / max( dot(r, r), 1e-4 );
+}
+
+fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
+{
+    var OutPath : Path;
+    {
+        OutPath.Surface[0].Position = Get_X0(ThreadID);
+        OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
+        OutPath.length              = InCompactPath.length;
+        OutPath.XL                  = InCompactPath.XL;
+    }
+
+    for (var i = 1u; i < InCompactPath.length - 1; i++)
+    {
+        let X_Prev  : Surface       = OutPath.Surface[i - 1];
+        let X_Curr  : Surface       = OutPath.Surface[i    ];
+
+        let V       : vec3<f32>     = normalize( X_Prev.Position - X_Curr.Position );
+
+        var rSeed   : u32           = InCompactPath.rSeed[i - 1];
+        let W       : BSDFSample    = SampleBSDF(&rSeed, X_Curr, V);
+
+        OutPath.Lobe[i]             = W.Lobe;
+        let HitInfo : HitResult     = TraceRay( Ray(X_Curr.Position, W.Direction) );
+
+        OutPath.Surface[i + 1]      = GetSurface( HitInfo.SurfaceInfo );
+    }
+
+    return OutPath;
+}
+
+fn PathContribution(InPath : Path) -> vec3<f32>
+{
     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = k + 1; i < InPath.length - 1; i++)
+    for (var i = 1u; i < InPath.length - 1; i++)
     {
         let X_Prev : Surface = InPath.Surface[i - 1];
         let X_Curr : Surface = InPath.Surface[i    ];
@@ -1587,204 +1544,88 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
     return f;
 }
 
-fn PartialJacobian(InPath : Path, k : u32) -> f32
-{
-    let bIsLight_Xk : bool = ( k == InPath.length );
+fn PathPDF(InPath : Path) -> f32
+{    
+    var PDF : f32 = InPath.XL.PDF;
 
-    let X_Prev : Surface = InPath.Surface[k - 2];
-    let X_Curr : Surface = InPath.Surface[k - 1];
-    let X_Next : Surface = InPath.Surface[k    ];
-
-    let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-    let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
-    let r : vec3<f32> = X_Next.Position - X_Curr.Position;
-
-    var PDF_X   : f32;
-    var Cos     : f32;
-
-    if ( bIsLight_Xk )
+    for (var i = 1u; i < InPath.length - 1; i++)
     {
-        PDF_X   = PDF_LIGHT(X_Curr, V, InPath.XL);
-        Cos     = max( dot( InPath.XL.Direction, -L ), 0.0 );
-    }
-    else 
-    { 
-        PDF_X   = PDF_BSDF(X_Curr, V, L); 
-        Cos     = max( dot( X_Next.Normal, -L ), 0.0 );
+        let X_Prev : Surface = InPath.Surface[i - 1];
+        let X_Curr : Surface = InPath.Surface[i    ];
+        let X_Next : Surface = InPath.Surface[i + 1];
+
+        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+        let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+
+        PDF *= PDF_BSDF(X_Curr, V, L);
     }
 
-    return PDF_X * Cos / max( dot(r, r), 1e-4 );
+    return PDF;
 }
 
-fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
+//==========================================================================
+// Functions
+//==========================================================================
+
+fn IsInBoundary(ThreadID : vec2<u32>) -> bool
 {
-    var OutCompactPath : CompactPath;
-    {
-        OutCompactPath.k            = SafeReconnectionIndex(InPath);
-        OutCompactPath.RcVertex     = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-        OutCompactPath.XL           = InPath.XL;
-        OutCompactPath.J            = 0.0;
-        OutCompactPath.L            = vec3<f32>(0.0, 0.0, 0.0);
-        OutCompactPath.Radiance     = vec3<f32>(0.0, 0.0, 0.0);
+    let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
+    let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        OutCompactPath.rSeed[0] = InPath.rSeed[2];
-        OutCompactPath.rSeed[1] = InPath.rSeed[3];
-        OutCompactPath.rSeed[2] = InPath.rSeed[4];
-        OutCompactPath.rSeed[3] = InPath.rSeed[5];
-    }
+    if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return false; }
 
-    OutCompactPath.Radiance = SuffixRadiance(InPath, OutCompactPath.k);
-
-    // Unshiftable Path
-    if ( OutCompactPath.k == 0u ) { return OutCompactPath; }
-
-    let bIsLight_Xk : bool  = ( OutCompactPath.k == InPath.length );
-
-    OutCompactPath.Lobe_k   = select(InPath.Lobe[OutCompactPath.k], LOBE_LIGHT, bIsLight_Xk);
-    OutCompactPath.Lobe_km1 = InPath.Lobe[OutCompactPath.k - 1];
-
-    if ( !bIsLight_Xk ) 
-    { 
-        let bIsLight_Xkp1   : bool      = ( OutCompactPath.k == InPath.length - 1 );
-        let Xk_Light        : vec3<f32> = DirectionToLight( InPath.Surface[OutCompactPath.k], InPath.XL );
-        let Xk_Surface      : vec3<f32> =  normalize( InPath.Surface[OutCompactPath.k + 1].Position - InPath.Surface[OutCompactPath.k].Position );
-
-        OutCompactPath.L        = select( Xk_Surface, Xk_Light, bIsLight_Xkp1 );
-        OutCompactPath.RcVertex = GetRcVertex( CSurface[OutCompactPath.k] );
-    }
-
-    OutCompactPath.J = PartialJacobian(InPath, OutCompactPath.k);
-
-    return OutCompactPath;
+    return true;
 }
-
-
-
-
-//==========================================================================
-// Main
-//==========================================================================
 
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
-    // 0. 범위 밖 스레드는 계산 X
+    if ( !IsInBoundary(ThreadID.xy) ) { return; }
+
+    // Initialize
+    let Delta   : i32 = 2;
+    var idx     : u32 = 1;
+
+    var ReservoirArray      : array<Reservoir, 25u>;
+    var ShiftedPathArray    : array<Path, 25u>;
+    var JacobianArray       : array<f32, 25u>;
+
+
+    ReservoirArray[0] = LoadReservoir(ThreadID.xy); 
+
+    // Fetch Non-Canonical Samples
+    for (var dx : i32 = -Delta; dx <= Delta; dx++)
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
-
-        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
-    }
-
-
-
-    // 1. 초기화
-    var rSeed   : u32       = InitializeRandomSeed(ThreadID.xy);
-    var f       : vec3<f32> = vec3f(1.0);
-    var p       : f32       = 1.0;
-
-    var CSurface : array<CompactSurface, 8u>;
-    {
-        CSurface[1] = Get_X1(ThreadID.xy);
-    }
-
-    var PathTreeReservoir : PathReservoir = PathReservoir();
-    {
-        PathTreeReservoir.w_sum = 0.0;
-        PathTreeReservoir.C     = 0u;
-    }
-
-    var PathTree : Path = Path();
-    {
-        PathTree.Surface[0].Position    = Get_X0(ThreadID.xy);
-        PathTree.Surface[1]             = GetSurface( Get_X1(ThreadID.xy) );
-        PathTree.length                 = 2u;
-    }
-
-
-
-    // 2. Path Tree 순회
-    for (var i = 1u; i < 4u; i++)
-    {
-        let X : Surface     = PathTree.Surface[i];
-        let V : vec3<f32>   = normalize( PathTree.Surface[i - 1].Position - X.Position );
-        var L : vec3<f32>;
-
-        // Submit NEE Path
+        for (var dy : i32 = -Delta; dy <= Delta; dy++)
         {
-            PathTree.rSeed[i + 1]   = rSeed;
-            PathTree.XL             = SampleNEE(&rSeed, X, V);
-            L = DirectionToLight(X, PathTree.XL);
+            let NeighborID : vec2<u32> = vec2<u32>( vec2<i32>(ThreadID.xy) + vec2<i32>(dx, dy) );
 
-            let PathContribution : vec3<f32> = f * BSDF(X, V, L) * abs(dot(X.Normal, L))
-            * L_emit(PathTree.XL, X) * Visibility(X.Position, PathTree.XL.Position);
-
-            let P_hat   : f32 = Luminance( PathContribution );
-            let PathPDF : f32 = p * PathTree.XL.PDF;
-            let RIS     : f32 = P_hat / PathPDF;
-
-            UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
+            if ( dx == 0 && dy == 0 )           { continue; }
+            if ( !IsInBoundary(NeighborID) )    { continue; }
+            
+            ReservoirArray[idx] = LoadReservoir(NeighborID); 
+            idx++;
         }
-
-        if (i == 3u) { break; }
-
-        // Sample BSDF
-        {
-            PathTree.rSeed[i + 1]   = rSeed;
-            let W : BSDFSample      = SampleBSDF(&rSeed, X, V);
-
-            L = W.Direction;
-            PathTree.Lobe[i] = W.Lobe;
-        }
-
-        // Update Path Contribution & PDF
-        {
-            f *= BSDF(X, V, L) * abs(dot(X.Normal, L));
-            p *= PDF_BSDF(X, V, L);
-
-            let P_Survive : f32 = Luminance(f) / p;
-            if ( Random(&rSeed) < P_Survive) { p *= P_Survive; } else { break; }
-        }
-
-        let RayHit : HitResult = TraceRay( Ray(X.Position, L) );
-
-        // Submit Env Path
-        if ( !RayHit.IsValidHit )
-        {
-            PathTree.XL = CreateEnvLight(X, V, L);
-
-            let PathContribution : vec3<f32> = f * GetEnvironmentColorIndirect(L);
-            let P_hat   : f32 = Luminance( PathContribution );
-            let PathPDF : f32 = p;
-            let RIS     : f32 = P_hat / PathPDF;
-
-            UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
-
-            break;
-        }
-
-        // Update Path Tree
-        {
-            CSurface[i + 1]         = RayHit.SurfaceInfo;
-            PathTree.Surface[i + 1] = GetSurface( CSurface[i + 1] );
-            PathTree.length++;
-        }
-
     }
 
-    // 3. 최종 살아남은 경로를 Reservoir 에 저장
+
+    // Shift All Samples To Current Domain
+    for (var iter : u32 = 0u; iter < idx; iter++)
     {
-        var ResultReservoir : Reservoir;
-
-        ResultReservoir.Sample  = CompressPath(PathTreeReservoir.Sample, CSurface);
-        ResultReservoir.UCW     = PathTreeReservoir.w_sum / PathTreeReservoir.P_hat;
-        ResultReservoir.C       = PathTreeReservoir.C;
-
-        StoreReservoir(ThreadID.xy, &ResultReservoir);
+        ShiftedPathArray[iter] = RegeneratePath(ThreadID.xy, ReservoirArray[iter].Sample);
     }
-    storageBarrier();
-    workgroupBarrier();
+
+
+    // No Forced Reconnection -> Jacobian = 1.0
+    JacobianArray[0] = 1.0;
+
+    for (var iter : u32 = 1u; iter < idx; iter++)
+    {
+        JacobianArray[iter] = 1.0;
+    }
+
+    
 
     return;
 }

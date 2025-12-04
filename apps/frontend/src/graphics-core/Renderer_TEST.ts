@@ -21,6 +21,7 @@ import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
 
 import ShaderCode_ReSTIR_DI   from './shaders/PT_03_ReSTIR_DI.wgsl?raw';
+
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
 import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
@@ -45,6 +46,7 @@ const TemporalReuseCode     = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? Shader
 const SpatialReuseCode      = ( SelectedTest === TEST_ReSTIR_Pairwise ) ? ShaderCode_Spatial_PairMIS    : ShaderCode_Spatial;
 
 // -------------------------------------------------
+
 const EBufferIndex =
 {
     Uniform         : 0,
@@ -432,9 +434,6 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            
-            //this.ComputePasses[EComputePassIndex.ReSTIR_DI].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-               
             
             if ( SelectedTest === TEST_MCPT )
             {
