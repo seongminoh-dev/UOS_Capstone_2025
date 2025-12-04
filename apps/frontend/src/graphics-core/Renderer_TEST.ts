@@ -23,6 +23,8 @@ import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?r
 import ShaderCode_ReSTIR_DI   from './shaders/PT_03_ReSTIR_DI.wgsl?raw';
 
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
+
+import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
 import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
 import ShaderCode_Temporal_PairMIS  from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
@@ -435,23 +437,9 @@ export class Renderer
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             
-            if ( SelectedTest === TEST_MCPT )
-            {
-                this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-            else if ( SelectedTest === TEST_MIS )
-            {
-                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-            else
-            {
-                this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            }
-
+            //this.ComputePasses[EComputePassIndex.ReSTIR_DI].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+               
+            
             //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             //this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
