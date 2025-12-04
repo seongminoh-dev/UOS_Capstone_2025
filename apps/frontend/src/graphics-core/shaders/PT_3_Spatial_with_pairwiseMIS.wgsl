@@ -211,6 +211,20 @@ struct Reservoir
     Padding : vec2<f32>,
 };
 
+struct Candidate
+{
+    path : Path,
+
+    // f(y)의 대리 값: PathContribution 의 휘도
+    L : f32,
+
+    // 이웃 픽셀 i 가 현재 픽셀에서 이 path y 를 낼 때의
+    // 추정 PDF  p_hat<-i(y) ≈ 1/UCW_i * (J_y / J_x)
+    p_from_i : f32,
+
+    confidence : u32,
+};
+
 
 
 //==========================================================================
@@ -1554,51 +1568,56 @@ fn CompressPath(InPath : Path) -> CompactPath
 
     let bIsLight_Xk : bool  = ( OutCompactPath.k == InPath.length );
     OutCompactPath.Lobe_k   = select(InPath.Lobe[OutCompactPath.k], LOBE_LIGHT, bIsLight_Xk);
-    OutCompactPath.Lobe_k_1 = InPath.Lobe[OutCompactPath.k - 1];
+    OutCompactPath.Lobe_k_1 = InPath.Lobe[OutCompactPath.k - 1u];
 
-    // Compute Jacobian Determinant
+    // --- 여기부터 J 저장 부분 수정 ---
+
+    let k : u32 = OutCompactPath.k;
+
+    // x_k 이 라이트 버텍스인 경우(=k == length) : 수식 6.16의 두번째 항이 사라진 케이스
+    if (bIsLight_Xk)
     {
-        // k는 재연결 위치
-        let k : u32 = OutCompactPath.k;
+        // k == length 이므로, k-2, k-1 은 존재
+        if (k >= 2u && k <= InPath.length)
+        {
+            let Xkm2 : Surface = InPath.Surface[k - 2u]; // x_{k-2}
+            let Xkm1 : Surface = InPath.Surface[k - 1u]; // x_{k-1}
 
-        let bIsLight_Xk : bool = (k == InPath.length);
-        if (bIsLight_Xk) {
-            OutCompactPath.J = 1.0;
-        } else {
-            // (X_{k-1} -> X_k) segment
-            let Xkm1   : Surface = InPath.Surface[k - 1u];  // scattering vertex
-            let Xkm2   : Surface = InPath.Surface[k - 2u];  // 이전 vertex
-            let Xk     : Surface = InPath.Surface[k];       // hit vertex to reconnect
+            // x_{k-1} 기준 in/out 방향
+            let V_in  : vec3<f32> = normalize(Xkm2.Position - Xkm1.Position);
+            // out 방향은 light 쪽 : XL.Direction 을 이용
+            let L_dir : vec3<f32> = DirectionToLight(Xkm1, InPath.XL);
+            let pdf_in : f32      = PDF_BSDF(Xkm1, V_in, L_dir);
 
-            // 베이스 경로의 segment 방향: X_{k-1} -> X_k
-            let L_x : vec3<f32> =
-                normalize(Xk.Position - Xkm1.Position);
+            // 기하학 항 |cos θ_k^x| / ||x_k - x_{k-1}||^2
+            let L_vec : vec3<f32> = normalize(InPath.XL.Position - Xkm1.Position);
+            let XkN   : vec3<f32> = Xkm1.Normal; // 마지막 서피스의 노멀
+            let cos_k : f32       = abs(dot(XkN, L_vec));
+            let d     : vec3<f32> = InPath.XL.Position - Xkm1.Position;
+            let dist2 : f32       = max(dot(d, d), EPS);
 
-            // X_{k-1}에서의 'in' 방향 V_x (이전 점 쪽)
-            let V_x : vec3<f32> =
-                normalize(Xkm2.Position - Xkm1.Position);
+            var J_light : f32 = pdf_in * (cos_k / dist2);
+            if (!isFinite(J_light) || J_light < MIN_J || J_light > MAX_J) {
+                J_light = 0.0;
+            }
 
-            // 베이스에서 이 segment를 만들 때 사용된 BSDF PDF 근사
-            let pdf_x : f32 = PDF_BSDF(Xkm1, V_x, L_x);
-
-            // X_k에서 보는 입사 코사인: 이전 점 쪽에서 들어오는 방향은 -L_x
-            let cos_x : f32 =
-                max(dot(Xk.Normal, -L_x), 0.0);
-
-            // 거리^2
-            let d      : vec3<f32> = Xk.Position - Xkm1.Position;
-            let dist2_x: f32       = dot(d, d);
-
-            // 베이스 쪽 Jacobian 조각:
-            //   J_base = r_x^2 / (p_x * cos_x)
-            let denom : f32 = max( cos_x, EPS);
-            let J_base: f32 = dist2_x / denom;
-
-            OutCompactPath.J = J_base;
+            OutCompactPath.J = J_light;
+        }
+        else
+        {
+            OutCompactPath.J = 0.0;
         }
     }
+    else
+    {
+        // 일반 surface 재연결 : calculate_J 로 베이스 J_x 계산
+        let J_base : f32 = calculate_J(InPath, k);
+        OutCompactPath.J = J_base;
+    }
+
     return OutCompactPath;
 }
+
 
 
 fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
@@ -1684,15 +1703,17 @@ fn PathPDF(InPath : Path) -> f32
 const KERNEL_RADIUS : i32 = 2; 
 const KERNEL_DIAM : i32 = 2 * KERNEL_RADIUS + 1;
 const MAX_NEIGHBOR : i32 = KERNEL_DIAM * KERNEL_DIAM - 1;
-//==========================================================================
-// Final Reservoir and Pixel Calculation (Main Compute Shader)
-//==========================================================================
+// 후보 최대 개수 (커널 전체 - 자기 자신)
+const MAX_CANDIDATE : u32 = u32(MAX_NEIGHBOR);
+
+// 후보 정보를 간단히 모아둘 구조
+
+
 @compute @workgroup_size(8, 8, 1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
     storageBarrier();
 
-    
     let curPixel : vec2<u32> = ThreadID.xy;
 
     if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
@@ -1702,66 +1723,38 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let curIdx : u32 = curPixel.y * UniformBuffer.Resolution_Source.x + curPixel.x;
 
-    // Retrieve base reservoir and path from previous frame
+    // --- 1. canonical(base) reservoir 가져오기 ---
     var baseRes : Reservoir = ReservoirBuffer[curIdx];
     if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
-        //ReservoirBuffer[curIdx] = baseRes;
         return;
     }
 
-    // Regenerate path for base sample
+    // base path 재구성
     let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
     if (basePath.length < 2u) {
-        //ReservoirBuffer[curIdx] = baseRes;
-        //return;
+        return;
     }
 
-    // Get the hybrid shift value for k
-    var k_base : u32 = baseRes.Sample.k;
+    // base reconnection index
+    let k_base : u32 = baseRes.Sample.k;
     if (k_base < 2u || (k_base + 1u) >= basePath.length) {
-        if (basePath.length >= 4u) {
-            //k_base = 2u;
-        } else {
-            ReservoirBuffer[curIdx] = baseRes;
-            return;
-        }
-        //baseRes.Sample.k = k_base;
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
     }
 
-    // Update contribution for base path
+    // base contribution / proxy pdf
     let contribBase : vec3<f32> = PathContribution(basePath);
     var P_hat_Base  : f32       = Luminance(contribBase);
     if (!(P_hat_Base > 0.0) || !isFinite(P_hat_Base)) {
-        P_hat_Base = 0.0;
-        //ReservoirBuffer[curIdx] = baseRes;
-        //return;
+        ReservoirBuffer[curIdx] = baseRes;
+        return;
     }
 
-    var p_base_raw : f32 = PathPDF(basePath);
-    if (!(p_base_raw > 0.0) || !isFinite(p_base_raw)) {
-        p_base_raw = 0.0;
-        //ReservoirBuffer[curIdx] = baseRes;
-        //return;
-    }
-    let p_base : f32 = max(p_base_raw, EPS);
-
-    // Simplified weight calculation
-    let w_base_simple : f32 = clamp(P_hat_Base / p_base, 0.0, MAX_RIS);
-
-    // Prepare for pairwise MIS update
-    var outRes : PathReservoir;
-    var W_total : f32 = 0.0;
-    var totalC : u32 = 0u;
-
-    // Initialize RNG for this pixel
+    // --- 2. neighbor 후보들을 hybrid shift + 경로 재생성으로 모으기 ---
     var rng : u32 = GetHashValue(curPixel.x * 1973u + curPixel.y * 9277u + UniformBuffer.FrameIndex * 26699u);
+    var candidates : array<Candidate, MAX_CANDIDATE>;
+    var candCount  : u32 = 0u;
 
-    var invDenomSum : f32 = 0.0;
-    var neighborCount : u32 = 0u;
-
-    var m1 : f32 = 0.0;
-
-    // Start pairwise MIS loop
     for (var dy : i32 = -KERNEL_RADIUS; dy <= KERNEL_RADIUS; dy = dy + 1)
     {
         for (var dx : i32 = -KERNEL_RADIUS; dx <= KERNEL_RADIUS; dx = dx + 1)
@@ -1771,117 +1764,161 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             let nx_i : i32 = i32(curPixel.x) + dx;
             let ny_i : i32 = i32(curPixel.y) + dy;
 
-            if (nx_i < 0 || ny_i < 0 || nx_i >= i32(UniformBuffer.Resolution_Source.x) || ny_i >= i32(UniformBuffer.Resolution_Source.y)) {
+            if (nx_i < 0 || ny_i < 0 ||
+                nx_i >= i32(UniformBuffer.Resolution_Source.x) ||
+                ny_i >= i32(UniformBuffer.Resolution_Source.y)) {
                 continue;
             }
 
-            let nx : u32 = u32(nx_i);
-            let ny : u32 = u32(ny_i);
+            if (candCount >= MAX_CANDIDATE) { break; }
+
+            let nx   : u32 = u32(nx_i);
+            let ny   : u32 = u32(ny_i);
             let nIdx : u32 = ny * UniformBuffer.Resolution_Source.x + nx;
 
-            // Retrieve the neighbor sample
             let neiRes : Reservoir = ReservoirBuffer[nIdx];
             if (neiRes.C == 0u || neiRes.Sample.length < 2u) {
                 continue;
             }
 
-            // Retrieve the neighbor path
+            // base path 재구성 (이웃 픽셀 기준)
             let neiPath : Path = RegeneratePath(vec2<u32>(nx, ny), neiRes.Sample);
             if (neiPath.length < 2u) {
-                //continue;
-            }
-
-            // Hybrid shift base to neighbor domain
-            var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
-            if (!(shiftCompact.length > 0u)) {
                 continue;
             }
 
-            let offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
-            if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
-                //continue;
-            }
-
-            // Compute J value for the offset path
-            let J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
-            if (!(J_val > 0.0) || !isFinite(J_val)) {
-                //continue;
-            }
-
-            shiftCompact.J = J_val;
-
-            // Check if it's safe to reconnect the paths
-            if (!IsSafeToReconnect(neiPath.Surface[k_base - 1u], neiPath.Lobe[k_base - 1u], basePath.Surface[k_base], basePath.Lobe[k_base])) {
+            // 하이브리드 시프트: neighbor sample -> 현재 픽셀 도메인
+            var shifted : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
+            if (!(shifted.length > 0u) || shifted.k != k_base) {
                 continue;
             }
 
-            let det_J_base : f32 = max(baseRes.Sample.J, MIN_J);
-            let det_J      : f32 = J_val / det_J_base;
+            // 현재 픽셀에서 offset path 재구성
+            let offsetPath : Path = RegeneratePath(curPixel, shifted);
+            if (!(offsetPath.length >= 2u && shifted.k < offsetPath.length)) {
+                continue;
+            }
 
+            // 재연결 안전성 검사
+            if (!IsSafeToReconnect(
+                    offsetPath.Surface[k_base - 1u], offsetPath.Lobe[k_base - 1u],
+                    offsetPath.Surface[k_base    ], offsetPath.Lobe[k_base    ])) {
+                continue;
+            }
 
+            // Jacobian J_y 계산
+            let J_y : f32 = calculate_J(offsetPath, shifted.k);
+            if (!(J_y > 0.0)) {
+                continue;
+            }
 
-            // Pairwise MIS weight update
+            shifted.J = J_y;
+
+            // 이웃(base) 쪽의 J_x, PDF p_i(x) 복원
+            let J_x    : f32 = max(neiRes.Sample.J, EPS);
+            let UCW_i  : f32 = neiRes.UCW;
+
+            if (!(UCW_i > 0.0)) {
+                continue;
+            }
+
+            let p_base : f32 = 1.0 / UCW_i;                 // ≈ p_i(x)
+            var p_from_i : f32 = p_base * (J_y / J_x);      // ≈ p_i(y)
+
+            if (!(p_from_i > 0.0)) {
+                continue;
+            }
+
+            // path contribution (target function 값 f(y))
             let contribOff : vec3<f32> = PathContribution(offsetPath);
-            let P_hat_Off  : f32       = Luminance(contribOff);
-            if (!(P_hat_Off > 0.0) || !isFinite(P_hat_Off)) {
-                //continue;
+            let L_i        : f32       = Luminance(contribOff);
+            if (!(L_i > 0.0)) {
+                continue;
             }
 
-            let p_off_raw : f32 = PathPDF(offsetPath);
-            if (!(p_off_raw > 0.0) || !isFinite(p_off_raw)) {
-                //continue;
-            }
+            // 후보 저장
+            candidates[candCount].path      = offsetPath;
+            candidates[candCount].L         = L_i;
+            candidates[candCount].p_from_i  = p_from_i;
+            candidates[candCount].confidence= max(neiRes.C, 1u);
 
-            let p_off : f32 = max(p_off_raw/det_J, EPS);
-
-            let mi = p_off / (p_base + (24.0*p_off));
-            let RIS : f32 = mi*P_hat_Off*det_J/p_off;
-
-            let denom : f32 = p_base * det_J + p_off;
-
-            let p_shift : f32 = P_hat_Off/p_off;
-            if (!isFinite(p_shift) || p_shift < 0.0) {
-                //continue;
-            }
-                var w_off : f32 = P_hat_Off / (P_hat_Off+P_hat_Base);
-                w_off = clamp(w_off, 0.0, MAX_RIS);
-
-                UpdateReservoir(
-                &rng, 
-                &outRes, 
-                offsetPath, 
-                RIS, 
-                P_hat_Off, 
-                neiRes.C // Confidence can be set as 1 for simplicity
-            );
-            neighborCount++;
-            m1 = m1+(1/ (P_hat_Base + (24.0*P_hat_Off)));
+            candCount++;
         }
     }
 
-    // Calculate final weight for canonical sample (base)
-    var w_base : f32 = P_hat_Base/p_base;
+    // --- 3. pairwise MIS with J-based p_hat<-i -------------------------
 
-    let RIS_C : f32 = (1/24.0)*P_hat_Base*m1;
+    // 후보가 없으면 기존 리저버 유지
+    if (candCount == 0u) {
+        return;
+    }
 
+    let M : f32 = f32(candCount + 1u); // canonical + neighbors
 
-    // Update canonical sample weight in reservoir
+    var outRes : PathReservoir;
+    outRes.C     = 0u;
+    outRes.w_sum = 0.0;
+    outRes.P_hat = 0.0;
 
-    UpdateReservoir(
-        &rng, 
-        &outRes, 
-        basePath, 
-        RIS_C, 
-        P_hat_Base, 
-        baseRes.C // Confidence for the base path
-    );
-    
+    // canonical 샘플(base path)의 기여와 PDF
+    let L_c         : f32       = Luminance(contribBase);
+    let p_c_base    : f32       = PathPDF(basePath);
 
+    var sum_c_term : f32 = 0.0;
+
+    // 3a. 이웃 후보들
+    for (var i : u32 = 0u; i < candCount; i++)
+    {
+        let p_i : f32 = candidates[i].p_from_i;     // 이웃 기술 i 의 p_hat<-i(y)
+        let p_c : f32 = PathPDF(candidates[i].path); // canonical 기술의 p_c(y)
+
+        if (!(p_i > 0.0 && p_c > 0.0)) {
+            continue;
+        }
+
+        let denom : f32 = p_i + p_c;
+        if (denom <= 0.0) { continue; }
+
+        // pairwise MIS weight m_i(y) = (1/M) * p_i / (p_i + p_c)
+        let m_i : f32 = (1.0 / M) * (p_i / denom);
+
+        // 최종 weight w_i = m_i * f(y)  (여기서 f(y) ≈ L_i)
+        let w_i : f32 = m_i * candidates[i].L;
+
+        UpdateReservoir(
+            &rng,
+            &outRes,
+            candidates[i].path,
+            w_i,
+            candidates[i].L,
+            candidates[i].confidence
+        );
+
+        // canonical 쪽 pairwise term 누적
+        sum_c_term += p_c / denom;
+    }
+
+    // 3b. canonical 샘플(base path)에 대한 weight
+    if (L_c > 0.0 && p_c_base > 0.0)
+    {
+        let m_c : f32 = (1.0 / M) * (1.0 + sum_c_term);
+        let w_c : f32 = m_c * L_c;
+
+        UpdateReservoir(
+            &rng,
+            &outRes,
+            basePath,
+            w_c,
+            L_c,
+            max(baseRes.C, 1u)
+        );
+    }
+
+    // --- 4. 리저버 압축 & 저장 ---
     {
         var ResultReservoir : Reservoir;
-
         ResultReservoir.Sample  = CompressPath(outRes.Sample);
-        ResultReservoir.UCW     = outRes.w_sum / outRes.P_hat;
+        ResultReservoir.UCW     = outRes.w_sum / max(outRes.P_hat, EPS);
         ResultReservoir.C       = outRes.C;
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
