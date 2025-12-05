@@ -174,22 +174,28 @@ struct CompactPath
     RcVertex    : vec4<f32>,
 
     k           : u32,
-    Lobe_k_1    : u32,
+    Lobe_km1    : u32,
     Lobe_k      : u32,
-    length      : u32,
-
-    Padding     : vec3<u32>,
     J           : f32,
+
+    L           : vec3<f32>,
+    Padding_0   : u32,
+
+    Radiance    : vec3<f32>,
+    P_hat       : f32,
 };
 
-struct Path
+struct RegeneratedPath
 {
-    Surface    : array<Surface, 8u>,
-    Lobe       : array<u32, 8u>,
-    rSeed      : array<u32, 8u>,
+    Surface     : array<Surface, 8u>,
+    Lobe        : array<u32, 8u>,
+    XL          : LightSample,
 
-    XL         : LightSample,
-    length     : u32,
+    L           : vec3<f32>,
+    k           : u32,
+
+    Radiance    : vec3<f32>,
+    J           : f32,
 };
 
 struct Reservoir
@@ -198,30 +204,11 @@ struct Reservoir
     UCW     : f32,
     C       : u32,
 
-    Padding : vec2<f32>,
-};
-
-struct PathReservoir
-{
-    Sample  : Path,
-    C       : u32,
     P_hat   : f32,
     w_sum   : f32,
 };
 
-struct Candidate
-{
-    path : Path,
 
-    // f(y)의 대리 값: PathContribution 의 휘도
-    L : f32,
-
-    // 이웃 픽셀 i 가 현재 픽셀에서 이 path y 를 낼 때의
-    // 추정 PDF  p_hat<-i(y) ≈ 1/UCW_i * (J_y / J_x)
-    p_from_i : f32,
-
-    confidence : u32,
-};
 
 
 //==========================================================================
@@ -1063,11 +1050,14 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
 //==========================================================================
 // Path Reconstruction / Contribution / PDF
 //==========================================================================
-fn PathContribution(InPath : Path) -> vec3<f32>
+fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
 {
+
+    if ( InPath.k == 0u ) { return vec3f(1.0); }
+
     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1; i++)
+    for (var i = 1u; i < InPath.k - 1; i++)
     {
         let X_Prev : Surface = InPath.Surface[i - 1];
         let X_Curr : Surface = InPath.Surface[i    ];
@@ -1080,10 +1070,10 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
-    // 최종 Light hit
+    if ( InPath.Lobe[InPath.k] == LOBE_LIGHT )
     {
-        let X_Prev : Surface = InPath.Surface[InPath.length - 2];
-        let X_Curr : Surface = InPath.Surface[InPath.length - 1];
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
 
         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
         let L : vec3<f32> = DirectionToLight( X_Curr, InPath.XL );
@@ -1092,17 +1082,31 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
         f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
     }
+    else
+    {
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
+        let X_Next : Surface = InPath.Surface[InPath.k    ];
+
+        var V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+        var L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+        var N : vec3<f32> = X_Curr.Normal;
+
+        f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+
+        V = normalize( X_Curr.Position - X_Next.Position );
+        L = InPath.L;
+        N = X_Next.Normal;
+
+        f *= BSDF(X_Next, L, V) * abs( dot(N, L) );
+    }
 
     return f;
 }
 
 
-fn PathPDF(InPath : Path) -> f32
+fn PathPDF(InPath : RegeneratedPath) -> f32
 {
-    if (InPath.length < 2u) {
-        return 1.0;
-    }
-
     var pdf : f32 = InPath.XL.PDF;
 
     for (var i = 1u; i < InPath.length - 1u; i++)
@@ -1657,7 +1661,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
 
     // base path 재구성
-    let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
+    let basePath : RegeneratedPath = RegeneratePath(curPixel, baseRes.Sample);
     if (basePath.length < 2u) {
         //ReservoirBuffer_Write[curIdx] = baseRes;
         return;
@@ -1722,7 +1726,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             }
 
             // 현재 픽셀에서 offset path 재구성
-            let offsetPath : Path = RegeneratePath(curPixel, shifted);
+            let offsetPath : RegeneratedPath = RegeneratePath(curPixel, shifted);
             if (!(offsetPath.length >= 2u && shifted.k < offsetPath.length)) {
                 continue;
             }

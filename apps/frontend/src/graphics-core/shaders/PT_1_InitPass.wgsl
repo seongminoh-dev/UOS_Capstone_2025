@@ -1514,31 +1514,36 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
 
 fn PartialJacobian(InPath : Path, k : u32) -> f32
 {
-    let bIsLight_Xk : bool = ( k == InPath.length );
-
-    let X_Prev : Surface = InPath.Surface[k - 2];
-    let X_Curr : Surface = InPath.Surface[k - 1];
-    let X_Next : Surface = InPath.Surface[k    ];
-
-    let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-    let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
-    let r : vec3<f32> = X_Next.Position - X_Curr.Position;
-
-    var PDF_X   : f32;
-    var Cos     : f32;
-
-    if ( bIsLight_Xk )
-    {
-        PDF_X   = PDF_LIGHT(X_Curr, V, InPath.XL);
-        Cos     = max( dot( InPath.XL.Direction, -L ), 0.0 );
-    }
-    else 
-    { 
-        PDF_X   = PDF_BSDF(X_Curr, V, L); 
-        Cos     = max( dot( X_Next.Normal, -L ), 0.0 );
+    // k 가 너무 작거나, 이후 버텍스가 없으면 재연결 불가 → 0 리턴
+    if (k < 2u || (k + 1u) >= InPath.length) {
+        return 0.0;
     }
 
-    return PDF_X * Cos / max( dot(r, r), 1e-4 );
+    // --- 주변 버텍스들 가져오기 ---
+    let Xkm2 : Surface = InPath.Surface[k - 2u];
+    let Xkm1 : Surface = InPath.Surface[k - 1u];
+    let Xk   : Surface = InPath.Surface[k];
+    let Xkp1 : Surface = InPath.Surface[k + 1u];
+
+    // --- 1) p_{ω,ℓ}^{x_{k-1}}(x_k) ---
+    let V_in  : vec3<f32> = normalize(Xkm2.Position - Xkm1.Position);
+    let L_in  : vec3<f32> = normalize(Xk.Position   - Xkm1.Position);
+    let pdf_in: f32       = PDF_BSDF(Xkm1, V_in, L_in);
+
+    // --- 2) |cos θ_k^x| / ||x_k - x_{k-1}||^2 ---
+    let dir_k : vec3<f32> = normalize(Xkm1.Position - Xk.Position); // x_k 기준에서 x_{k-1} 방향
+    let cos_k : f32       = abs(dot(Xk.Normal, dir_k));
+    let d     : vec3<f32> = Xk.Position - Xkm1.Position;
+    let dist2 : f32       = max(dot(d, d), EPS);
+
+    // --- 3) p_ω^{x_k}(x_{k+1}) ---
+    let V_k   : vec3<f32> = normalize(Xkm1.Position - Xk.Position);
+    let L_k   : vec3<f32> = normalize(Xkp1.Position - Xk.Position);
+    let pdf_out           = PDF_BSDF(Xk, V_k, L_k);
+
+    var J : f32 = pdf_in * (cos_k / dist2) * pdf_out;
+
+    return J;
 }
 
 fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
