@@ -9,6 +9,7 @@ interface ThreeRendererProps {
   onSelectionChange?: (assetId: string | number | null) => void;
   onTransformChange?: (assetId: string | number, transform: Transform) => void;
   onLightParamsChange?: (assetId: string | number, lightParams: PointLightParams | RectLightParams | DirectionalLightParams) => void;
+  onSaveCamera?: (camera: { position: [number, number, number]; target: [number, number, number]; fov: number }) => void;
 }
 
 /**
@@ -21,6 +22,7 @@ export default function ThreeRenderer({
   onSelectionChange,
   onTransformChange,
   onLightParamsChange,
+  onSaveCamera,
 }: ThreeRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -124,18 +126,18 @@ export default function ThreeRenderer({
     }
   }, [onSelectionChange, onTransformChange, onLightParamsChange]);
 
-  // C키로 카메라 좌표 콘솔 출력
+  // C키로 카메라 좌표 콘솔 출력, V키로 카메라 저장
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Input/Textarea에서는 무시
+      const target = e.target as HTMLElement;
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+        return;
+      }
+
+      if (!managerRef.current) return;
+
       if (e.key === 'c' || e.key === 'C') {
-        // Input/Textarea에서는 무시
-        const target = e.target as HTMLElement;
-        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-          return;
-        }
-
-        if (!managerRef.current) return;
-
         const camera = managerRef.current.camera;
         const position = camera.position;
         const target3D = managerRef.current.controls?.target;
@@ -148,11 +150,19 @@ export default function ThreeRenderer({
         console.log(`FOV: ${camera.fov}`);
         console.log('==================');
       }
+
+      // V키: 현재 카메라 시점 저장
+      if (e.key === 'v' || e.key === 'V') {
+        if (onSaveCamera) {
+          const cameraSettings = managerRef.current.getCameraSettings();
+          onSaveCamera(cameraSettings);
+        }
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
+  }, [onSaveCamera]);
 
   // Scene 데이터 변경 시 모델 로드
   useEffect(() => {

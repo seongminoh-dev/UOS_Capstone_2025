@@ -172,9 +172,8 @@ export default function EditPage() {
         case 'r':
           setGizmoMode('rotate');
           break;
-        case 's':
-          setGizmoMode('scale');
-          break;
+        // S키는 WASDQE 카메라 이동에서 사용됨 (뒤로 이동)
+        // 크기 조절은 +/- 키로 ThreeSceneManager에서 처리
         case 'escape':
           setSelectedAssetId(null);
           break;
@@ -541,6 +540,25 @@ export default function EditPage() {
       : '면광원'
     : undefined;
 
+  // ========== 카메라 저장 핸들러 ==========
+  const handleSaveCamera = useCallback(
+    (camera: { position: [number, number, number]; target: [number, number, number]; fov: number }) => {
+      if (!editingScene) return;
+
+      setEditingScene({
+        ...editingScene,
+        camera: {
+          position: camera.position,
+          target: camera.target,
+          fov: camera.fov,
+        },
+      });
+      setIsDirty(true);
+      toast.success('카메라 시점이 저장되었습니다.');
+    },
+    [editingScene, toast]
+  );
+
   // ========== 렌더링 ==========
   return (
     <>
@@ -669,12 +687,16 @@ export default function EditPage() {
                 onSelectionChange={handleSelectionChange}
                 onTransformChange={handleTransformChange}
                 onLightParamsChange={handleLightParamsChange}
+                onSaveCamera={handleSaveCamera}
               />
             </ErrorBoundary>
 
             {/* Canvas Overlays */}
             <GizmoModeSelector mode={gizmoMode} onModeChange={setGizmoMode} />
-            <CameraHelpOverlay />
+            <CameraHelpOverlay onSaveCamera={() => {
+              // CameraHelpOverlay 버튼 클릭 시 V키 이벤트를 시뮬레이트
+              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
+            }} />
             <ViewportInfo gizmoMode={gizmoMode} selectedObjectName={selectedAssetName} />
           </div>
 

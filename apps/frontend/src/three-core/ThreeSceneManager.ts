@@ -44,6 +44,11 @@ export class ThreeSceneManager {
   private scaleIntervalId: number | null = null;
   private currentScaleDirection: 'up' | 'down' | null = null;
 
+  // WASDQE camera movement (FPS style)
+  private pressedKeys: Set<string> = new Set();
+  private moveSpeed: number = 5.0; // units per second
+  private lastFrameTime: number = 0;
+
   // Callbacks for React integration
   private onSelectionChange?: (assetId: string | number | null) => void;
   private onTransformChange?: (assetId: string | number, transform: Transform) => void;
@@ -200,19 +205,28 @@ export class ThreeSceneManager {
       return;
     }
 
-    if (!this.selectedObject) return;
+    const key = event.key.toLowerCase();
 
-    switch (event.key.toLowerCase()) {
-      case 'g':
-        this.transformControls.setMode('translate');
-        break;
-      case 'r':
-        this.transformControls.setMode('rotate');
-        break;
-      case 'escape':
-        this.deselectObject();
-        break;
-      // delete/backspace는 EditPage에서 처리
+    // WASDQE 카메라 이동 키 처리
+    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
+      this.pressedKeys.add(key);
+      return; // 카메라 이동 키는 여기서 처리 완료
+    }
+
+    // Gizmo 모드 전환 (선택된 오브젝트가 있을 때만)
+    if (this.selectedObject) {
+      switch (key) {
+        case 'g':
+          this.transformControls.setMode('translate');
+          break;
+        case 'r':
+          this.transformControls.setMode('rotate');
+          break;
+        case 'escape':
+          this.deselectObject();
+          break;
+        // delete/backspace는 EditPage에서 처리
+      }
     }
 
     // 스케일 조정 (+/- 키) - 키를 누르고 있으면 연속 스케일 조정
@@ -250,9 +264,16 @@ export class ThreeSceneManager {
   };
 
   /**
-   * 키보드 keyup 핸들러 (스케일 interval 정지)
+   * 키보드 keyup 핸들러 (스케일 interval 정지 + WASDQE 해제)
    */
   private onKeyUp = (event: KeyboardEvent): void => {
+    const key = event.key.toLowerCase();
+
+    // WASDQE 카메라 이동 키 해제
+    if (['w', 'a', 's', 'd', 'q', 'e'].includes(key)) {
+      this.pressedKeys.delete(key);
+    }
+
     // +/- 키를 떼면 interval 정지
     if (event.key === '+' || event.key === '=' || event.key === '-' || event.key === '_') {
       if (this.scaleIntervalId !== null) {
@@ -431,12 +452,66 @@ export class ThreeSceneManager {
 
     this.animationId = requestAnimationFrame(this.animate);
 
+    // Calculate delta time for frame-rate independent movement
+    const currentTime = performance.now();
+    const deltaTime = this.lastFrameTime > 0 ? (currentTime - this.lastFrameTime) / 1000 : 0.016;
+    this.lastFrameTime = currentTime;
+
+    // WASDQE camera movement (FPS style)
+    this.updateCameraMovement(deltaTime);
+
     // Update controls
     this.controls.update();
 
     // Render
     this.renderer.render(this.scene, this.camera);
   };
+
+  /**
+   * WASDQE 카메라 이동 업데이트
+   */
+  private updateCameraMovement(deltaTime: number): void {
+    if (this.pressedKeys.size === 0) return;
+
+    // 카메라의 forward/right 벡터 계산 (OrbitControls의 target 기준)
+    const forward = new THREE.Vector3();
+    this.camera.getWorldDirection(forward);
+    forward.y = 0; // Y축 무시 (수평 이동)
+    forward.normalize();
+
+    const right = new THREE.Vector3();
+    right.crossVectors(forward, new THREE.Vector3(0, 1, 0)).normalize();
+
+    const up = new THREE.Vector3(0, 1, 0);
+
+    const moveOffset = new THREE.Vector3();
+    const frameSpeed = this.moveSpeed * deltaTime;
+
+    if (this.pressedKeys.has('w')) {
+      moveOffset.addScaledVector(forward, frameSpeed);
+    }
+    if (this.pressedKeys.has('s')) {
+      moveOffset.addScaledVector(forward, -frameSpeed);
+    }
+    if (this.pressedKeys.has('a')) {
+      moveOffset.addScaledVector(right, -frameSpeed);
+    }
+    if (this.pressedKeys.has('d')) {
+      moveOffset.addScaledVector(right, frameSpeed);
+    }
+    if (this.pressedKeys.has('q')) {
+      moveOffset.addScaledVector(up, -frameSpeed);
+    }
+    if (this.pressedKeys.has('e')) {
+      moveOffset.addScaledVector(up, frameSpeed);
+    }
+
+    if (moveOffset.lengthSq() > 0) {
+      // 카메라와 OrbitControls target 동시에 이동 (상대 위치 유지)
+      this.camera.position.add(moveOffset);
+      this.controls.target.add(moveOffset);
+    }
+  }
 
   /**
    * 리사이즈 핸들러
@@ -935,6 +1010,25 @@ export class ThreeSceneManager {
         this.selectedObject.scale.y,
         this.selectedObject.scale.z,
       ],
+    };
+  }
+
+  /**
+   * 현재 카메라 설정 가져오기 (저장용)
+   */
+  getCameraSettings(): { position: [number, number, number]; target: [number, number, number]; fov: number } {
+    return {
+      position: [
+        this.camera.position.x,
+        this.camera.position.y,
+        this.camera.position.z,
+      ],
+      target: [
+        this.controls.target.x,
+        this.controls.target.y,
+        this.controls.target.z,
+      ],
+      fov: this.camera.fov,
     };
   }
 

@@ -4,7 +4,7 @@
  * Canvas 상단에 표시
  * - Translate (G)
  * - Rotate (R)
- * - Scale (S)
+ * - Scale: +/- 키로 조절 (버튼 없음)
  */
 
 import './GizmoModeSelector.css';
@@ -20,7 +20,6 @@ interface GizmoModeSelectorProps {
 const MODES: { key: GizmoMode; label: string; icon: string; shortcut: string }[] = [
   { key: 'translate', label: '이동', icon: '↔️', shortcut: 'G' },
   { key: 'rotate', label: '회전', icon: '🔄', shortcut: 'R' },
-  { key: 'scale', label: '크기', icon: '⬛', shortcut: 'S' },
 ];
 
 export function GizmoModeSelector({ mode, onModeChange, className = '' }: GizmoModeSelectorProps) {
@@ -38,6 +37,12 @@ export function GizmoModeSelector({ mode, onModeChange, className = '' }: GizmoM
           <span className="gizmo-mode-selector__shortcut">{m.shortcut}</span>
         </button>
       ))}
+      {/* Scale hint */}
+      <div className="gizmo-mode-selector__hint" title="오브젝트 선택 후 +/- 키로 크기 조절">
+        <span className="gizmo-mode-selector__hint-icon">📐</span>
+        <span className="gizmo-mode-selector__hint-label">크기</span>
+        <span className="gizmo-mode-selector__hint-shortcut">+/-</span>
+      </div>
     </div>
   );
 }
