@@ -238,6 +238,9 @@ const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
+const MIN_J      : f32 = 1e-4;
+const MAX_J      : f32 = 1e+4;
+
 //==========================================================================
 // Procedural Sky (물리 기반 환경광)
 //==========================================================================
@@ -1463,6 +1466,47 @@ fn UpdateReservoir(
     return;
 }
 
+
+
+fn calculate_J(InPath : Path, k : u32) -> f32
+{
+    // k 가 너무 작거나, 이후 버텍스가 없으면 재연결 불가 → 0 리턴
+    if (k < 2u || (k + 1u) >= InPath.length) {
+        return 0.0;
+    }
+
+    // --- 주변 버텍스들 가져오기 ---
+    let Xkm2 : Surface = InPath.Surface[k - 2u];
+    let Xkm1 : Surface = InPath.Surface[k - 1u];
+    let Xk   : Surface = InPath.Surface[k];
+    let Xkp1 : Surface = InPath.Surface[k + 1u];
+
+    // --- 1) p_{ω,ℓ}^{x_{k-1}}(x_k) ---
+    let V_in  : vec3<f32> = normalize(Xkm2.Position - Xkm1.Position);
+    let L_in  : vec3<f32> = normalize(Xk.Position   - Xkm1.Position);
+    let pdf_in: f32       = PDF_BSDF(Xkm1, V_in, L_in);
+
+    // --- 2) |cos θ_k^x| / ||x_k - x_{k-1}||^2 ---
+    let dir_k : vec3<f32> = normalize(Xkm1.Position - Xk.Position); // x_k 기준에서 x_{k-1} 방향
+    let cos_k : f32       = abs(dot(Xk.Normal, dir_k));
+    let d     : vec3<f32> = Xk.Position - Xkm1.Position;
+    let dist2 : f32       = max(dot(d, d), EPS);
+
+    // --- 3) p_ω^{x_k}(x_{k+1}) ---
+    let V_k   : vec3<f32> = normalize(Xkm1.Position - Xk.Position);
+    let L_k   : vec3<f32> = normalize(Xkp1.Position - Xk.Position);
+    let pdf_out           = PDF_BSDF(Xk, V_k, L_k);
+
+    var J : f32 = pdf_in * (cos_k / dist2) * pdf_out;
+
+    if (J < MIN_J || J > MAX_J) {
+        return 0.0;
+    }
+
+    return J;
+}
+
+
 fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
 {
     var OutCompactPath : CompactPath;
@@ -1497,40 +1541,38 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
         if (bIsLight_Xk) {
             OutCompactPath.J = 1.0;
         } else {
-            // (X_{k-1} -> X_k) segment
-            let Xkm1   : Surface = InPath.Surface[k - 1u];  // scattering vertex
-            let Xkm2   : Surface = InPath.Surface[k - 2u];  // 이전 vertex
-            let Xk     : Surface = InPath.Surface[k];       // hit vertex to reconnect
 
-            // 베이스 경로의 segment 방향: X_{k-1} -> X_k
-            let L_x : vec3<f32> =
-                normalize(Xk.Position - Xkm1.Position);
+        // --- 주변 버텍스들 가져오기 ---
+            let Xkm2 : Surface = InPath.Surface[k - 2u];
+            let Xkm1 : Surface = InPath.Surface[k - 1u];
+            let Xk   : Surface = InPath.Surface[k];
+            let Xkp1 : Surface = InPath.Surface[k + 1u];
 
-            // X_{k-1}에서의 'in' 방향 V_x (이전 점 쪽)
-            let V_x : vec3<f32> =
-                normalize(Xkm2.Position - Xkm1.Position);
+            // --- 1) p_{ω,ℓ}^{x_{k-1}}(x_k) ---
+            let V_in  : vec3<f32> = normalize(Xkm2.Position - Xkm1.Position);
+            let L_in  : vec3<f32> = normalize(Xk.Position   - Xkm1.Position);
+            let pdf_in: f32       = PDF_BSDF(Xkm1, V_in, L_in);
 
-            // 베이스에서 이 segment를 만들 때 사용된 BSDF PDF 근사
-            let pdf_x : f32 = PDF_BSDF(Xkm1, V_x, L_x);
+            // --- 2) |cos θ_k^x| / ||x_k - x_{k-1}||^2 ---
+            let dir_k : vec3<f32> = normalize(Xkm1.Position - Xk.Position); // x_k 기준에서 x_{k-1} 방향
+            let cos_k : f32       = abs(dot(Xk.Normal, dir_k));
+            let d     : vec3<f32> = Xk.Position - Xkm1.Position;
+            let dist2 : f32       = max(dot(d, d), EPS);
 
-            // X_k에서 보는 입사 코사인: 이전 점 쪽에서 들어오는 방향은 -L_x
-            let cos_x : f32 =
-                max(dot(Xk.Normal, -L_x), 0.0);
+            // --- 3) p_ω^{x_k}(x_{k+1}) ---
+            let V_k   : vec3<f32> = normalize(Xkm1.Position - Xk.Position);
+            let L_k   : vec3<f32> = normalize(Xkp1.Position - Xk.Position);
+            let pdf_out           = PDF_BSDF(Xk, V_k, L_k);
 
-            // 거리^2
-            let d      : vec3<f32> = Xk.Position - Xkm1.Position;
-            let dist2_x: f32       = dot(d, d);
+            var J : f32 = pdf_in * (cos_k / dist2) * pdf_out;
 
-            // 베이스 쪽 Jacobian 조각:
-            //   J_base = r_x^2 / (p_x * cos_x)
-            let denom : f32 = max( cos_x, EPS);
-            let J_base: f32 = dist2_x / denom;
-
-            OutCompactPath.J = J_base;
+            OutCompactPath.J = J;
         }
     }
     return OutCompactPath;
 }
+
+
 
 
 //==========================================================================
@@ -1546,7 +1588,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
         let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
 
@@ -1658,6 +1700,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
     }
+    storageBarrier();
+    workgroupBarrier();
 
     return;
 }

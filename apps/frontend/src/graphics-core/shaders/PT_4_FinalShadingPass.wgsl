@@ -346,6 +346,7 @@ const LOBE_LIGHT    : u32 = 3u;
 
 @group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
+@group(0) @binding(12) var DITexture : texture_storage_2d<rgba16float, read>;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
@@ -1539,6 +1540,9 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
+    storageBarrier();
+    workgroupBarrier();
+
     // 0. 범위 밖 스레드는 계산 X
     {
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
@@ -1577,8 +1581,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // Compute Final Color
     let PathSample : Path       = RegeneratePath( ThreadID.xy, Reservoir.Sample );
     let FrameColor : vec3<f32>  = Reservoir.UCW * PathContribution( PathSample );
+    let test : vec3<f32> = vec3<f32>(Reservoir.Padding, 0.1);
+    let DI = textureLoad(DITexture, ThreadID.xy);
 
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(DI.xyz+FrameColor, 1.0));
 
     return;
 }
