@@ -15,9 +15,10 @@
  * - RightPanel: Inspector (선택된 오브젝트 속성 편집)
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ThreeRenderer from '../components/ThreeRenderer';
+import type { ThreeRendererHandle } from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
 import { useToast, Modal, Button } from '../components/common';
 import type { SceneMode } from '../components/common';
@@ -59,6 +60,9 @@ export default function EditPage() {
   const [hiddenAssetIds, setHiddenAssetIds] = useState<Set<string | number>>(new Set());
   const [selectedAssetId, setSelectedAssetId] = useState<string | number | null>(null);
   const [rendererKey, setRendererKey] = useState(0);
+
+  // ThreeRenderer 명령형 핸들 (ref)
+  const threeRendererRef = useRef<ThreeRendererHandle>(null);
 
   // ========== 모달 상태 ==========
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
@@ -158,6 +162,12 @@ export default function EditPage() {
   }, [isDirty]);
 
   // ========== 단축키 처리 ==========
+  // Gizmo 모드 변경 핸들러 (React + Three.js 동기화)
+  const handleGizmoModeChange = useCallback((mode: GizmoMode) => {
+    setGizmoMode(mode);
+    threeRendererRef.current?.setGizmoMode(mode);
+  }, []);
+
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       const target = event.target as HTMLElement;
@@ -167,10 +177,10 @@ export default function EditPage() {
 
       switch (event.key.toLowerCase()) {
         case 'g':
-          setGizmoMode('translate');
+          handleGizmoModeChange('translate');
           break;
         case 'r':
-          setGizmoMode('rotate');
+          handleGizmoModeChange('rotate');
           break;
         // S키는 WASDQE 카메라 이동에서 사용됨 (뒤로 이동)
         // 크기 조절은 +/- 키로 ThreeSceneManager에서 처리
@@ -193,7 +203,7 @@ export default function EditPage() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedAssetId, editingScene]);
+  }, [selectedAssetId, editingScene, handleGizmoModeChange]);
 
   // ========== 모달 핸들러 ==========
   const handleOpenCreateSceneModal = () => {
@@ -331,6 +341,10 @@ export default function EditPage() {
           const newTransform = { ...asset.transform };
           newTransform[property] = [...newTransform[property]] as [number, number, number];
           newTransform[property][axis] = value;
+
+          // Three.js 동기화
+          threeRendererRef.current?.updateAssetTransform(assetId, newTransform);
+
           return { ...asset, transform: newTransform };
         }
         return asset;
@@ -348,6 +362,10 @@ export default function EditPage() {
         if (asset.id === assetId && asset.transform) {
           const newTransform = { ...asset.transform };
           newTransform.scale = [value, value, value];
+
+          // Three.js 동기화
+          threeRendererRef.current?.updateAssetTransform(assetId, newTransform);
+
           return { ...asset, transform: newTransform };
         }
         return asset;
@@ -388,6 +406,15 @@ export default function EditPage() {
           } else {
             (newLightParams as Record<string, unknown>)[paramPath] = value;
           }
+
+          // Three.js 동기화 (PointLight, RectLight만)
+          if (asset.type === 'point-light' || asset.type === 'rect-light') {
+            threeRendererRef.current?.updateLightParams(
+              assetId,
+              newLightParams as PointLightParams | RectLightParams
+            );
+          }
+
           return { ...asset, lightParams: newLightParams };
         }
         return asset;
@@ -399,7 +426,7 @@ export default function EditPage() {
   );
 
   // ========== Object CRUD 핸들러 ==========
-  const handleAddObject = (meshName: string) => {
+  const handleAddObject = async (meshName: string) => {
     if (!editingScene) return;
     const newId = `${meshName.toLowerCase()}_${Date.now()}`;
     const newAsset = {
@@ -412,6 +439,10 @@ export default function EditPage() {
         scale: [1, 1, 1] as [number, number, number],
       },
     };
+
+    // Three.js에 실시간 추가
+    await threeRendererRef.current?.addAsset(newAsset);
+
     setEditingScene({
       ...editingScene,
       assets: [...editingScene.assets, newAsset],
@@ -447,6 +478,9 @@ export default function EditPage() {
             },
           };
 
+    // Three.js에 실시간 추가
+    threeRendererRef.current?.addAsset(newLight);
+
     setEditingScene({
       ...editingScene,
       assets: [...editingScene.assets, newLight],
@@ -464,6 +498,9 @@ export default function EditPage() {
       return;
     }
 
+    // Three.js에서 제거
+    threeRendererRef.current?.removeAsset(selectedAssetId);
+
     const updatedAssets = editingScene.assets.filter((asset) => asset.id !== selectedAssetId);
     setEditingScene({ ...editingScene, assets: updatedAssets });
     setSelectedAssetId(null);
@@ -479,6 +516,9 @@ export default function EditPage() {
         toast.warning('기본 방은 삭제할 수 없습니다.');
         return;
       }
+
+      // Three.js에서 제거
+      threeRendererRef.current?.removeAsset(assetId);
 
       const updatedAssets = editingScene.assets.filter((asset) => asset.id !== assetId);
       setEditingScene({ ...editingScene, assets: updatedAssets });
@@ -682,6 +722,7 @@ export default function EditPage() {
           <div className="edit-page__canvas">
             <ErrorBoundary key={rendererKey} fallbackTitle="Three.js 렌더링 오류" onReset={handleErrorReset}>
               <ThreeRenderer
+                ref={threeRendererRef}
                 className="three-canvas"
                 scene={editingScene}
                 onSelectionChange={handleSelectionChange}
@@ -692,7 +733,7 @@ export default function EditPage() {
             </ErrorBoundary>
 
             {/* Canvas Overlays */}
-            <GizmoModeSelector mode={gizmoMode} onModeChange={setGizmoMode} />
+            <GizmoModeSelector mode={gizmoMode} onModeChange={handleGizmoModeChange} />
             <CameraHelpOverlay onSaveCamera={() => {
               // CameraHelpOverlay 버튼 클릭 시 V키 이벤트를 시뮬레이트
               window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));

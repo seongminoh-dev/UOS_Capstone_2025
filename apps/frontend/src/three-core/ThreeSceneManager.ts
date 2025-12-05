@@ -213,20 +213,10 @@ export class ThreeSceneManager {
       return; // 카메라 이동 키는 여기서 처리 완료
     }
 
-    // Gizmo 모드 전환 (선택된 오브젝트가 있을 때만)
-    if (this.selectedObject) {
-      switch (key) {
-        case 'g':
-          this.transformControls.setMode('translate');
-          break;
-        case 'r':
-          this.transformControls.setMode('rotate');
-          break;
-        case 'escape':
-          this.deselectObject();
-          break;
-        // delete/backspace는 EditPage에서 처리
-      }
+    // Gizmo 모드 전환, 삭제 등은 EditPage에서 처리
+    // ThreeSceneManager는 setGizmoMode() 메서드를 통해 외부에서 호출됨
+    if (this.selectedObject && key === 'escape') {
+      this.deselectObject();
     }
 
     // 스케일 조정 (+/- 키) - 키를 누르고 있으면 연속 스케일 조정
@@ -986,6 +976,57 @@ export class ThreeSceneManager {
    */
   setLightParamsChangeCallback(callback: (assetId: string | number, lightParams: PointLightParams | RectLightParams | DirectionalLightParams) => void): void {
     this.onLightParamsChange = callback;
+  }
+
+  /**
+   * Asset Transform 업데이트 (React → Three.js 동기화)
+   */
+  updateAssetTransform(assetId: string | number, transform: Transform): void {
+    const obj = this.loadedObjects.get(assetId);
+    if (obj) {
+      obj.position.set(...transform.position);
+      obj.rotation.set(
+        THREE.MathUtils.degToRad(transform.rotation[0]),
+        THREE.MathUtils.degToRad(transform.rotation[1]),
+        THREE.MathUtils.degToRad(transform.rotation[2])
+      );
+      obj.scale.set(...transform.scale);
+    }
+  }
+
+  /**
+   * Light 파라미터 업데이트 (React → Three.js 동기화)
+   */
+  updateLightParams(assetId: string | number, lightParams: PointLightParams | RectLightParams): void {
+    const light = this.loadedLights.get(assetId);
+    const helper = this.lightHelpers.get(assetId);
+    if (!light || !helper) return;
+
+    if (light instanceof THREE.PointLight) {
+      const params = lightParams as PointLightParams;
+      light.position.set(...params.position);
+      light.color.setRGB(...params.color);
+      light.intensity = params.intensity;
+      helper.position.set(...params.position);
+    } else if (light instanceof THREE.RectAreaLight) {
+      const params = lightParams as RectLightParams;
+      light.position.set(...params.position);
+      light.color.setRGB(...params.color);
+      light.intensity = params.intensity;
+      // RectAreaLight는 u/v로 크기 결정
+      const width = Math.sqrt(params.u[0] ** 2 + params.u[1] ** 2 + params.u[2] ** 2) * 2;
+      const height = Math.sqrt(params.v[0] ** 2 + params.v[1] ** 2 + params.v[2] ** 2) * 2;
+      light.width = width;
+      light.height = height;
+      helper.position.set(...params.position);
+    }
+  }
+
+  /**
+   * Gizmo 모드 설정 (React → Three.js 동기화)
+   */
+  setGizmoMode(mode: 'translate' | 'rotate' | 'scale'): void {
+    this.transformControls.setMode(mode);
   }
 
   /**

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
 import { ThreeSceneManager } from '../three-core/ThreeSceneManager';
 import { ThreeSceneAdapter } from '../adapters/ThreeSceneAdapter';
-import type { Scene, SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
+import type { Scene, SceneFrontend, SceneAsset, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
 
 interface ThreeRendererProps {
   className?: string;
@@ -13,17 +13,35 @@ interface ThreeRendererProps {
 }
 
 /**
+ * ThreeRenderer 명령형 API (ref로 접근)
+ */
+export interface ThreeRendererHandle {
+  /** Asset 제거 (Object 또는 Light) */
+  removeAsset: (assetId: string | number) => void;
+  /** Asset Transform 업데이트 */
+  updateAssetTransform: (assetId: string | number, transform: Transform) => void;
+  /** Light 파라미터 업데이트 */
+  updateLightParams: (assetId: string | number, lightParams: PointLightParams | RectLightParams) => void;
+  /** Asset 추가 (Object 또는 Light) */
+  addAsset: (asset: SceneAsset) => Promise<void>;
+  /** Gizmo 모드 설정 */
+  setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
+  /** 오브젝트 선택 */
+  selectObject: (assetId: string | number | null) => void;
+}
+
+/**
  * ThreeRenderer - Three.js 렌더링을 위한 React 래퍼 컴포넌트
  * EditPage에서 사용되는 실시간 프리뷰 렌더러
  */
-export default function ThreeRenderer({
+const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(function ThreeRenderer({
   className = '',
   scene = null,
   onSelectionChange,
   onTransformChange,
   onLightParamsChange,
   onSaveCamera,
-}: ThreeRendererProps) {
+}, ref) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const managerRef = useRef<ThreeSceneManager | null>(null);
@@ -125,6 +143,44 @@ export default function ThreeRenderer({
       managerRef.current.setLightParamsChangeCallback(onLightParamsChange);
     }
   }, [onSelectionChange, onTransformChange, onLightParamsChange]);
+
+  // 명령형 API 노출 (ref를 통해 접근)
+  useImperativeHandle(ref, () => ({
+    removeAsset: (assetId: string | number) => {
+      if (managerRef.current) {
+        managerRef.current.removeAsset(assetId);
+      }
+    },
+    updateAssetTransform: (assetId: string | number, transform: Transform) => {
+      if (managerRef.current) {
+        managerRef.current.updateAssetTransform(assetId, transform);
+      }
+    },
+    updateLightParams: (assetId: string | number, lightParams: PointLightParams | RectLightParams) => {
+      if (managerRef.current) {
+        managerRef.current.updateLightParams(assetId, lightParams);
+      }
+    },
+    addAsset: async (asset: SceneAsset) => {
+      if (managerRef.current) {
+        if (asset.type === 'object') {
+          await managerRef.current.loadAsset(asset);
+        } else if (asset.type === 'point-light' || asset.type === 'rect-light') {
+          managerRef.current.loadLightAsset(asset);
+        }
+      }
+    },
+    setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => {
+      if (managerRef.current) {
+        managerRef.current.setGizmoMode(mode);
+      }
+    },
+    selectObject: (assetId: string | number | null) => {
+      if (managerRef.current) {
+        managerRef.current.selectObjectByAssetId(assetId);
+      }
+    },
+  }), []);
 
   // C키로 카메라 좌표 콘솔 출력, V키로 카메라 저장
   useEffect(() => {
@@ -275,4 +331,6 @@ export default function ThreeRenderer({
       )}
     </div>
   );
-}
+});
+
+export default ThreeRenderer;
