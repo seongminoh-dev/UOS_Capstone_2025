@@ -51,7 +51,10 @@ export class ThreeSceneAdapter {
     // 1. Clear existing scene
     manager.clearScene();
 
-    // 2. ✅ Room 로드 (편집 불가능한 기본 Object)
+    // 2. ✅ DefaultRoom 설정 (선택 불가능하게 만들기 위해)
+    manager.setDefaultRoom(scene.room.meshName);
+
+    // 3. ✅ Room 로드 (편집 불가능한 기본 Object)
     const roomAsset: SceneAsset = {
       id: 'room',
       type: 'object',
@@ -75,11 +78,11 @@ export class ThreeSceneAdapter {
       result.success = false;
     }
 
-    // 3. ❌ Sun → DirectionalLight 비활성화 (Three.js에서는 너무 밝음)
+    // 4. ❌ Sun → DirectionalLight 비활성화 (Three.js에서는 너무 밝음)
     // WebGPU Renderer에서만 태양빛 렌더링
     console.log('[ThreeSceneAdapter] Sun light disabled for Three.js renderer');
 
-    // 4. ✅ Assets 로드 (Objects + Point/Rect Lights만)
+    // 5. ✅ Assets 로드 (Objects + Point/Rect Lights만)
     for (const asset of scene.assets) {
       if (asset.type === 'object') {
         // Object Asset 처리
@@ -122,7 +125,7 @@ export class ThreeSceneAdapter {
       console.warn(`- Failed assets: ${result.failedAssets.length}`);
     }
 
-    // 5. ✅ 카메라 설정 적용 (있는 경우)
+    // 6. ✅ 카메라 설정 적용 (있는 경우)
     if (scene.camera) {
       try {
         manager.setCamera(

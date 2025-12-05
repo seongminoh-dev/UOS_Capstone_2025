@@ -22,6 +22,7 @@ export interface ErrorSolution {
 
 /** 에러 코드별 해결책 매핑 */
 export const ERROR_SOLUTIONS: Record<string, ErrorSolution> = {
+  // Three.js 에러
   INIT_FAILED: {
     title: '렌더러 초기화 실패',
     description: 'Three.js 렌더러를 초기화하는 중 문제가 발생했습니다.',
@@ -52,6 +53,38 @@ export const ERROR_SOLUTIONS: Record<string, ErrorSolution> = {
     ],
     canRetry: true,
   },
+  // WebGPU 에러
+  WEBGPU_NOT_SUPPORTED: {
+    title: 'WebGPU 미지원',
+    description: '현재 브라우저가 WebGPU를 지원하지 않습니다.',
+    solutions: [
+      'Chrome 113+ 또는 Edge 113+ 버전을 사용해 주세요.',
+      'chrome://flags에서 WebGPU를 활성화해 보세요.',
+      '그래픽 드라이버를 최신 버전으로 업데이트해 주세요.',
+    ],
+    canRetry: false,
+  },
+  ADAPTER_NOT_FOUND: {
+    title: 'GPU 어댑터 없음',
+    description: 'WebGPU를 지원하는 GPU 어댑터를 찾을 수 없습니다.',
+    solutions: [
+      '그래픽 드라이버를 최신 버전으로 업데이트해 주세요.',
+      '외장 GPU가 있다면 해당 GPU를 사용하도록 설정해 주세요.',
+      '브라우저를 재시작해 보세요.',
+    ],
+    canRetry: true,
+  },
+  DEVICE_LOST: {
+    title: 'GPU 연결 끊김',
+    description: 'GPU 장치와의 연결이 끊어졌습니다.',
+    solutions: [
+      '페이지를 새로고침해 주세요.',
+      '다른 GPU 집약적인 프로그램을 종료해 보세요.',
+      '그래픽 드라이버 문제일 수 있습니다.',
+    ],
+    canRetry: true,
+  },
+  // 공통
   UNKNOWN: {
     title: '알 수 없는 오류',
     description: '예상치 못한 오류가 발생했습니다.',

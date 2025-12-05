@@ -68,6 +68,7 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const managerRef = useRef<ThreeSceneManager | null>(null);
+  const loadedSceneIdRef = useRef<string | number | null>(null); // 이미 로드된 Scene ID 추적
 
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
   const [internalError, setInternalError] = useState<ThreeError | null>(null);
@@ -263,8 +264,17 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
   }, [onSaveCamera]);
 
   // Scene 데이터 변경 시 모델 로드
+  // IMPORTANT: scene.id가 변경된 경우에만 전체 재로드
+  // 속성(transform 등)만 변경된 경우 updateAssetTransform 등의 API 사용
   useEffect(() => {
     if (!managerRef.current || !scene || !isInitialized) return;
+
+    // 이미 같은 Scene ID가 로드되어 있으면 스킵
+    // (속성 변경은 updateAssetTransform 등 명령형 API로 처리됨)
+    if (loadedSceneIdRef.current === scene.id) {
+      console.log('[ThreeRenderer] Scene ID unchanged, skipping reload');
+      return;
+    }
 
     async function loadSceneData() {
       setIsSceneLoading(true);
@@ -287,6 +297,9 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
         }
 
         const loadResult = await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
+
+        // Scene ID 저장
+        loadedSceneIdRef.current = scene.id;
 
         // Room 로드 실패 시 에러 표시 (심각한 오류)
         if (!loadResult.roomLoaded) {
@@ -329,7 +342,7 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
     }
 
     loadSceneData();
-  }, [scene, isInitialized, onLoadingChange, onError]);
+  }, [scene?.id, isInitialized, onLoadingChange, onError]); // scene.id만 dependency로 사용
 
   // 에러가 있으면 에러 정보만 내부에 표시하지 않음 (부모가 처리)
   // internalError는 onError 콜백으로 전달됨

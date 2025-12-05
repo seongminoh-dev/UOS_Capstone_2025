@@ -9,7 +9,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { TransformControls } from 'three/addons/controls/TransformControls.js';
 import { RectAreaLightHelper } from 'three/addons/helpers/RectAreaLightHelper.js';
 import { modelLoader } from './ModelLoader';
-import type { Scene, SceneAsset, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
+import type { Scene, SceneFrontend, SceneAsset, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
 
 export class ThreeSceneManager {
   // Core Three.js objects
@@ -308,13 +308,18 @@ export class ThreeSceneManager {
     // Light Helper인 경우, 실제 Light에 TransformControls를 attach
     // Helper를 이동하면 Light도 함께 이동해야 하기 때문
     let attachTarget = object;
+    let focusTarget = object; // 카메라 포커스 대상 (Helper 유지)
     if (object.userData.isLightHelper && assetId !== undefined) {
       const light = this.loadedLights.get(assetId);
       if (light) {
         attachTarget = light;
+        // focusTarget은 helper 유지 (Light는 geometry가 없어서 BoundingBox 계산 불가)
         console.log('[ThreeSceneManager] Light helper selected, attaching TransformControls to light');
       }
     }
+
+    // 이미 같은 오브젝트가 선택되어 있으면 카메라 이동하지 않음
+    const isNewSelection = this.selectedObject !== attachTarget;
 
     this.selectedObject = attachTarget;
     this.transformControls.attach(attachTarget);
@@ -325,18 +330,17 @@ export class ThreeSceneManager {
     }
 
     // 디버깅: TransformControls 상태 확인
-    console.log('[ThreeSceneManager] TransformControls attached to:', assetId);
-    console.log('[ThreeSceneManager] TransformControls visible:', this.transformControls.visible);
-    console.log('[ThreeSceneManager] TransformControls enabled:', this.transformControls.enabled);
-    // @ts-ignore
-    console.log('[ThreeSceneManager] TransformControls _root in scene:', this.scene.children.includes(this.transformControls._root));
+    console.log('[ThreeSceneManager] TransformControls attached to:', assetId, 'isNewSelection:', isNewSelection);
 
     if (assetId !== undefined) {
       this.onSelectionChange?.(assetId);
     }
 
-    // 선택된 오브젝트로 카메라 포커스 (부드럽게 이동)
-    this.focusOnObject(attachTarget);
+    // 새로운 오브젝트가 선택된 경우에만 카메라 포커스 이동
+    // Light의 경우 Helper를 기준으로 포커스 (Light 자체는 geometry가 없음)
+    if (isNewSelection) {
+      this.focusOnObject(focusTarget);
+    }
   }
 
   /**
@@ -795,9 +799,18 @@ export class ThreeSceneManager {
   }
 
   /**
+   * DefaultRoom 설정 (선택 불가능한 Room mesh 이름)
+   * ThreeSceneAdapter에서 Room 로드 전에 호출
+   */
+  setDefaultRoom(meshName: string | null): void {
+    this.currentDefaultRoom = meshName;
+    console.log('[ThreeSceneManager] DefaultRoom set to:', meshName);
+  }
+
+  /**
    * Scene 데이터로부터 오브젝트 로드
    */
-  async loadScene(scene: Scene): Promise<void> {
+  async loadScene(scene: Scene | SceneFrontend): Promise<void> {
     // Scene ID가 변경되었는지 확인 (새로운 Scene인지 체크)
     const isNewScene = this.currentSceneId !== scene.id;
 
@@ -811,7 +824,9 @@ export class ThreeSceneManager {
     this.currentSceneId = scene.id;
 
     // defaultRoom 저장 (선택 불가능하게 만들기 위해)
-    this.currentDefaultRoom = scene.defaultRoom || null;
+    // SceneFrontend인 경우 room.meshName 사용
+    const sceneFrontend = scene as SceneFrontend;
+    this.currentDefaultRoom = sceneFrontend.room?.meshName || null;
 
     // Object 타입 에셋 로드
     const objectAssets = scene.assets.filter((asset) => asset.type === 'object');
