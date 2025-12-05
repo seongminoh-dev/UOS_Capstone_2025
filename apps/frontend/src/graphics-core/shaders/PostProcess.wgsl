@@ -447,13 +447,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
     let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
     let Alpha           : f32   = select(0.0, N / (N + 1), bHistoryValid);
-
-    if (false)
-    {
-        let CurrentColor : vec3<f32> = Encode( textureSampleLevel(RadianceTexture, LinearSampler, UV_Unjitter, 0.0).rgb );
-        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(CurrentColor, 1.0));
-        return;
-    }
     
     let CurrentColor    : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV_Unjitter, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );

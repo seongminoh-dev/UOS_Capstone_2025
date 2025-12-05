@@ -1484,29 +1484,8 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
     return f;
 }
 
-// fn PathPDF(InPath : RegeneratedPath) -> f32
-// {
-//     var p : f32 = 1.0;
-
-//     for (var i = 1u; i < InPath.k; i++)
-//     {
-//         let X_Prev : Surface = InPath.Surface[i - 1];
-//         let X_Curr : Surface = InPath.Surface[i    ];
-//         let X_Next : Surface = InPath.Surface[i + 1];
-
-//         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-//         let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
-//         let N : vec3<f32> = X_Curr.Normal;
-
-//         p *= PDF_BSDF(X_Curr, V, L);
-//     }
-
-//     return p;
-// }
-
 fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
-
     var OutPath : RegeneratedPath;
     {
         OutPath.Surface[0].Position         = Get_X0(ThreadID);

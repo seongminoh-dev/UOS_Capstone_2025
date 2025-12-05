@@ -1474,7 +1474,7 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
     if ( k == InPath.length - 1 )
     {
         let X_k : Surface = InPath.Surface[InPath.length - 1];
-        return L_emit(InPath.XL, X_k) * Visibility(X_k.Position, InPath.XL.Position);
+        return L_emit(InPath.XL, X_k);// * Visibility(X_k.Position, InPath.XL.Position);
     }
     else if ( k == InPath.length )
     {
@@ -1506,7 +1506,7 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
         let N : vec3<f32> = X_Curr.Normal;
 
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
-        f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
+        f *= L_emit(InPath.XL, X_Curr);// * Visibility(X_Curr.Position, InPath.XL.Position);
     }
 
     return f;
@@ -1624,8 +1624,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // DI 경로를 좀 더 넣어봅시다
-    let DI_Count : u32 = 16u;
-    if (true)
+    let DI_Count : u32 = 8u;
     {
         let X : Surface     = PathTree.Surface[1];
         let V : vec3<f32>   = normalize( PathTree.Surface[0].Position - X.Position );
@@ -1718,13 +1717,20 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     }
 
+    // var VisibilityFactor : f32;
+    // {
+    //     let Start   : vec3<f32> = PathTreeReservoir.Sample.Surface[PathTreeReservoir.Sample.length - 1].Position;
+    //     let End     : vec3<f32> = PathTreeReservoir.Sample.XL.Position;
+    //     VisibilityFactor        = Visibility(Start, End);
+    // }
+
     // 3. 최종 살아남은 경로를 Reservoir 에 저장
     {
         var ResultReservoir : Reservoir;
 
         ResultReservoir.Sample          = CompressPath(PathTreeReservoir.Sample, CSurface);
         ResultReservoir.Sample.P_hat    = PathTreeReservoir.P_hat;
-        ResultReservoir.UCW             = PathTreeReservoir.w_sum / PathTreeReservoir.P_hat;
+        ResultReservoir.UCW             = ( PathTreeReservoir.w_sum / PathTreeReservoir.P_hat );// * VisibilityFactor;
         ResultReservoir.C               = PathTreeReservoir.C;
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
