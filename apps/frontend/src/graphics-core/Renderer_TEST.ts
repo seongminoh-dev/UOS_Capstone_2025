@@ -647,13 +647,12 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_REUSE_TEMPORAL, 
+                ShaderCode_Temporal_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
                     this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame],
                 ],
                 [   // Read GPUTextureView
@@ -674,13 +673,12 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                ShaderCode_REUSE_SPATIAL, 
+                ShaderCode_Spatial_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
