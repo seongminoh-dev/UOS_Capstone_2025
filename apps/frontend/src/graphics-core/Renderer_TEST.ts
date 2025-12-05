@@ -415,7 +415,7 @@ export class Renderer
                         
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -459,9 +459,8 @@ export class Renderer
 
             CommandEncoder.copyBufferToBuffer
             (
-                this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial], 0,
-                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
-                4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
+                this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial],
+                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame]
             );
 
         }
@@ -647,7 +646,7 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_REUSE_TEMPORAL, 
+                ShaderCode_Temporal_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -705,7 +704,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),

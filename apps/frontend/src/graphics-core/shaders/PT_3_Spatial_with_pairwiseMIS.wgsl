@@ -1635,19 +1635,23 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
     let curPixel : vec2<u32> = ThreadID.xy;
-
-    //if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
-    //    curPixel.y >= UniformBuffer.Resolution_Source.y) {
-    //    return;
-    //}
+    
 
     let curIdx : u32 = curPixel.y * UniformBuffer.Resolution_Source.x + curPixel.x;
 
+
+
     // --- 1. canonical(base) reservoir 가져오기 ---
     var baseRes : Reservoir = ReservoirBuffer_Read[curIdx];
-     ReservoirBuffer_Write[curIdx] = baseRes;
+
+    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
+        curPixel.y >= UniformBuffer.Resolution_Source.y ) {
+            //ReservoirBuffer_Write[curIdx] = baseRes;
+        return;
+    }
 
     if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1655,6 +1659,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // base path 재구성
     let basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
     if (basePath.length < 2u) {
+        //ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1773,6 +1778,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 후보가 없으면 기존 리저버 유지
     if (candCount == 0u) {
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1845,6 +1851,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         ResultReservoir.C       = outRes.C;
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
-        ReservoirBuffer_Write[curIdx] = baseRes;
+        //ReservoirBuffer_Write[curIdx] = baseRes;
+        
     }
 }

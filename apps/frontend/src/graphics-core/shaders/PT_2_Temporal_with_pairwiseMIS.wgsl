@@ -1610,37 +1610,35 @@ const TEMPORAL_MIN_NORMAL_DOT    : f32 = 0.97;
 // ==========================================================================
 // Temporal Reuse: cs_main
 // ==========================================================================
-// ==========================================================================
-// Temporal Reuse: cs_main (spatial pairwise MIS 기반으로 재작성)
-// ==========================================================================
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
-    storageBarrier();
-    workgroupBarrier();
 
-    if (UniformBuffer.FrameIndex == 0u) {
-        // 그냥 baseRes 그대로 사용 (spatial 결과)
-        return;
-    }
+
 
     let curPixel : vec2<u32> = ThreadID.xy;
 
-    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
-        curPixel.y >= UniformBuffer.Resolution_Source.y) {
-        return;
-    }
 
     let curIdx : u32 =
-        curPixel.y * UniformBuffer.Resolution_Source.x +
-        curPixel.x;
+        ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
 
     // ----------------------------------------------------------------------
     // 1. base reservoir & path 재구성 (canonical technique)
     // ----------------------------------------------------------------------
     var baseRes  : Reservoir = ReservoirBuffer_Init[curIdx];
+
+    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
+        curPixel.y >= UniformBuffer.Resolution_Source.y || UniformBuffer.FrameCount ==0) {
+            ReservoirBuffer_Write[curIdx] = baseRes;
+        return;
+    }
     if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
         // 아직 초기화 안된 픽셀
+        ReservoirBuffer_Write[curIdx] = baseRes;
+        return;
+    }
+
+    if(UniformBuffer.FrameCount == 0){
         ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
@@ -1894,4 +1892,5 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     ResultReservoir.Padding = vec2<f32>(0.0, 0.0);
 
     ReservoirBuffer_Write[curIdx] = ResultReservoir;
+    //ReservoirBuffer_Write[curIdx] = baseRes;
 }
