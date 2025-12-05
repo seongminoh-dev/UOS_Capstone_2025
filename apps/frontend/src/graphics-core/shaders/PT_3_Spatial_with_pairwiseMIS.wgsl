@@ -1364,56 +1364,56 @@ fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
 
     return OutLightSample;
 }
-
-fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
+fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
-    var OutPath : Path;
+    var OutPath : RegeneratedPath;
 
-    if (InCompactPath.length < 2u) {
-        OutPath.length = 0u;
-        return OutPath;
-    }
-
-    // 카메라/1번째 서페이스 세팅
+    // 기본 정보 세팅 (x0, x1, XL, k, L, J, Radiance 등)
     OutPath.Surface[0].Position = Get_X0(ThreadID);
     OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
     OutPath.XL                  = InCompactPath.XL;
 
-    // 최소 길이: x0, x1
-    OutPath.length = 2u;
+    OutPath.L                   = InCompactPath.L;
+    OutPath.k                   = InCompactPath.k;
+    OutPath.J                   = InCompactPath.J;
+    OutPath.Radiance            = InCompactPath.Radiance;   // 초기값 (base-domain radiance 스케일)
 
-    // 나머지 버텍스 재생성
-    for (var i = 1u; i < InCompactPath.length - 1u; i++)
-    {
-        let X_Prev  : Surface       = OutPath.Surface[i - 1u];
-        let X_Curr  : Surface       = OutPath.Surface[i    ];
-
-        let V       : vec3<f32>     = normalize( X_Prev.Position - X_Curr.Position );
-
-        var rSeed   : u32           = InCompactPath.rSeed[i - 1u];
-        let W       : BSDFSample    = SampleBSDF(&rSeed, X_Curr, V);
-
-        OutPath.Lobe[i]             = W.Lobe;
-
-        let HitInfo : HitResult     = TraceRay( Ray(X_Curr.Position, W.Direction) );
-
-        // 히트 못하면 더 이상 유효한 surface 없음 → 여기서 path 종료
-        if (!HitInfo.IsValidHit)
-        {
-            // 현재까지의 길이 = i+1 (0..i 인덱스까지 존재)
-            OutPath.length = i + 1u;
-            return OutPath;
-        }
-
-        // 히트했다면 다음 surface 채우고 길이 갱신
-        OutPath.Surface[i + 1u] = GetSurface( HitInfo.SurfaceInfo );
-        OutPath.length = i + 2u;
-
-        // Path array 최대 길이 방어 (8개로 제한되어 있으므로)
-
-        if (i + 1u >= 8u) { break; }
-
+    // k == 0 이면 더 이상 복원할 경로가 없음
+    if (OutPath.k == 0u) {
+        return OutPath;
     }
+
+    // 재연결 지점의 Lobe 정보는 CompactPath에 이미 들어 있으므로 그대로 복사
+    OutPath.Lobe[InCompactPath.k    ] = InCompactPath.Lobe_k;
+    OutPath.Lobe[InCompactPath.k-1u] = InCompactPath.Lobe_km1;
+
+    // --- x2 ... x_{k-1} 까지 추적 ---
+    for (var i : u32 = 1u; i < InCompactPath.k - 1u; i = i + 1u)
+    {
+        let X_Prev  : Surface   = OutPath.Surface[i - 1u];
+        let X_Curr  : Surface   = OutPath.Surface[i    ];
+
+        let V       : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+
+        var rSeed   : u32       = InCompactPath.rSeed[i - 1u];
+        let W       : BSDFSample= SampleBSDF(&rSeed, X_Curr, V);
+
+        OutPath.Lobe[i]         = W.Lobe;
+
+        let HitInfo : HitResult = TraceRay( Ray(X_Curr.Position, W.Direction) );
+        OutPath.Surface[i + 1u] = GetSurface( HitInfo.SurfaceInfo );
+    }
+
+    // x_k 가 라이트가 아닌 서피스인 경우, RcVertex로부터 x_k 복원
+    if (InCompactPath.Lobe_k != LOBE_LIGHT)
+    {
+        OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
+    }
+
+    // --- 여기서 PathContribution을 한 번만 계산해서 Radiance에 반영 ---
+    // 원래 cs_main에서 하던: PathContribution(ShiftedPath) * ReservoirArray[*].Sample.Radiance
+    let contrib : vec3<f32> = PathContribution(OutPath);
+    OutPath.Radiance        = contrib * InCompactPath.Radiance;
 
     return OutPath;
 }
@@ -1633,229 +1633,116 @@ const MAX_CANDIDATE : u32 = u32(MAX_NEIGHBOR);
 
 // 후보 정보를 간단히 모아둘 구조
 
-
-@compute @workgroup_size(8, 8, 1)
+@compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
+    if ( !IsInBoundary(ThreadID.xy) ) { return; }
 
-    let curPixel : vec2<u32> = ThreadID.xy;
-    
+    // Initialize
+    var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
+    let Delta   : i32 = 1;
+    var idx     : u32 = 1u;
+    var C_sum   : u32 = 0u;
 
-    let curIdx : u32 = curPixel.y * UniformBuffer.Resolution_Source.x + curPixel.x;
+    var ReservoirArray      : array<Reservoir, 25u>;
+    var ShiftedPathArray    : array<RegeneratedPath, 25u>;
+    var JacobianArray       : array<f32, 25u>;
+    var MISArray            : array<f32, 25u>;
 
+    var AccumReservoir      : Reservoir;
 
+    // Canonical Sample (현재 픽셀)
+    ReservoirArray[0] = LoadReservoir(ThreadID.xy);
+    C_sum += ReservoirArray[0].C;
 
-    // --- 1. canonical(base) reservoir 가져오기 ---
-    var baseRes : Reservoir = ReservoirBuffer_Read[curIdx];
-
-    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
-        curPixel.y >= UniformBuffer.Resolution_Source.y ) {
-            //ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-
-    // base path 재구성
-    let basePath : RegeneratedPath = RegeneratePath(curPixel, baseRes.Sample);
-    if (basePath.length < 2u) {
-        //ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // base reconnection index
-    let k_base : u32 = baseRes.Sample.k;
-    if (k_base < 2u || (k_base + 1u) >= basePath.length) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // base contribution / proxy pdf
-    let contribBase : vec3<f32> = PathContribution(basePath);
-    var P_hat_Base  : f32       = Luminance(contribBase);
-    if (!(P_hat_Base > 0.0) || !isFinite(P_hat_Base)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // --- 2. neighbor 후보들을 hybrid shift + 경로 재생성으로 모으기 ---
-    var rng : u32 = GetHashValue(curPixel.x * 1973u + curPixel.y * 9277u + UniformBuffer.FrameIndex * 26699u);
-    var candidates : array<Candidate, MAX_CANDIDATE>;
-    var candCount  : u32 = 0u;
-
-    for (var dy : i32 = -KERNEL_RADIUS; dy <= KERNEL_RADIUS; dy = dy + 1)
+    // Neighbor Samples
+    for (var dx : i32 = -Delta; dx <= Delta; dx = dx + 1)
     {
-        for (var dx : i32 = -KERNEL_RADIUS; dx <= KERNEL_RADIUS; dx = dx + 1)
+        for (var dy : i32 = -Delta; dy <= Delta; dy = dy + 1)
         {
-            if (dx == 0 && dy == 0) { continue; }
+            let NeighborID : vec2<u32> = vec2<u32>( vec2<i32>(ThreadID.xy) + vec2<i32>(dx, dy) );
 
-            let nx_i : i32 = i32(curPixel.x) + dx;
-            let ny_i : i32 = i32(curPixel.y) + dy;
+            if (dx == 0 && dy == 0)          { continue; }
+            if (!IsInBoundary(NeighborID))   { continue; }
 
-            if (nx_i < 0 || ny_i < 0 ||
-                nx_i >= i32(UniformBuffer.Resolution_Source.x) ||
-                ny_i >= i32(UniformBuffer.Resolution_Source.y)) {
-                continue;
-            }
+            let NeighborReservoir : Reservoir = LoadReservoir(NeighborID);
+            if (NeighborReservoir.Sample.k == 0u) { continue; }
 
-            if (candCount >= MAX_CANDIDATE) { break; }
+            ReservoirArray[idx] = NeighborReservoir;
+            C_sum += ReservoirArray[idx].C;
 
-            let nx   : u32 = u32(nx_i);
-            let ny   : u32 = u32(ny_i);
-            let nIdx : u32 = ny * UniformBuffer.Resolution_Source.x + nx;
-
-            let neiRes : Reservoir = ReservoirBuffer_Read[nIdx];
-            if (neiRes.C == 0u || neiRes.Sample.length < 2u) {
-                continue;
-            }
-
-            // base path 재구성 (이웃 픽셀 기준)
-            let neiPath : Path = RegeneratePath(vec2<u32>(nx, ny), neiRes.Sample);
-            if (neiPath.length < 2u) {
-                continue;
-            }
-
-            // 하이브리드 시프트: neighbor sample -> 현재 픽셀 도메인
-            var shifted : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
-            if (!(shifted.length > 0u) || shifted.k != k_base) {
-                continue;
-            }
-
-            // 현재 픽셀에서 offset path 재구성
-            let offsetPath : RegeneratedPath = RegeneratePath(curPixel, shifted);
-            if (!(offsetPath.length >= 2u && shifted.k < offsetPath.length)) {
-                continue;
-            }
-
-            // 재연결 안전성 검사
-            if (!IsSafeToReconnect(
-                    offsetPath.Surface[k_base - 1u], offsetPath.Lobe[k_base - 1u],
-                    offsetPath.Surface[k_base    ], offsetPath.Lobe[k_base    ])) {
-                continue;
-            }
-
-            // Jacobian J_y 계산
-            let J_y : f32 = calculate_J(offsetPath, shifted.k);
-            if (!(J_y > 0.0)) {
-                continue;
-            }
-
-            shifted.J = J_y;
-
-            // 이웃(base) 쪽의 J_x, PDF p_i(x) 복원
-            let J_x    : f32 = max(neiRes.Sample.J, EPS);
-            let UCW_i  : f32 = neiRes.UCW;
-
-            if (!(UCW_i > 0.0)) {
-                continue;
-            }
-
-            let p_base : f32 = 1.0 / UCW_i;                 // ≈ p_i(x)
-            var p_from_i : f32 = p_base * (J_y / J_x);      // ≈ p_i(y)
-
-            if (!(p_from_i > 0.0)) {
-                continue;
-            }
-
-            // path contribution (target function 값 f(y))
-            let contribOff : vec3<f32> = PathContribution(offsetPath);
-            let L_i        : f32       = Luminance(contribOff);
-            if (!(L_i > 0.0)) {
-                continue;
-            }
-
-            // 후보 저장
-            candidates[candCount].path      = offsetPath;
-            candidates[candCount].L         = L_i;
-            candidates[candCount].p_from_i  = p_from_i;
-            candidates[candCount].confidence= max(neiRes.C, 1u);
-
-            candCount++;
+            idx++;
         }
     }
 
-    // --- 3. pairwise MIS with J-based p_hat<-i -------------------------
+    if (C_sum == 0u) { return; }
 
-    // 후보가 없으면 기존 리저버 유지
-    if (candCount == 0u) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let M : f32 = f32(candCount + 1u); // canonical + neighbors
-
-    var outRes : PathReservoir;
-    outRes.C     = 0u;
-    outRes.w_sum = 0.0;
-    outRes.P_hat = 0.0;
-
-    // canonical 샘플(base path)의 기여와 PDF
-    let L_c         : f32       = Luminance(contribBase);
-    let p_c_base    : f32       = PathPDF(basePath);
-
-    var sum_c_term : f32 = 0.0;
-
-    // 3a. 이웃 후보들
-    for (var i : u32 = 0u; i < candCount; i++)
+    // 모든 후보를 현재 픽셀 도메인으로 Regenerate
+    for (var iter : u32 = 0u; iter < idx; iter = iter + 1u)
     {
-        let p_i : f32 = candidates[i].p_from_i;     // 이웃 기술 i 의 p_hat<-i(y)
-        let p_c : f32 = PathPDF(candidates[i].path); // canonical 기술의 p_c(y)
-
-        if (!(p_i > 0.0 && p_c > 0.0)) {
-            continue;
-        }
-
-        let denom : f32 = p_i + p_c;
-        if (denom <= 0.0) { continue; }
-
-        // pairwise MIS weight m_i(y) = (1/M) * p_i / (p_i + p_c)
-        let m_i : f32 = (1.0 / M) * (p_i / denom);
-
-        // 최종 weight w_i = m_i * f(y)  (여기서 f(y) ≈ L_i)
-        let w_i : f32 = m_i * candidates[i].L;
-
-        UpdateReservoir(
-            &rng,
-            &outRes,
-            candidates[i].path,
-            w_i,
-            candidates[i].L,
-            candidates[i].confidence
-        );
-
-        // canonical 쪽 pairwise term 누적
-        sum_c_term += p_c / denom;
+        ShiftedPathArray[iter] = RegeneratePath(ThreadID.xy, ReservoirArray[iter].Sample);
     }
 
-    // 3b. canonical 샘플(base path)에 대한 weight
-    if (L_c > 0.0 && p_c_base > 0.0)
+    // Jacobian = ∂T/∂x 비율 (PartialJacobian / 기존 J_x)
+    JacobianArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter = iter + 1u)
     {
-        let m_c : f32 = (1.0 / M) * (1.0 + sum_c_term);
-        let w_c : f32 = m_c * L_c;
-
-        UpdateReservoir(
-            &rng,
-            &outRes,
-            basePath,
-            w_c,
-            L_c,
-            max(baseRes.C, 1u)
-        );
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
     }
 
-    // --- 4. 리저버 압축 & 저장 ---
+    var DEBUG : f32 = 0.0;
+
+    // Pairwise MIS
+    MISArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter = iter + 1u)
     {
-        var ResultReservoir : Reservoir;
-        ResultReservoir.Sample  = CompressPath(outRes.Sample);
-        ResultReservoir.UCW     = outRes.w_sum / max(outRes.P_hat, EPS);
-        ResultReservoir.C       = outRes.C;
+        if (JacobianArray[iter] < 1e-20) { continue; }
 
-        StoreReservoir(ThreadID.xy, &ResultReservoir);
-        //ReservoirBuffer_Write[curIdx] = baseRes;
-        
+        // p_i(y) ≈ p_i(x) * (J_y / J_x) = Sample.P_hat / J * J_y/J_x  (여기서 J_x는 Sample.J)
+        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+
+        // 여기서 PathContribution 다시 계산하지 않고,
+        // RegeneratePath에서 미리 계산해 둔 Radiance를 그대로 사용
+        let P_hat_cy : f32 = Luminance( ShiftedPathArray[iter].Radiance );
+
+        let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
+        let MIS_DL : f32 = f32(C_sum);
+        let MIS_NR : f32 = f32(ReservoirArray[iter].C) * P_hat_iy;
+        let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy
+                           + f32(ReservoirArray[0].C) * P_hat_cy );
+
+        let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+
+        MISArray[iter] = select(0.0, MIS, MIS_DR > 1e-20);
+
+        let RIS : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+
+        UpdateReservoir(&rSeed, &AccumReservoir,
+                        ReservoirArray[iter].Sample,
+                        RIS,
+                        P_hat_cy,
+                        ReservoirArray[iter].C);
     }
+
+    // Canonical Sample에 대한 RIS
+    {
+        // 마찬가지로 canonical path 도 Radiance가 RegeneratePath에서 이미 계산되어 있음
+        let P_hat_cy : f32 = Luminance( ShiftedPathArray[0].Radiance );
+        let RIS      : f32 = MISArray[0] * P_hat_cy * ReservoirArray[0].UCW * JacobianArray[0];
+
+        UpdateReservoir(&rSeed, &AccumReservoir,
+                        ReservoirArray[0].Sample,
+                        RIS,
+                        P_hat_cy,
+                        ReservoirArray[0].C);
+    }
+
+    // Write Reservoir To Buffer
+    {
+        AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
+        //AccumReservoir.UCW = DEBUG;
+        StoreReservoir(ThreadID.xy, &AccumReservoir);
+    }
+
+    return;
 }
