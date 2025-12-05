@@ -8,6 +8,7 @@
  * - U/V Vectors (rect-light)
  */
 
+import { useState } from 'react';
 import type { PointLightParams, RectLightParams, DirectionalLightParams } from '../../../graphics-core/service/Scene';
 import './LightSection.css';
 
@@ -18,14 +19,44 @@ interface LightSectionProps {
 }
 
 export function LightSection({ lightType, lightParams, onParamChange }: LightSectionProps) {
+  // 입력 중인 값을 임시로 저장 (빈 문자열, '-', '.' 등 허용)
+  const [tempValues, setTempValues] = useState<Record<string, string>>({});
+
   const handleNumberChange = (
     paramPath: string,
     e: React.ChangeEvent<HTMLInputElement>
   ) => {
-    const value = parseFloat(e.target.value);
+    const rawValue = e.target.value;
+
+    // 임시 값 저장 (빈 문자열, '-', '.', '-.' 등 허용)
+    setTempValues(prev => ({ ...prev, [paramPath]: rawValue }));
+
+    // 유효한 숫자인 경우에만 실제 값 업데이트
+    const value = parseFloat(rawValue);
     if (!isNaN(value)) {
       onParamChange(paramPath, value);
     }
+  };
+
+  // blur 시 임시 값 정리 (빈 값이면 0으로 리셋)
+  const handleBlur = (paramPath: string, defaultValue: number = 0) => {
+    const tempValue = tempValues[paramPath];
+    if (tempValue === '' || tempValue === '-' || tempValue === '.' || tempValue === '-.') {
+      onParamChange(paramPath, defaultValue);
+    }
+    // 임시 값 삭제
+    setTempValues(prev => {
+      const { [paramPath]: _, ...rest } = prev;
+      return rest;
+    });
+  };
+
+  // 표시할 값 결정 (임시 값이 있으면 임시 값, 없으면 실제 값)
+  const getDisplayValue = (paramPath: string, actualValue: number): string => {
+    if (paramPath in tempValues) {
+      return tempValues[paramPath];
+    }
+    return String(actualValue);
   };
 
   // RGB to Hex 변환
@@ -49,9 +80,8 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
 
   const handleColorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const rgb = hexToRgb(e.target.value);
-    onParamChange('color.0', rgb[0]);
-    onParamChange('color.1', rgb[1]);
-    onParamChange('color.2', rgb[2]);
+    // 색상은 배열 전체를 한 번에 업데이트 (race condition 방지)
+    onParamChange('color', rgb);
   };
 
   return (
@@ -70,8 +100,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={lightParams.position[0]}
+                  value={getDisplayValue('position.0', lightParams.position[0])}
                   onChange={(e) => handleNumberChange('position.0', e)}
+                  onBlur={() => handleBlur('position.0', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -80,8 +111,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={lightParams.position[1]}
+                  value={getDisplayValue('position.1', lightParams.position[1])}
                   onChange={(e) => handleNumberChange('position.1', e)}
+                  onBlur={() => handleBlur('position.1', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -90,8 +122,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={lightParams.position[2]}
+                  value={getDisplayValue('position.2', lightParams.position[2])}
                   onChange={(e) => handleNumberChange('position.2', e)}
+                  onBlur={() => handleBlur('position.2', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -112,8 +145,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
               <input
                 type="number"
                 step="0.1"
-                value={lightParams.direction[0]}
+                value={getDisplayValue('direction.0', lightParams.direction[0])}
                 onChange={(e) => handleNumberChange('direction.0', e)}
+                onBlur={() => handleBlur('direction.0', 0)}
                 className="light-section__input"
               />
             </div>
@@ -122,8 +156,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
               <input
                 type="number"
                 step="0.1"
-                value={lightParams.direction[1]}
+                value={getDisplayValue('direction.1', lightParams.direction[1])}
                 onChange={(e) => handleNumberChange('direction.1', e)}
+                onBlur={() => handleBlur('direction.1', 0)}
                 className="light-section__input"
               />
             </div>
@@ -132,8 +167,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
               <input
                 type="number"
                 step="0.1"
-                value={lightParams.direction[2]}
+                value={getDisplayValue('direction.2', lightParams.direction[2])}
                 onChange={(e) => handleNumberChange('direction.2', e)}
+                onBlur={() => handleBlur('direction.2', 0)}
                 className="light-section__input"
               />
             </div>
@@ -155,8 +191,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).u[0]}
+                  value={getDisplayValue('u.0', (lightParams as RectLightParams).u[0])}
                   onChange={(e) => handleNumberChange('u.0', e)}
+                  onBlur={() => handleBlur('u.0', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -165,8 +202,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).u[1]}
+                  value={getDisplayValue('u.1', (lightParams as RectLightParams).u[1])}
                   onChange={(e) => handleNumberChange('u.1', e)}
+                  onBlur={() => handleBlur('u.1', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -175,8 +213,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).u[2]}
+                  value={getDisplayValue('u.2', (lightParams as RectLightParams).u[2])}
                   onChange={(e) => handleNumberChange('u.2', e)}
+                  onBlur={() => handleBlur('u.2', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -194,8 +233,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).v[0]}
+                  value={getDisplayValue('v.0', (lightParams as RectLightParams).v[0])}
                   onChange={(e) => handleNumberChange('v.0', e)}
+                  onBlur={() => handleBlur('v.0', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -204,8 +244,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).v[1]}
+                  value={getDisplayValue('v.1', (lightParams as RectLightParams).v[1])}
                   onChange={(e) => handleNumberChange('v.1', e)}
+                  onBlur={() => handleBlur('v.1', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -214,8 +255,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
                 <input
                   type="number"
                   step="0.1"
-                  value={(lightParams as RectLightParams).v[2]}
+                  value={getDisplayValue('v.2', (lightParams as RectLightParams).v[2])}
                   onChange={(e) => handleNumberChange('v.2', e)}
+                  onBlur={() => handleBlur('v.2', 0)}
                   className="light-section__input"
                 />
               </div>
@@ -245,8 +287,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
             step="0.01"
             min="0"
             max="1"
-            value={lightParams.color[0].toFixed(2)}
+            value={'color.0' in tempValues ? tempValues['color.0'] : lightParams.color[0].toFixed(2)}
             onChange={(e) => handleNumberChange('color.0', e)}
+            onBlur={() => handleBlur('color.0', 1)}
             className="light-section__color-input"
           />
           {/* G */}
@@ -256,8 +299,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
             step="0.01"
             min="0"
             max="1"
-            value={lightParams.color[1].toFixed(2)}
+            value={'color.1' in tempValues ? tempValues['color.1'] : lightParams.color[1].toFixed(2)}
             onChange={(e) => handleNumberChange('color.1', e)}
+            onBlur={() => handleBlur('color.1', 1)}
             className="light-section__color-input"
           />
           {/* B */}
@@ -267,8 +311,9 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
             step="0.01"
             min="0"
             max="1"
-            value={lightParams.color[2].toFixed(2)}
+            value={'color.2' in tempValues ? tempValues['color.2'] : lightParams.color[2].toFixed(2)}
             onChange={(e) => handleNumberChange('color.2', e)}
+            onBlur={() => handleBlur('color.2', 1)}
             className="light-section__color-input"
           />
         </div>
@@ -280,23 +325,15 @@ export function LightSection({ lightType, lightParams, onParamChange }: LightSec
           <span className="light-section__label-dot light-section__label-dot--intensity" />
           밝기 (Intensity)
         </div>
-        <div className="light-section__row light-section__row--single">
-          <input
-            type="range"
-            min="0"
-            max="100"
-            step="0.5"
-            value={lightParams.intensity}
-            onChange={(e) => handleNumberChange('intensity', e)}
-            className="light-section__slider"
-          />
+        <div className="light-section__row light-section__row--intensity">
           <input
             type="number"
             step="0.5"
             min="0"
-            value={lightParams.intensity}
+            value={getDisplayValue('intensity', lightParams.intensity)}
             onChange={(e) => handleNumberChange('intensity', e)}
-            className="light-section__input light-section__input--small"
+            onBlur={() => handleBlur('intensity', 1)}
+            className="light-section__input light-section__input--intensity"
           />
         </div>
       </div>

@@ -81,8 +81,9 @@ export class ThreeSceneManager {
     this.controls.dampingFactor = 0.05;
     this.controls.minDistance = 1;
     this.controls.maxDistance = 50;
-    this.controls.maxPolarAngle = Math.PI * 0.45; // 위쪽으로 드래그 제한 (약 81도)
-    this.controls.minPolarAngle = Math.PI * 0.1; // 아래쪽 제한 (너무 내려다보지 않게)
+    // 시점 전환 제한 해제 (자유로운 카메라 회전)
+    this.controls.maxPolarAngle = Math.PI; // 기본값 (제한 없음)
+    this.controls.minPolarAngle = 0; // 기본값 (제한 없음)
     this.controls.enablePan = false; // 우클릭 드래그 비활성화 (WASDQE로 대체)
 
     // TransformControls (오브젝트 이동/회전/스케일)
@@ -928,9 +929,6 @@ export class ThreeSceneManager {
       center.z - size.z * 0.3 // 앞쪽을 바라보도록
     );
     this.controls.update();
-
-    // 카메라가 바닥 아래로 가지 않도록 제한
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.05;
   }
 
   /**
