@@ -233,10 +233,25 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
           return;
         }
 
-        await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
+        const loadResult = await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
+
+        // Room 로드 실패 시 에러 표시 (심각한 오류)
+        if (!loadResult.roomLoaded) {
+          console.error('[ThreeRenderer] Room failed to load');
+          setError('방(Room) 모델 로드에 실패했습니다.');
+          return;
+        }
+
+        // 개별 asset 로드 실패 경고 (부분 성공)
+        if (loadResult.failedAssets.length > 0) {
+          console.warn(`[ThreeRenderer] ${loadResult.failedAssets.length} asset(s) failed to load`);
+          loadResult.failedAssets.forEach((failed) => {
+            console.warn(`  - ${failed.assetId}: ${failed.error}`);
+          });
+        }
       } catch (error) {
         console.error('[ThreeRenderer] Failed to load scene:', error);
-        setError('Failed to load scene models');
+        setError('Scene 로드 중 오류가 발생했습니다.');
       }
     }
 

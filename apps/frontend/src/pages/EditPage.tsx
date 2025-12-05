@@ -319,9 +319,16 @@ export default function EditPage() {
   };
 
   // ========== Selection 핸들러 ==========
+  // Three.js 캔버스에서 선택 변경 시 (React 상태만 업데이트)
   const handleSelectionChange = (assetId: string | number | null) => {
     setSelectedAssetId(assetId);
   };
+
+  // ObjectTree에서 선택 시 (React + Three.js 동기화)
+  const handleSelectAssetFromTree = useCallback((assetId: string | number | null) => {
+    setSelectedAssetId(assetId);
+    threeRendererRef.current?.selectObject(assetId);
+  }, []);
 
   // ========== Transform 핸들러 ==========
   const handleTransformChange = (assetId: string | number, transform: Transform) => {
@@ -530,7 +537,7 @@ export default function EditPage() {
     [editingScene, selectedAssetId, toast]
   );
 
-  const handleDuplicateSelectedObject = useCallback(() => {
+  const handleDuplicateSelectedObject = useCallback(async () => {
     if (!editingScene || !selectedAssetId) return;
 
     const asset = editingScene.assets.find((a) => a.id === selectedAssetId);
@@ -548,6 +555,9 @@ export default function EditPage() {
     if (duplicated.lightParams && 'position' in duplicated.lightParams) {
       duplicated.lightParams.position[0] += 0.5;
     }
+
+    // Three.js에 실시간 추가
+    await threeRendererRef.current?.addAsset(duplicated);
 
     setEditingScene({
       ...editingScene,
@@ -712,7 +722,7 @@ export default function EditPage() {
               roomMeshName={editingScene?.room.meshName || ''}
               selectedAssetId={selectedAssetId}
               hiddenAssetIds={hiddenAssetIds}
-              onSelectAsset={setSelectedAssetId}
+              onSelectAsset={handleSelectAssetFromTree}
               onToggleVisibility={handleToggleVisibility}
               onDeleteAsset={handleDeleteAssetById}
             />

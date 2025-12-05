@@ -7,6 +7,7 @@
  * - 시점 저장: V키
  */
 
+import { useState, useEffect, useCallback } from 'react';
 import './CameraHelpOverlay.css';
 
 interface CameraHelpOverlayProps {
@@ -15,6 +16,38 @@ interface CameraHelpOverlayProps {
 }
 
 export function CameraHelpOverlay({ className = '', onSaveCamera }: CameraHelpOverlayProps) {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // 저장 처리 (애니메이션 포함)
+  const handleSave = useCallback(() => {
+    if (isSaving) return;
+    setIsSaving(true);
+    onSaveCamera?.();
+  }, [isSaving, onSaveCamera]);
+
+  // V키 이벤트 리스닝 (저장 애니메이션 동기화)
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === 'v' || e.key === 'V') && !isSaving) {
+        const target = e.target as HTMLElement;
+        if (target.tagName !== 'INPUT' && target.tagName !== 'TEXTAREA') {
+          setIsSaving(true);
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isSaving]);
+
+  // 애니메이션 종료 후 상태 리셋
+  useEffect(() => {
+    if (isSaving) {
+      const timer = setTimeout(() => setIsSaving(false), 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isSaving]);
+
   return (
     <div className={`camera-help-overlay ${className}`}>
       {/* 마우스 조작 */}
@@ -49,12 +82,13 @@ export function CameraHelpOverlay({ className = '', onSaveCamera }: CameraHelpOv
 
       {/* 시점 저장 버튼 */}
       <button
-        className="camera-help-overlay__save-btn"
-        onClick={onSaveCamera}
+        className={`camera-help-overlay__save-btn ${isSaving ? 'camera-help-overlay__save-btn--saving' : ''}`}
+        onClick={handleSave}
         title="현재 카메라 시점을 저장합니다 (V)"
+        disabled={isSaving}
       >
-        <span className="camera-help-overlay__save-icon">📷</span>
-        <span className="camera-help-overlay__save-label">시점 저장</span>
+        <span className="camera-help-overlay__save-icon">{isSaving ? '✓' : '📷'}</span>
+        <span className="camera-help-overlay__save-label">{isSaving ? '저장됨!' : '시점 저장'}</span>
         <span className="camera-help-overlay__save-shortcut">V</span>
       </button>
     </div>
