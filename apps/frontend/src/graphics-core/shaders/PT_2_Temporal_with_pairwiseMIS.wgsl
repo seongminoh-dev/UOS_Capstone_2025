@@ -250,7 +250,9 @@ const RECONNECTION_ROUGHNESS : f32 = 0.05;
 @group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
 @group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
 @group(0) @binding(3) var<storage, read>    AccelBuffer         : array<u32>;
-@group(0) @binding(4) var<storage, read>    PrevReservoirBuffer : array<Reservoir>;
+@group(0) @binding(4) var<storage, read>    ReservoirBuffer_Init    : array<Reservoir>;
+@group(0) @binding(5) var<storage, read>    ReservoirBuffer_Prev    : array<Reservoir>;
+
 
 @group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer : texture_2d<f32>;
@@ -258,7 +260,7 @@ const RECONNECTION_ROUGHNESS : f32 = 0.05;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
-@group(1) @binding(0) var<storage, read_write> ReservoirBuffer  : array<Reservoir>;
+@group(1) @binding(0) var<storage, read_write> ReservoirBuffer_Write  : array<Reservoir>;
 
 //==========================================================================
 // Small utils / Random
@@ -1390,10 +1392,9 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
         OutPath.length = i + 2u;
 
         // Path array 최대 길이 방어 (8개로 제한되어 있으므로)
-        if (OutPath.length >= 8u) {
-            // 더 이상 저장할 곳이 없으니 안전하게 종료
-            return OutPath;
-        }
+
+        if (i + 1u >= 8u) { break; }
+
     }
 
     return OutPath;
@@ -1637,16 +1638,16 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // ----------------------------------------------------------------------
     // 1. base reservoir & path 재구성 (canonical technique)
     // ----------------------------------------------------------------------
-    var baseRes  : Reservoir = ReservoirBuffer[curIdx];
+    var baseRes  : Reservoir = ReservoirBuffer_Init[curIdx];
     if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
         // 아직 초기화 안된 픽셀
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     var basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
     if (basePath.length < 2u) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1654,7 +1655,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 재연결 인덱스 k 유효성 검사 (spatial 과 동일)
     if (k_base < 2u || (k_base + 1u) >= basePath.length) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1667,13 +1668,13 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let contribBase : vec3<f32> = PathContribution(basePath);
     let L_c         : f32       = Luminance(contribBase);
     if (!(L_c > 0.0) || !isFinite(L_c)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     let p_c_base_raw : f32 = PathPDF(basePath);
     if (!(p_c_base_raw > 0.0) || !isFinite(p_c_base_raw)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
     let p_c_base : f32 = max(p_c_base_raw, EPS);
@@ -1687,7 +1688,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let mvLen : f32 = length(mv_f);
     if (mvLen > TEMPORAL_MAX_MOTION_PIXELS) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1696,7 +1697,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if (any(prevPos_f < vec2<f32>(0.0)) ||
         any(prevPos_f >= res_f)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1705,13 +1706,13 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if (!(all(prevPixel_i >= vec2<i32>(0, 0)) &&
           all(prevPixel_i <  res_i))) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     let quantError : f32 = length(prevPos_f - vec2<f32>(prevPixel_i));
     if (quantError > 0.5) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1723,22 +1724,22 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // ----------------------------------------------------------------------
     // 3. prev reservoir & path (neighbor technique)
     // ----------------------------------------------------------------------
-    let prevRes : Reservoir = PrevReservoirBuffer[prevIdx];
+    let prevRes : Reservoir = ReservoirBuffer_Prev[prevIdx];
     if (prevRes.C == 0u || prevRes.Sample.length < 2u) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     var prevPath : Path = RegeneratePath(prevPixel, prevRes.Sample);
     if (prevPath.length < 2u) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     // 3.5. 표면 유사도 체크 (ghosting 방지) – 기존 코드 유지
     let curX1Compact : CompactSurface = Get_X1(curPixel);
     if (!curX1Compact.IsValidSurface) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
     let curX1Surface : Surface = GetSurface(curX1Compact);
@@ -1749,7 +1750,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let nDot    : f32 = dot(curX1Surface.Normal, prevRcSurf.Normal);
 
     if (posDiff > TEMPORAL_MAX_POS_DIFF || nDot < TEMPORAL_MIN_NORMAL_DOT) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1759,14 +1760,14 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // ----------------------------------------------------------------------
     var shifted : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);
     if (!(shifted.length > 0u) || shifted.k != k_base) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     // offset path 재구성 (현재 픽셀 기준)
     var offsetPath : Path = RegeneratePath(curPixel, shifted);
     if (!(offsetPath.length >= 2u && shifted.k < offsetPath.length)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1775,14 +1776,14 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         offsetPath.Surface[k_base - 1u], offsetPath.Lobe[k_base - 1u],
         offsetPath.Surface[k_base    ], offsetPath.Lobe[k_base    ]
     )) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     // neighbor 쪽 J_y 계산
     var J_y : f32 = calculate_J(offsetPath, shifted.k);
     if (!(J_y > 0.0) || !isFinite(J_y)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
     shifted.J = J_y;
@@ -1791,7 +1792,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let J_x   : f32 = max(prevRes.Sample.J, EPS);
     let UCW_i : f32 = prevRes.UCW;
     if (!(UCW_i > 0.0) || !isFinite(UCW_i) || !(J_x > 0.0) || !isFinite(J_x)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1799,7 +1800,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     var p_from_prev : f32 = p_base_prev * (J_y / J_x); // ≈ p_i(y)
 
     if (!(p_from_prev > 0.0) || !isFinite(p_from_prev)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
@@ -1807,14 +1808,14 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let contribOff : vec3<f32> = PathContribution(offsetPath);
     let L_i        : f32       = Luminance(contribOff);
     if (!(L_i > 0.0) || !isFinite(L_i)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
 
     // canonical pdf for offsetPath (p_c(y))
     let p_c_off_raw : f32 = PathPDF(offsetPath);
     if (!(p_c_off_raw > 0.0) || !isFinite(p_c_off_raw)) {
-        ReservoirBuffer[curIdx] = baseRes;
+        ReservoirBuffer_Write[curIdx] = baseRes;
         return;
     }
     let p_c_off : f32 = max(p_c_off_raw, EPS);
@@ -1845,7 +1846,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         let denom : f32 = p_i + p_c;
         if (!(denom > 0.0) || !isFinite(denom)) {
-            ReservoirBuffer[curIdx] = baseRes;
+            ReservoirBuffer_Write[curIdx] = baseRes;
             return;
         }
 
@@ -1892,5 +1893,5 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     ResultReservoir.C       = outRes.C;
     ResultReservoir.Padding = vec2<f32>(0.0, 0.0);
 
-    ReservoirBuffer[curIdx] = ResultReservoir;
+    ReservoirBuffer_Write[curIdx] = ResultReservoir;
 }

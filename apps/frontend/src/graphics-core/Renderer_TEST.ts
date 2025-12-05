@@ -415,7 +415,7 @@ export class Renderer
                         
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -647,12 +647,13 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_Temporal_PairMIS, 
+                ShaderCode_REUSE_TEMPORAL, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
                     this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame],
                 ],
                 [   // Read GPUTextureView
@@ -679,6 +680,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
@@ -703,7 +705,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
