@@ -81,7 +81,9 @@ export class ThreeSceneManager {
     this.controls.dampingFactor = 0.05;
     this.controls.minDistance = 1;
     this.controls.maxDistance = 50;
-    this.controls.maxPolarAngle = Math.PI / 2 - 0.1; // 바닥 아래로 못 가게
+    this.controls.maxPolarAngle = Math.PI * 0.45; // 위쪽으로 드래그 제한 (약 81도)
+    this.controls.minPolarAngle = Math.PI * 0.1; // 아래쪽 제한 (너무 내려다보지 않게)
+    this.controls.enablePan = false; // 우클릭 드래그 비활성화 (WASDQE로 대체)
 
     // TransformControls (오브젝트 이동/회전/스케일)
     // Note: v0.180.0에서는 TransformControls의 내부 구조가 변경되어
@@ -213,11 +215,9 @@ export class ThreeSceneManager {
       return; // 카메라 이동 키는 여기서 처리 완료
     }
 
-    // Gizmo 모드 전환, 삭제 등은 EditPage에서 처리
+    // Gizmo 모드 전환, 삭제, Escape 등은 EditPage에서 처리
     // ThreeSceneManager는 setGizmoMode() 메서드를 통해 외부에서 호출됨
-    if (this.selectedObject && key === 'escape') {
-      this.deselectObject();
-    }
+    // Escape 키는 EditPage에서만 처리하여 중복 선택 해제 방지
 
     // 스케일 조정 (+/- 키) - 키를 누르고 있으면 연속 스케일 조정
     if (this.selectedObject) {
@@ -297,20 +297,128 @@ export class ThreeSceneManager {
    * 오브젝트 선택
    */
   private selectObject(object: THREE.Object3D): void {
-    this.selectedObject = object;
-    this.transformControls.attach(object);
+    // Room (defaultRoom)은 선택 불가능
+    if (this.currentDefaultRoom && object.userData.meshName === this.currentDefaultRoom) {
+      console.log('[ThreeSceneManager] Cannot select defaultRoom:', object.userData.meshName);
+      return;
+    }
+
+    const assetId = object.userData.assetId;
+
+    // Light Helper인 경우, 실제 Light에 TransformControls를 attach
+    // Helper를 이동하면 Light도 함께 이동해야 하기 때문
+    let attachTarget = object;
+    if (object.userData.isLightHelper && assetId !== undefined) {
+      const light = this.loadedLights.get(assetId);
+      if (light) {
+        attachTarget = light;
+        console.log('[ThreeSceneManager] Light helper selected, attaching TransformControls to light');
+      }
+    }
+
+    this.selectedObject = attachTarget;
+    this.transformControls.attach(attachTarget);
+
+    // Light인 경우 translate 모드만 허용 (회전/스케일은 의미 없음)
+    if (object.userData.isLightHelper) {
+      this.transformControls.setMode('translate');
+    }
 
     // 디버깅: TransformControls 상태 확인
-    console.log('[ThreeSceneManager] TransformControls attached to:', object.userData.assetId);
+    console.log('[ThreeSceneManager] TransformControls attached to:', assetId);
     console.log('[ThreeSceneManager] TransformControls visible:', this.transformControls.visible);
     console.log('[ThreeSceneManager] TransformControls enabled:', this.transformControls.enabled);
     // @ts-ignore
     console.log('[ThreeSceneManager] TransformControls _root in scene:', this.scene.children.includes(this.transformControls._root));
 
-    const assetId = object.userData.assetId;
     if (assetId !== undefined) {
       this.onSelectionChange?.(assetId);
     }
+
+    // 선택된 오브젝트로 카메라 포커스 (부드럽게 이동)
+    this.focusOnObject(attachTarget);
+  }
+
+  /**
+   * 오브젝트에 카메라 포커스 (부드러운 애니메이션)
+   */
+  private focusOnObject(object: THREE.Object3D, animate: boolean = true): void {
+    // 오브젝트의 BoundingBox 계산
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty()) return;
+
+    const center = box.getCenter(new THREE.Vector3());
+    const size = box.getSize(new THREE.Vector3());
+
+    // 오브젝트 크기에 따라 적절한 거리 계산
+    const maxDim = Math.max(size.x, size.y, size.z);
+    const fov = this.camera.fov * (Math.PI / 180);
+    let cameraDistance = Math.max(maxDim / (2 * Math.tan(fov / 2)), 2); // 최소 2m 거리
+
+    // 작은 오브젝트는 더 가까이, 큰 오브젝트는 더 멀리
+    cameraDistance = Math.max(cameraDistance * 1.5, 1.5);
+    cameraDistance = Math.min(cameraDistance, 10); // 최대 10m 거리
+
+    // 현재 카메라 방향 유지하면서 오브젝트를 바라보는 위치 계산
+    const currentDirection = new THREE.Vector3()
+      .subVectors(this.camera.position, this.controls.target)
+      .normalize();
+
+    // 카메라가 너무 위에서 내려다보는 경우 각도 보정
+    if (currentDirection.y > 0.7) {
+      currentDirection.y = 0.5;
+      currentDirection.normalize();
+    }
+
+    const targetCameraPosition = new THREE.Vector3()
+      .copy(center)
+      .addScaledVector(currentDirection, cameraDistance);
+
+    // 카메라가 바닥 아래로 가지 않도록
+    const floorY = this.gridHelper.position.y + 0.5;
+    if (targetCameraPosition.y < floorY) {
+      targetCameraPosition.y = floorY;
+    }
+
+    if (animate) {
+      // 부드러운 카메라 이동 (애니메이션)
+      this.animateCameraTo(targetCameraPosition, center);
+    } else {
+      // 즉시 이동
+      this.camera.position.copy(targetCameraPosition);
+      this.controls.target.copy(center);
+      this.controls.update();
+    }
+  }
+
+  /**
+   * 카메라 애니메이션 (부드럽게 이동)
+   */
+  private animateCameraTo(targetPosition: THREE.Vector3, targetLookAt: THREE.Vector3): void {
+    const startPosition = this.camera.position.clone();
+    const startTarget = this.controls.target.clone();
+
+    const duration = 300; // ms
+    const startTime = performance.now();
+
+    const animateStep = (currentTime: number) => {
+      const elapsed = currentTime - startTime;
+      const progress = Math.min(elapsed / duration, 1);
+
+      // Ease-out cubic
+      const eased = 1 - Math.pow(1 - progress, 3);
+
+      // 카메라 위치 보간
+      this.camera.position.lerpVectors(startPosition, targetPosition, eased);
+      this.controls.target.lerpVectors(startTarget, targetLookAt, eased);
+      this.controls.update();
+
+      if (progress < 1) {
+        requestAnimationFrame(animateStep);
+      }
+    };
+
+    requestAnimationFrame(animateStep);
   }
 
   /**
@@ -329,7 +437,13 @@ export class ThreeSceneManager {
     const assetId = object.userData.assetId;
     if (assetId === undefined) return;
 
-    // Light Helper인 경우 lightParams 업데이트
+    // Light인 경우 lightParams 업데이트 및 Helper 동기화
+    if (object.userData.isLight) {
+      this.syncLightToState(object);
+      return;
+    }
+
+    // Light Helper인 경우 lightParams 업데이트 (하위호환)
     if (object.userData.isLightHelper) {
       this.syncLightHelperToState(object);
       return;
@@ -347,6 +461,74 @@ export class ThreeSceneManager {
     };
 
     this.onTransformChange?.(assetId, transform);
+  }
+
+  /**
+   * Light transform을 lightParams로 동기화하고 Helper 위치도 업데이트
+   */
+  private syncLightToState(light: THREE.Object3D): void {
+    const assetId = light.userData.assetId;
+    const assetType = light.userData.assetType;
+    if (assetId === undefined || !assetType) return;
+
+    // Helper 위치도 Light와 동기화
+    const helper = this.lightHelpers.get(assetId);
+    if (helper) {
+      helper.position.copy(light.position);
+      // PointLightHelper의 경우 update() 메서드 호출
+      if ('update' in helper && typeof helper.update === 'function') {
+        helper.update();
+      }
+    }
+
+    switch (assetType) {
+      case 'point-light': {
+        if (light instanceof THREE.PointLight) {
+          const params: PointLightParams = {
+            position: [light.position.x, light.position.y, light.position.z],
+            color: [light.color.r, light.color.g, light.color.b],
+            intensity: light.intensity,
+          };
+          this.onLightParamsChange?.(assetId, params);
+        }
+        break;
+      }
+
+      case 'rect-light': {
+        if (light instanceof THREE.RectAreaLight) {
+          const width = light.width;
+          const height = light.height;
+          const u = new THREE.Vector3(width, 0, 0).applyQuaternion(light.quaternion);
+          const v = new THREE.Vector3(0, height, 0).applyQuaternion(light.quaternion);
+
+          const params: RectLightParams = {
+            position: [light.position.x, light.position.y, light.position.z],
+            u: [u.x, u.y, u.z],
+            v: [v.x, v.y, v.z],
+            color: [light.color.r, light.color.g, light.color.b],
+            intensity: light.intensity,
+          };
+          this.onLightParamsChange?.(assetId, params);
+        }
+        break;
+      }
+
+      case 'directional-light': {
+        if (light instanceof THREE.DirectionalLight) {
+          const direction = new THREE.Vector3()
+            .subVectors(light.target.position, light.position)
+            .normalize();
+
+          const params: DirectionalLightParams = {
+            direction: [direction.x, direction.y, direction.z],
+            color: [light.color.r, light.color.g, light.color.b],
+            intensity: light.intensity,
+          };
+          this.onLightParamsChange?.(assetId, params);
+        }
+        break;
+      }
+    }
   }
 
   /**
@@ -869,6 +1051,7 @@ export class ThreeSceneManager {
       // userData에 asset ID 저장
       light.userData.assetId = asset.id;
       light.userData.assetType = asset.type;
+      light.userData.isLight = true;  // Light 객체임을 표시
       helper.userData.assetId = asset.id;
       helper.userData.assetType = asset.type;
       helper.userData.isLightHelper = true;

@@ -18,10 +18,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import ThreeRenderer from '../components/ThreeRenderer';
-import type { ThreeRendererHandle } from '../components/ThreeRenderer';
+import type { ThreeRendererHandle, ThreeLoadingProgress, ThreeError } from '../components/ThreeRenderer';
 import ErrorBoundary from '../components/ErrorBoundary';
-import { useToast, Modal, Button } from '../components/common';
-import type { SceneMode } from '../components/common';
+import { useToast, Modal, Button, GlobalLoadingOverlay, GlobalErrorOverlay } from '../components/common';
+import type { SceneMode, LoadingProgress } from '../components/common';
 import {
   EditPageHeader,
   AddObjectPalette,
@@ -63,6 +63,11 @@ export default function EditPage() {
 
   // ThreeRenderer 명령형 핸들 (ref)
   const threeRendererRef = useRef<ThreeRendererHandle>(null);
+
+  // ========== 로딩/에러 상태 ==========
+  const [isLoading, setIsLoading] = useState(true);
+  const [loadingProgress, setLoadingProgress] = useState<LoadingProgress | null>(null);
+  const [rendererError, setRendererError] = useState<ThreeError | null>(null);
 
   // ========== 모달 상태 ==========
   const [showSceneSelectModal, setShowSceneSelectModal] = useState(false);
@@ -170,8 +175,14 @@ export default function EditPage() {
 
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
+      // Input/Textarea/Select/ContentEditable에서 키보드 입력 중일 때는 단축키 무시
       const target = event.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+      if (
+        target.tagName === 'INPUT' ||
+        target.tagName === 'TEXTAREA' ||
+        target.tagName === 'SELECT' ||
+        target.isContentEditable
+      ) {
         return;
       }
 
@@ -185,7 +196,9 @@ export default function EditPage() {
         // S키는 WASDQE 카메라 이동에서 사용됨 (뒤로 이동)
         // 크기 조절은 +/- 키로 ThreeSceneManager에서 처리
         case 'escape':
+          // React 상태와 Three.js 선택 모두 해제
           setSelectedAssetId(null);
+          threeRendererRef.current?.selectObject(null);
           break;
         case 'delete':
         case 'backspace':
@@ -609,6 +622,36 @@ export default function EditPage() {
     [editingScene, toast]
   );
 
+  // ========== 로딩/에러 핸들러 ==========
+  const handleLoadingChange = useCallback((loading: boolean, progress?: ThreeLoadingProgress) => {
+    setIsLoading(loading);
+    if (progress) {
+      setLoadingProgress({
+        step: progress.step,
+        totalSteps: progress.totalSteps,
+        message: progress.message,
+        loadedCount: progress.loadedCount,
+        totalCount: progress.totalCount,
+        currentAssetName: progress.currentAssetName,
+      });
+    } else {
+      setLoadingProgress(null);
+    }
+  }, []);
+
+  const handleRendererError = useCallback((error: ThreeError | null) => {
+    setRendererError(error);
+    if (error) {
+      setIsLoading(false);
+    }
+  }, []);
+
+  const handleRetryRenderer = useCallback(() => {
+    setRendererError(null);
+    setIsLoading(true);
+    setRendererKey((prev) => prev + 1);
+  }, []);
+
   // ========== 렌더링 ==========
   return (
     <>
@@ -739,16 +782,22 @@ export default function EditPage() {
                 onTransformChange={handleTransformChange}
                 onLightParamsChange={handleLightParamsChange}
                 onSaveCamera={handleSaveCamera}
+                onLoadingChange={handleLoadingChange}
+                onError={handleRendererError}
               />
             </ErrorBoundary>
 
-            {/* Canvas Overlays */}
-            <GizmoModeSelector mode={gizmoMode} onModeChange={handleGizmoModeChange} />
-            <CameraHelpOverlay onSaveCamera={() => {
-              // CameraHelpOverlay 버튼 클릭 시 V키 이벤트를 시뮬레이트
-              window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
-            }} />
-            <ViewportInfo gizmoMode={gizmoMode} selectedObjectName={selectedAssetName} />
+            {/* Canvas Overlays (로딩/에러 중에는 숨김) */}
+            {!isLoading && !rendererError && (
+              <>
+                <GizmoModeSelector mode={gizmoMode} onModeChange={handleGizmoModeChange} hasSelection={selectedAssetId !== null} />
+                <CameraHelpOverlay onSaveCamera={() => {
+                  // CameraHelpOverlay 버튼 클릭 시 V키 이벤트를 시뮬레이트
+                  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'v' }));
+                }} />
+                <ViewportInfo gizmoMode={gizmoMode} selectedObjectName={selectedAssetName} />
+              </>
+            )}
           </div>
 
           {/* ========== RightPanel ========== */}
@@ -763,6 +812,25 @@ export default function EditPage() {
           </div>
         </div>
       </div>
+
+      {/* ========== 전역 로딩 오버레이 ========== */}
+      <GlobalLoadingOverlay
+        isLoading={isLoading && !rendererError}
+        progress={loadingProgress}
+        defaultMessage="편집기 준비 중..."
+        defaultSubMessage="잠시만 기다려주세요"
+      />
+
+      {/* ========== 전역 에러 오버레이 ========== */}
+      {rendererError && (
+        <GlobalErrorOverlay
+          errorCode={rendererError.code}
+          errorMessage={rendererError.message}
+          errorDetails={rendererError.details}
+          onRetry={handleRetryRenderer}
+          onBack={() => navigate('/simulator/list')}
+        />
+      )}
     </>
   );
 }

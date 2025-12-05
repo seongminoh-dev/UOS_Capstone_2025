@@ -89,3 +89,22 @@
   background: rgba(255, 255, 255, 0.1);
   border-radius: 2px;
 }
+
+/* Scale hint - 활성화 상태 (오브젝트 선택됨) */
+.gizmo-mode-selector__hint--active {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.gizmo-mode-selector__hint--active .gizmo-mode-selector__hint-shortcut {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Scale hint - 비활성화 상태 (오브젝트 선택 안됨) */
+.gizmo-mode-selector__hint--disabled {
+  color: rgba(255, 255, 255, 0.25);
+  opacity: 0.6;
+}
+
+.gizmo-mode-selector__hint--disabled .gizmo-mode-selector__hint-shortcut {
+  background: rgba(255, 255, 255, 0.05);
+}
