@@ -176,17 +176,20 @@ struct CompactPath
     RcVertex    : vec4<f32>,
 
     k           : u32,
-    Lobe_k_1    : u32,
+    Lobe_km1    : u32,
     Lobe_k      : u32,
-    length      : u32,
+    J           : f32,
 
     L           : vec3<f32>,
-    J           : f32,
+    Padding_0   : u32,
+
+    Estimator   : vec3<f32>,
+    Padding_1   : u32,
 };
 
 struct Path
 {
-    Surface    : array<Surface, 8u>,
+    Surface     : array<Surface, 8u>,
     Lobe        : array<u32, 8u>,
     rSeed       : array<u32, 8u>,
 
@@ -1474,6 +1477,10 @@ fn SuffixEstimator(pRandomSeed : ptr<function, u32>, InPath : Path, k : u32) -> 
 
         return L_emit(InPath.XL, X_k) * Visibility(X_k.Position, InPath.XL.Position);
     }
+    else if ( k == InPath.length )
+    {
+        return vec3f(1.0);
+    }
 
     var I : vec3<f32> = vec3f(1.0);
 
@@ -1545,12 +1552,12 @@ fn CompressPath(pRandomSeed : ptr<function, u32>, InPath : Path, CSurface : arra
 {
     var OutCompactPath : CompactPath;
     {
-        OutCompactPath.k        = SafeReconnectionIndex(InPath);
-        OutCompactPath.length   = InPath.length;
-        OutCompactPath.RcVertex = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-        OutCompactPath.XL       = InPath.XL;
-        OutCompactPath.L        = vec3<f32>(0.0, 0.0, 0.0);
-        OutCompactPath.J        = 0.0;
+        OutCompactPath.k            = SafeReconnectionIndex(InPath);
+        OutCompactPath.RcVertex     = vec4<f32>(0.0, 0.0, 0.0, 0.0);
+        OutCompactPath.XL           = InPath.XL;
+        OutCompactPath.J            = 0.0;
+        OutCompactPath.L            = vec3<f32>(0.0, 0.0, 0.0);
+        OutCompactPath.Estimator    = vec3<f32>(0.0, 0.0, 0.0);
 
         OutCompactPath.rSeed[0] = InPath.rSeed[2];
         OutCompactPath.rSeed[1] = InPath.rSeed[3];
@@ -1558,16 +1565,25 @@ fn CompressPath(pRandomSeed : ptr<function, u32>, InPath : Path, CSurface : arra
         OutCompactPath.rSeed[3] = InPath.rSeed[5];
     }
 
-    OutCompactPath.L = SuffixEstimator(pRandomSeed, InPath, OutCompactPath.k);
+    OutCompactPath.Estimator = SuffixEstimator(pRandomSeed, InPath, OutCompactPath.k);
 
     // Unshiftable Path
     if ( OutCompactPath.k == 0u ) { return OutCompactPath; }
 
     let bIsLight_Xk : bool  = ( OutCompactPath.k == InPath.length );
-    OutCompactPath.Lobe_k   = select(InPath.Lobe[OutCompactPath.k], LOBE_LIGHT, bIsLight_Xk);
-    OutCompactPath.Lobe_k_1 = InPath.Lobe[OutCompactPath.k - 1];
 
-    if ( !bIsLight_Xk ) { OutCompactPath.RcVertex = GetRcVertex( CSurface[OutCompactPath.k] ); }
+    OutCompactPath.Lobe_k   = select(InPath.Lobe[OutCompactPath.k], LOBE_LIGHT, bIsLight_Xk);
+    OutCompactPath.Lobe_km1 = InPath.Lobe[OutCompactPath.k - 1];
+
+    if ( !bIsLight_Xk ) 
+    { 
+        let bIsLight_Xkp1   : bool      = ( OutCompactPath.k == InPath.length - 1 );
+        let Xk_Light        : vec3<f32> = DirectionToLight( InPath.Surface[OutCompactPath.k], InPath.XL );
+        let Xk_Surface      : vec3<f32> =  normalize( InPath.Surface[OutCompactPath.k + 1].Position - InPath.Surface[OutCompactPath.k].Position );
+
+        OutCompactPath.L        = select( Xk_Surface, Xk_Light, bIsLight_Xkp1 );
+        OutCompactPath.RcVertex = GetRcVertex( CSurface[OutCompactPath.k] );
+    }
 
     OutCompactPath.J = PartialJacobian(InPath, OutCompactPath.k);
 

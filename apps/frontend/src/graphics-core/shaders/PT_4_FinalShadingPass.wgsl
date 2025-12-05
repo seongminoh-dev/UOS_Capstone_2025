@@ -177,30 +177,28 @@ struct CompactPath
     RcVertex    : vec4<f32>,
 
     k           : u32,
-    Lobe_k_1    : u32,
+    Lobe_km1    : u32,
     Lobe_k      : u32,
-    length      : u32,
+    J           : f32,
 
     L           : vec3<f32>,
-    J           : f32,
+    Padding_0   : u32,
+
+    Estimator   : vec3<f32>,
+    Padding_1   : u32,
 };
 
-struct Path
+struct RegeneratedPath
 {
     Surface     : array<Surface, 8u>,
     Lobe        : array<u32, 8u>,
-    rSeed       : array<u32, 8u>,
-
     XL          : LightSample,
-    length      : u32,
-};
 
-struct PathReservoir
-{
-    Sample  : Path,
-    C       : u32,
-    P_hat   : f32,
-    w_sum   : f32,
+    L           : vec3<f32>,
+    k           : u32,
+
+    Estimator   : vec3<f32>,
+    J           : f32,
 };
 
 struct Reservoir
@@ -566,16 +564,16 @@ fn GetRcVertex(X : CompactSurface) -> vec4<f32>
     return OutRcVertex;
 }
 
-fn GetCompactSurface(CompactSurfaceRawData : vec4<f32>) -> CompactSurface
+fn GetCompactSurface(RcVertex : vec4<f32>) -> CompactSurface
 {
     var OutCompactSurface           : CompactSurface    = CompactSurface();
-    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(CompactSurfaceRawData.r);
+    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(RcVertex.r);
 
     OutCompactSurface.IsValidSurface    = bool( Valid_InstanceID_MaterialID & 0x80000000u );
     OutCompactSurface.InstanceID        = ( Valid_InstanceID_MaterialID & 0x7fff0000u ) >> 16u;
     OutCompactSurface.MaterialID        = ( Valid_InstanceID_MaterialID & 0x0000ffffu );
-    OutCompactSurface.PrimitiveID       = bitcast<u32>(CompactSurfaceRawData.g);
-    OutCompactSurface.Barycentric       = vec2<f32>( CompactSurfaceRawData.b, CompactSurfaceRawData.a );
+    OutCompactSurface.PrimitiveID       = bitcast<u32>(RcVertex.g);
+    OutCompactSurface.Barycentric       = vec2<f32>( RcVertex.b, RcVertex.a );
 
     return OutCompactSurface;
 }
@@ -1432,26 +1430,12 @@ fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
     return bFarEnough && bRoughEnough;
 }
 
-fn SafeReconnectionIndex(InPath : Path) -> u32
+fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
 {
-    for (var k = 2u; k < InPath.length; k++)
-    {
-        if ( IsSafeToReconnect(
-            InPath.Surface[k - 1], InPath.Lobe[k - 1], 
-            InPath.Surface[k    ], InPath.Lobe[k    ]
-            ) ) { return k; }
-    }
 
-    if ( IsSafeToReconnect_Light( InPath.Surface[InPath.length - 1], InPath.XL ) ) { return InPath.length; }
-
-    return 0u;
-}
-
-fn PathContribution(InPath : Path, k : u32) -> vec3<f32>
-{
     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < k; i++)
+    for (var i = 1u; i < InPath.k - 1; i++)
     {
         let X_Prev : Surface = InPath.Surface[i - 1];
         let X_Curr : Surface = InPath.Surface[i    ];
@@ -1464,58 +1448,98 @@ fn PathContribution(InPath : Path, k : u32) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
+    if ( InPath.Lobe[InPath.k] == LOBE_LIGHT )
     {
-        let X_Prev : Surface = InPath.Surface[k - 1];
-        let X_Curr : Surface = InPath.Surface[k    ];
-        let X_Next : Surface = InPath.Surface[k + 1];
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
 
-        let N : vec3<f32> = X_Curr.Normal;
         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-        var L : vec3<f32>;
-
-        if ( k + 1 == InPath.length ) { L = DirectionToLight( X_Curr, InPath.XL ); }
-        else { L = normalize( X_Next.Position - X_Curr.Position ); }
-
-        let BSDFValue = BSDF(X_Curr, L, V);
-        if ( BSDFValue.r != BSDFValue.r ) { return f; }
+        let L : vec3<f32> = DirectionToLight( X_Curr, InPath.XL );
+        let N : vec3<f32> = X_Curr.Normal;
 
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+        //f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
+    }
+    else
+    {
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
+        let X_Next : Surface = InPath.Surface[InPath.k    ];
+
+        var V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+        var L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+        var N : vec3<f32> = X_Curr.Normal;
+
+        f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+
+        V = normalize( X_Curr.Position - X_Next.Position );
+        L = InPath.L;
+        N = X_Next.Normal;
+
+        f *= BSDF(X_Next, L, V) * abs( dot(N, L) );
     }
 
     return f;
 }
 
-fn PathPDF(InPath : Path) -> f32
-{    
-    var PDF : f32 = InPath.XL.PDF;
+// fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
+// {
+//     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1; i++)
-    {
-        let X_Prev : Surface = InPath.Surface[i - 1];
-        let X_Curr : Surface = InPath.Surface[i    ];
-        let X_Next : Surface = InPath.Surface[i + 1];
+//     for (var i = 1u; i < InPath.k; i++)
+//     {
+//         let X_Prev : Surface = InPath.Surface[i - 1];
+//         let X_Curr : Surface = InPath.Surface[i    ];
+//         let X_Next : Surface = InPath.Surface[i + 1];
 
-        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-        let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+//         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+//         let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+//         let N : vec3<f32> = X_Curr.Normal;
 
-        PDF *= PDF_BSDF(X_Curr, V, L);
-    }
+//         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+//     }
 
-    return PDF;
-}
+//     {
+//         let X_Prev : Surface = InPath.Surface[InPath.k - 1];
+//         let X_Curr : Surface = InPath.Surface[InPath.k    ];
+//         let X_Next : Surface = InPath.Surface[InPath.k + 1];
 
-fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
+//         let N : vec3<f32> = X_Curr.Normal;
+//         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+//         var L : vec3<f32>;
+
+//         // if ( InPath.k + 1 == InPath.length ) { L = DirectionToLight( X_Curr, InPath.XL ); }
+//         // else { L = normalize( X_Next.Position - X_Curr.Position ); }
+
+//         let BSDFValue = BSDF(X_Curr, L, V);
+//         if ( BSDFValue.r != BSDFValue.r ) { return f; }
+
+//         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+//     }
+
+//     return f;
+// }
+
+fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
-    var OutPath : Path;
+
+    var OutPath : RegeneratedPath;
     {
-        OutPath.Surface[0].Position = Get_X0(ThreadID);
-        OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
-        OutPath.length              = InCompactPath.length;
-        OutPath.XL                  = InCompactPath.XL;
+        OutPath.Surface[0].Position         = Get_X0(ThreadID);
+        OutPath.Surface[1]                  = GetSurface( Get_X1(ThreadID) );
+        OutPath.XL                          = InCompactPath.XL;
+
+        OutPath.Lobe[InCompactPath.k]       = InCompactPath.Lobe_k;
+        OutPath.Lobe[InCompactPath.k - 1]   = InCompactPath.Lobe_km1;
+
+        OutPath.Estimator                   = InCompactPath.Estimator;
+        OutPath.L                           = InCompactPath.L;
+        OutPath.k                           = InCompactPath.k;
+        OutPath.J                           = InCompactPath.J;
     }
 
-    let K = select( InCompactPath.k, InCompactPath.length - 1u, InCompactPath.k == 0u );
-    for (var i = 1u; i <= K; i++)
+    // Tracing x_i+1
+    for (var i = 1u; i < InCompactPath.k - 1; i++)
     {
         let X_Prev  : Surface       = OutPath.Surface[i - 1];
         let X_Curr  : Surface       = OutPath.Surface[i    ];
@@ -1531,11 +1555,23 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
         OutPath.Surface[i + 1]      = GetSurface( HitInfo.SurfaceInfo );
     }
 
+    if ( InCompactPath.Lobe_k != LOBE_LIGHT )
+    {
+        OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
+    }
+
     return OutPath;
 }
 
+fn IsNan_f32(A : f32) -> bool
+{
+    return (A != A);
+}
 
-
+fn IsNan_vec3(A : vec3<f32>) -> bool
+{
+    return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
+}
 
 //==========================================================================
 // Main
@@ -1565,21 +1601,28 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // Store Black If Invalid Reservoir
     {
-        let bReservoirInvalid   : bool = ( Reservoir.C == 0u ) || ( Reservoir.Sample.length < 2u );
+        let bReservoirInvalid   : bool = ( Reservoir.C == 0u );
         let bUCWInvalid         : bool = ( Reservoir.UCW != Reservoir.UCW );
+        let bEstimatorInvalid   : bool = ( Reservoir.Sample.Estimator.r != Reservoir.Sample.Estimator.r );
 
-        if ( bReservoirInvalid || bUCWInvalid )
+        if ( bReservoirInvalid || IsNan_f32(Reservoir.UCW) || IsNan_vec3(Reservoir.Sample.Estimator))
         {
             textureStore(ResultTexture, ThreadID.xy, vec4<f32>(vec3f(0.0), 1.0));
             return; 
         }
     }
 
+    // No Other Contribution When k = 0 ( Using Precomputed Estimator Only )
+    var Contribution : vec3<f32> = vec3f(1.0);
+    if ( Reservoir.Sample.k != 0u )
+    {
+        let PathSample : RegeneratedPath = RegeneratePath( ThreadID.xy, Reservoir.Sample );
+        Contribution = PathContribution( PathSample );
+    }
+
+    // vec3f(Reservoir.UCW) * Reservoir.Sample.Estimator * Contribution;
     // Compute Final Color
-    let PathSample : Path = RegeneratePath( ThreadID.xy, Reservoir.Sample );
-    let K = select( Reservoir.Sample.k, Reservoir.Sample.length - 1u, Reservoir.Sample.k == 0u );
-    let FrameColor : vec3<f32>  = vec3f(Reservoir.UCW) * Reservoir.Sample.L * PathContribution( PathSample, K );
-    //vec3f(Reservoir.UCW) * PathContribution( PathSample, Reservoir.Sample.k ) * Reservoir.Sample.L;
+    let FrameColor : vec3<f32>  = vec3f(Reservoir.UCW) * Contribution * Reservoir.Sample.Estimator;
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
 
     return;

@@ -387,6 +387,16 @@ fn ClampHistoryColor(PixelUV_Center : vec2<f32>, HistoryColor : vec3<f32>) -> ve
     return clamp(HistoryColor, MinColor, MaxColor);
 }
 
+fn IsNan_f32(A : f32) -> bool
+{
+    return (A != A);
+}
+
+fn IsNan_vec3(A : vec3<f32>) -> bool
+{
+    return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
+}
+
 //==========================================================================
 // Main
 //==========================================================================
@@ -417,7 +427,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     //let mv = textureLoad(MotionVectorTexture, vec2<i32>(i32(ThreadID.x),i32(ThreadID.y)), 0).xy;
     //textureStore(ResultTexture, ThreadID.xy, vec4<f32>(mv, 0.0, 1.0));
     
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(select(WriteColor, CurrentColor, IsNan_vec3(WriteColor)), 1.0));
 
     return;
 }
