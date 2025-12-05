@@ -1,17 +1,12 @@
-import      { mat4 }            from "wgpu-matrix";
-import type { Mat4 }            from "wgpu-matrix";
-import      { Camera }          from "./Camera";
-import      { ComputePass }     from "./ComputePass";
-import      { World }           from "./World";
-import type { OnProgressCallback } from "./service/types/InitProgress";
+import      { mat4 }                from "wgpu-matrix";
+import type { Mat4 }                from "wgpu-matrix";
+import      { Camera }              from "./Camera";
+import      { ComputePass }         from "./ComputePass";
+import      { World }               from "./World";
+import type { OnProgressCallback }  from "./service/types/InitProgress";
+import      { Utils }               from "./Utils";
 
-// Lighting 상수 (중앙화된 값 사용)
-import {
-    ZENITH_BLUE,
-    HORIZON_BLUE,
-    DEFAULT_SKY_MODE,
-    DEFAULT_ENV_INDIRECT_MULT,
-} from "./lighting";
+import      { ZENITH_BLUE, HORIZON_BLUE, DEFAULT_SKY_MODE, DEFAULT_ENV_INDIRECT_MULT } from "./lighting";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
@@ -20,21 +15,15 @@ import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
 
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
-
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
-import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
-
-import ShaderCode_Temporal_PairMIS          from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
-import ShaderCode_Spatial_PairMIS          from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
-
-
-
+import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
+import ShaderCode_Temporal_PairMIS  from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_Spatial_PairMIS   from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
-import { Utils } from "./Utils";
 
 
 const EBufferIndex =
@@ -426,8 +415,8 @@ export class Renderer
             //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);

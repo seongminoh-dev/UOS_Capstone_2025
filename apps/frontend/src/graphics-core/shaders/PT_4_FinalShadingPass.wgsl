@@ -181,13 +181,13 @@ struct CompactPath
     Lobe_k      : u32,
     length      : u32,
 
-    Padding     : vec3<u32>,
+    L           : vec3<f32>,
     J           : f32,
 };
 
 struct Path
 {
-    Surface    : array<Surface, 8u>,
+    Surface     : array<Surface, 8u>,
     Lobe        : array<u32, 8u>,
     rSeed       : array<u32, 8u>,
 
@@ -1447,11 +1447,11 @@ fn SafeReconnectionIndex(InPath : Path) -> u32
     return 0u;
 }
 
-fn PathContribution(InPath : Path) -> vec3<f32>
+fn PathContribution(InPath : Path, k : u32) -> vec3<f32>
 {
     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1; i++)
+    for (var i = 1u; i < k; i++)
     {
         let X_Prev : Surface = InPath.Surface[i - 1];
         let X_Curr : Surface = InPath.Surface[i    ];
@@ -1464,17 +1464,22 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
-    // 최종 Light hit
     {
-        let X_Prev : Surface = InPath.Surface[InPath.length - 2];
-        let X_Curr : Surface = InPath.Surface[InPath.length - 1];
+        let X_Prev : Surface = InPath.Surface[k - 1];
+        let X_Curr : Surface = InPath.Surface[k    ];
+        let X_Next : Surface = InPath.Surface[k + 1];
 
-        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-        let L : vec3<f32> = DirectionToLight( X_Curr, InPath.XL );
         let N : vec3<f32> = X_Curr.Normal;
+        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+        var L : vec3<f32>;
+
+        if ( k + 1 == InPath.length ) { L = DirectionToLight( X_Curr, InPath.XL ); }
+        else { L = normalize( X_Next.Position - X_Curr.Position ); }
+
+        let BSDFValue = BSDF(X_Curr, L, V);
+        if ( BSDFValue.r != BSDFValue.r ) { return f; }
 
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
-        f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
     }
 
     return f;
@@ -1509,7 +1514,8 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
         OutPath.XL                  = InCompactPath.XL;
     }
 
-    for (var i = 1u; i < InCompactPath.length - 1; i++)
+    let K = select( InCompactPath.k, InCompactPath.length - 1u, InCompactPath.k == 0u );
+    for (var i = 1u; i <= K; i++)
     {
         let X_Prev  : Surface       = OutPath.Surface[i - 1];
         let X_Curr  : Surface       = OutPath.Surface[i    ];
@@ -1549,11 +1555,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if ( !Get_X1(ThreadID.xy).IsValidSurface )
     {
-        // let PixelUV         : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
-        // let PixelNDC        : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
-        // let X0_Jittered     : vec3<f32> = TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
-        // let rayDir_Jittered : vec3<f32> = normalize( X0_Jittered - UniformBuffer.CameraWorldPosition );
-
         let rayDir = normalize( Get_X0(ThreadID.xy) - UniformBuffer.CameraWorldPosition );
         textureStore(ResultTexture, ThreadID.xy, vec4<f32>(GetEnvironmentColor(rayDir), 1.0));
         return;
@@ -1575,9 +1576,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // Compute Final Color
-    let PathSample : Path       = RegeneratePath( ThreadID.xy, Reservoir.Sample );
-    let FrameColor : vec3<f32>  = Reservoir.UCW * PathContribution( PathSample );
-
+    let PathSample : Path = RegeneratePath( ThreadID.xy, Reservoir.Sample );
+    let K = select( Reservoir.Sample.k, Reservoir.Sample.length - 1u, Reservoir.Sample.k == 0u );
+    let FrameColor : vec3<f32>  = vec3f(Reservoir.UCW) * Reservoir.Sample.L * PathContribution( PathSample, K );
+    //vec3f(Reservoir.UCW) * PathContribution( PathSample, Reservoir.Sample.k ) * Reservoir.Sample.L;
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
 
     return;
