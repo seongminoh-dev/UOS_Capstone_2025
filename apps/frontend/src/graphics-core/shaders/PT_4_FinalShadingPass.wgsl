@@ -173,7 +173,7 @@ struct LightSample
 struct CompactPath
 {
     rSeed       : array<u32, 4u>,
-    XL          : LightSample,    
+    XL          : LightSample,
     RcVertex    : vec4<f32>,
 
     k           : u32,
@@ -1433,6 +1433,8 @@ fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
 fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
 {
 
+    if ( InPath.k == 0u ) { return vec3f(1.0); }
+
     var f : vec3<f32> = vec3f(1.0);
 
     for (var i = 1u; i < InPath.k - 1; i++)
@@ -1482,26 +1484,25 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
     return f;
 }
 
-fn PathPDF(InPath : RegeneratedPath) -> f32
-{
+// fn PathPDF(InPath : RegeneratedPath) -> f32
+// {
+//     var p : f32 = 1.0;
 
-    var p : f32 = 1.0;
+//     for (var i = 1u; i < InPath.k; i++)
+//     {
+//         let X_Prev : Surface = InPath.Surface[i - 1];
+//         let X_Curr : Surface = InPath.Surface[i    ];
+//         let X_Next : Surface = InPath.Surface[i + 1];
 
-    for (var i = 1u; i < InPath.k; i++)
-    {
-        let X_Prev : Surface = InPath.Surface[i - 1];
-        let X_Curr : Surface = InPath.Surface[i    ];
-        let X_Next : Surface = InPath.Surface[i + 1];
+//         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+//         let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+//         let N : vec3<f32> = X_Curr.Normal;
 
-        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-        let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
-        let N : vec3<f32> = X_Curr.Normal;
+//         p *= PDF_BSDF(X_Curr, V, L);
+//     }
 
-        p *= PDF_BSDF(X_Curr, V, L);
-    }
-
-    return p;
-}
+//     return p;
+// }
 
 fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
@@ -1601,7 +1602,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // Compute Final Color
-    let FrameColor : vec3<f32>  = vec3f(Reservoir.UCW) * Contribution * Reservoir.Sample.Radiance;
+    let FrameColor : vec3<f32> = vec3f(Reservoir.UCW) * Contribution * Reservoir.Sample.Radiance;
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(FrameColor, 1.0));
 
     return;
