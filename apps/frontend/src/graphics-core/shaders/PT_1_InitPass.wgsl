@@ -183,7 +183,7 @@ struct CompactPath
     L           : vec3<f32>,
     Padding_0   : u32,
 
-    Estimator   : vec3<f32>,
+    Radiance    : vec3<f32>,
     Padding_1   : u32,
 };
 
@@ -1468,13 +1468,12 @@ fn UpdateReservoir(
     return;
 }
 
-fn SuffixEstimator(pRandomSeed : ptr<function, u32>, InPath : Path, k : u32) -> vec3<f32>
+fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
 {
 
     if ( k == InPath.length - 1 )
     {
         let X_k : Surface = InPath.Surface[InPath.length - 1];
-
         return L_emit(InPath.XL, X_k) * Visibility(X_k.Position, InPath.XL.Position);
     }
     else if ( k == InPath.length )
@@ -1482,7 +1481,7 @@ fn SuffixEstimator(pRandomSeed : ptr<function, u32>, InPath : Path, k : u32) -> 
         return vec3f(1.0);
     }
 
-    var I : vec3<f32> = vec3f(1.0);
+    var f : vec3<f32> = vec3f(1.0);
 
     for (var i = k + 1; i < InPath.length - 1; i++)
     {
@@ -1494,10 +1493,7 @@ fn SuffixEstimator(pRandomSeed : ptr<function, u32>, InPath : Path, k : u32) -> 
         let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
         let N : vec3<f32> = X_Curr.Normal;
 
-        I *= BSDF(X_Curr, L, V) * abs( dot(N, L) ) / PDF_BSDF(X_Curr, V, L);
-
-        let P_Survive : f32 = Luminance(I);
-        if ( Random(pRandomSeed) < P_Survive) { I /= P_Survive; } else { return vec3f(0.0); }
+        f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
     // 최종 Light hit
@@ -1509,14 +1505,11 @@ fn SuffixEstimator(pRandomSeed : ptr<function, u32>, InPath : Path, k : u32) -> 
         let L : vec3<f32> = DirectionToLight( X_Curr, InPath.XL );
         let N : vec3<f32> = X_Curr.Normal;
 
-        I *= BSDF(X_Curr, L, V) * abs( dot(N, L) ) / PDF_BSDF(X_Curr, V, L);
-        let P_Survive : f32 = Luminance(I);
-        if ( Random(pRandomSeed) < P_Survive) { I /= P_Survive; } else { return vec3f(0.0); }
-
-        I *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
+        f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+        f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
     }
 
-    return I;
+    return f;
 }
 
 fn PartialJacobian(InPath : Path, k : u32) -> f32
@@ -1548,7 +1541,7 @@ fn PartialJacobian(InPath : Path, k : u32) -> f32
     return PDF_X * Cos / max( dot(r, r), 1e-4 );
 }
 
-fn CompressPath(pRandomSeed : ptr<function, u32>, InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
+fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
 {
     var OutCompactPath : CompactPath;
     {
@@ -1557,7 +1550,7 @@ fn CompressPath(pRandomSeed : ptr<function, u32>, InPath : Path, CSurface : arra
         OutCompactPath.XL           = InPath.XL;
         OutCompactPath.J            = 0.0;
         OutCompactPath.L            = vec3<f32>(0.0, 0.0, 0.0);
-        OutCompactPath.Estimator    = vec3<f32>(0.0, 0.0, 0.0);
+        OutCompactPath.Radiance     = vec3<f32>(0.0, 0.0, 0.0);
 
         OutCompactPath.rSeed[0] = InPath.rSeed[2];
         OutCompactPath.rSeed[1] = InPath.rSeed[3];
@@ -1565,7 +1558,7 @@ fn CompressPath(pRandomSeed : ptr<function, u32>, InPath : Path, CSurface : arra
         OutCompactPath.rSeed[3] = InPath.rSeed[5];
     }
 
-    OutCompactPath.Estimator = SuffixEstimator(pRandomSeed, InPath, OutCompactPath.k);
+    OutCompactPath.Radiance = SuffixRadiance(InPath, OutCompactPath.k);
 
     // Unshiftable Path
     if ( OutCompactPath.k == 0u ) { return OutCompactPath; }
@@ -1647,13 +1640,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             PathTree.XL             = SampleNEE(&rSeed, X, V);
             L = DirectionToLight(X, PathTree.XL);
 
-            let PathContribution : vec3<f32> = f * L_emit(PathTree.XL, X) * 
-            BSDF(X, V, L) * abs(dot(X.Normal, L)) * Visibility(X.Position, PathTree.XL.Position);
+            let PathContribution : vec3<f32> = f * BSDF(X, V, L) * abs(dot(X.Normal, L))
+            * L_emit(PathTree.XL, X) * Visibility(X.Position, PathTree.XL.Position);
 
-            let P_hat : f32 = Luminance( PathContribution );
-            var PathPDF : f32 = p * PathTree.XL.PDF;
-
-            let RIS : f32 = P_hat / PathPDF;
+            let P_hat   : f32 = Luminance( PathContribution );
+            let PathPDF : f32 = p * PathTree.XL.PDF;
+            let RIS     : f32 = P_hat / PathPDF;
 
             UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
         }
@@ -1686,11 +1678,9 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             PathTree.XL = CreateEnvLight(X, V, L);
 
             let PathContribution : vec3<f32> = f * GetEnvironmentColorIndirect(L);
-            let P_hat : f32 = Luminance( PathContribution );
-
+            let P_hat   : f32 = Luminance( PathContribution );
             let PathPDF : f32 = p;
-
-            let RIS : f32 = P_hat / PathPDF;
+            let RIS     : f32 = P_hat / PathPDF;
 
             UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
 
@@ -1710,7 +1700,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     {
         var ResultReservoir : Reservoir;
 
-        ResultReservoir.Sample  = CompressPath(&rSeed, PathTreeReservoir.Sample, CSurface);
+        ResultReservoir.Sample  = CompressPath(PathTreeReservoir.Sample, CSurface);
         ResultReservoir.UCW     = PathTreeReservoir.w_sum / PathTreeReservoir.P_hat;
         ResultReservoir.C       = PathTreeReservoir.C;
 
