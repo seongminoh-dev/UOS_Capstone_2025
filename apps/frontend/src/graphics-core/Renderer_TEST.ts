@@ -733,7 +733,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                SpatialReuseCode, 
+                ShaderCode_Spatial_PairMIS, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
