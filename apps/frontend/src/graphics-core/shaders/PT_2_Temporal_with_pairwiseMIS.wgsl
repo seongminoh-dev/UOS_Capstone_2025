@@ -174,22 +174,28 @@ struct CompactPath
     RcVertex    : vec4<f32>,
 
     k           : u32,
-    Lobe_k_1    : u32,
+    Lobe_km1    : u32,
     Lobe_k      : u32,
-    length      : u32,
-
-    Padding     : vec3<u32>,
     J           : f32,
+
+    L           : vec3<f32>,
+    Padding_0   : u32,
+
+    Radiance    : vec3<f32>,
+    P_hat       : f32,
 };
 
-struct Path
+struct RegeneratedPath
 {
-    Surface    : array<Surface, 8u>,
-    Lobe       : array<u32, 8u>,
-    rSeed      : array<u32, 8u>,
+    Surface     : array<Surface, 8u>,
+    Lobe        : array<u32, 8u>,
+    XL          : LightSample,
 
-    XL         : LightSample,
-    length     : u32,
+    L           : vec3<f32>,
+    k           : u32,
+
+    Radiance    : vec3<f32>,
+    J           : f32,
 };
 
 struct Reservoir
@@ -198,16 +204,12 @@ struct Reservoir
     UCW     : f32,
     C       : u32,
 
-    Padding : vec2<f32>,
-};
-
-struct PathReservoir
-{
-    Sample  : Path,
-    C       : u32,
     P_hat   : f32,
     w_sum   : f32,
 };
+
+
+
 
 //==========================================================================
 // Constants / Enums
@@ -242,25 +244,29 @@ const MAX_X1_GAP : f32 = 0.05;   // prev / base x1 위치 허용 오차
 
 const RECONNECTION_DISTANCE  : f32 = 0.01;
 const RECONNECTION_ROUGHNESS : f32 = 0.05;
+
+const MIN_ROUGHNESS     : f32 = 0.02;
+const MAX_CONFIDENCE    : u32 = 20u;
 //==========================================================================
 // GPU Bindings
 //==========================================================================
 
-@group(0) @binding(0) var<uniform>          UniformBuffer       : Uniform;
-@group(0) @binding(1) var<storage, read>    SceneBuffer         : array<u32>;
-@group(0) @binding(2) var<storage, read>    GeometryBuffer      : array<u32>;
-@group(0) @binding(3) var<storage, read>    AccelBuffer         : array<u32>;
+@group(0) @binding(0) var<uniform>          UniformBuffer           : Uniform;
+@group(0) @binding(1) var<storage, read>    SceneBuffer             : array<u32>;
+@group(0) @binding(2) var<storage, read>    GeometryBuffer          : array<u32>;
+@group(0) @binding(3) var<storage, read>    AccelBuffer             : array<u32>;
 @group(0) @binding(4) var<storage, read>    ReservoirBuffer_Init    : array<Reservoir>;
 @group(0) @binding(5) var<storage, read>    ReservoirBuffer_Prev    : array<Reservoir>;
 
+@group(0) @binding(10) var TexturePool          : texture_2d_array<f32>;
+@group(0) @binding(11) var G_Buffer             : texture_2d<f32>;
+@group(0) @binding(12) var MotionVectorTexture  : texture_2d<f32>;
 
-@group(0) @binding(10) var TexturePool : texture_2d_array<f32>;
-@group(0) @binding(11) var G_Buffer : texture_2d<f32>;
-@group(0) @binding(12) var MotionVectorTex : texture_storage_2d<rgba16float, read>;
+@group(0) @binding(20) var TextureSampler   : sampler;
 
-@group(0) @binding(20) var TextureSampler : sampler;
+@group(1) @binding(0) var<storage, read_write> ReservoirBuffer_Write : array<Reservoir>;
 
-@group(1) @binding(0) var<storage, read_write> ReservoirBuffer_Write  : array<Reservoir>;
+
 
 //==========================================================================
 // Small utils / Random
@@ -283,6 +289,11 @@ fn Random(pSeed : ptr<function, u32>) -> f32
     let Hash = GetHashValue(*pSeed);
     *pSeed = *pSeed + 1u;
     return f32(Hash) / 4294967295.0;
+}
+
+fn InitializeRandomSeed(ThreadID : vec2<u32>) -> u32
+{
+    return GetHashValue(ThreadID.x * 1973u + ThreadID.y * 9277u + UniformBuffer.FrameIndex * 26699u);
 }
 
 
@@ -961,38 +972,9 @@ fn PDF_BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
     if (dot(L, N) * dot(V, N) > 0.0) { return PDF_BRDF(X, V, L); }
     return PDF_BTDF(X, V, L);
 }
-fn GetLightsCDF(Idx : u32) -> f32
-{
-    let Offset : u32 = UniformBuffer.Offset_LightsCDFBuffer;
-    return bitcast<f32>(SceneBuffer[Offset + Idx]);
-}
 
-fn PDF_LIGHT(X : Surface, V : vec3<f32>, XL : LightSample) -> f32
-{
 
-    let bIsEnvLight     : bool = ( XL.Type == LIGHT_ENV );
-    let bIsVirtualLight : bool = ( XL.LightID < 0 );
 
-    if ( bIsEnvLight ) { return PDF_BSDF(X, V, DirectionToLight(X, XL)); }
-
-    let LightSource : Light = GetLight(u32(XL.LightID));
-    let Pr_Before   : f32   = select(GetLightsCDF(u32(XL.LightID)-1), 0.0, XL.LightID == 0);
-    let Pr_Choose   : f32   = GetLightsCDF(u32(XL.LightID)) - Pr_Before;
-
-    var PDF_Point   : f32   = 1.0;
-
-    if ( XL.Type == LIGHT_RECT )
-    {
-        let r : vec3<f32>   = XL.Position - X.Position;
-        let L : vec3<f32>   = normalize(r);
-        let N : vec3<f32>   = LightSource.Direction;
-        let A : f32         = LightSource.Area;
-
-        PDF_Point = dot(r,r) / max(A * abs(dot(N, L)), EPS);
-    }
-
-    return Pr_Choose * PDF_Point;
-}
 
 //==========================================================================
 // PathContribution / PathPDF
@@ -1049,11 +1031,25 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
 //==========================================================================
 // Path Reconstruction / Contribution / PDF
 //==========================================================================
-fn PathContribution(InPath : Path) -> vec3<f32>
+
+fn IsInBoundary(ThreadID : vec2<u32>) -> bool
 {
+    let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
+    let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
+
+    if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return false; }
+
+    return true;
+}
+
+fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
+{
+
+    if ( InPath.k == 0u ) { return vec3f(1.0); }
+
     var f : vec3<f32> = vec3f(1.0);
 
-    for (var i = 1u; i < InPath.length - 1; i++)
+    for (var i = 1u; i < InPath.k - 1; i++)
     {
         let X_Prev : Surface = InPath.Surface[i - 1];
         let X_Curr : Surface = InPath.Surface[i    ];
@@ -1066,10 +1062,10 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
     }
 
-    // 최종 Light hit
+    if ( InPath.Lobe[InPath.k] == LOBE_LIGHT )
     {
-        let X_Prev : Surface = InPath.Surface[InPath.length - 2];
-        let X_Curr : Surface = InPath.Surface[InPath.length - 1];
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
 
         let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
         let L : vec3<f32> = DirectionToLight( X_Curr, InPath.XL );
@@ -1078,33 +1074,29 @@ fn PathContribution(InPath : Path) -> vec3<f32>
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
         f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
     }
+    else
+    {
+        let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+        let X_Curr : Surface = InPath.Surface[InPath.k - 1];
+        let X_Next : Surface = InPath.Surface[InPath.k    ];
+
+        var V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+        var L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+        var N : vec3<f32> = X_Curr.Normal;
+
+        f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
+
+        V = normalize( X_Curr.Position - X_Next.Position );
+        L = InPath.L;
+        N = X_Next.Normal;
+
+        f *= BSDF(X_Next, L, V) * abs( dot(N, L) );
+    }
 
     return f;
 }
 
 
-fn PathPDF(InPath : Path) -> f32
-{
-    if (InPath.length < 2u) {
-        return 1.0;
-    }
-
-    var pdf : f32 = InPath.XL.PDF;
-
-    for (var i = 1u; i < InPath.length - 1u; i++)
-    {
-        let X_Prev : Surface = InPath.Surface[i - 1u];
-        let X_Curr : Surface = InPath.Surface[i    ];
-        let X_Next : Surface = InPath.Surface[i + 1u];
-
-        let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
-        let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
-
-        pdf *= PDF_BSDF(X_Curr, V, L);
-    }
-
-    return pdf;
-}
 
 //==========================================================================
 // GBuffer / Reprojection / Path 재구성
@@ -1129,70 +1121,6 @@ fn GetTriangleFromPrimitive(primitiveID : u32, instanceID : u32) -> Triangle
     let triLocal      : Triangle = GetTriangle(GetMeshDescriptor(inst.MeshID), primitiveID);
     let triWorld      : Triangle = GetTriangleWorldSpace(inst, triLocal);
     return triWorld;
-}
-
-fn GetPrevScreenPx(curPixel : vec2<u32>) -> vec2<i32>
-{
-    let gbuf : vec4<f32> = textureLoad(G_Buffer, vec2<i32>(curPixel), 0);
-
-    let packed_r  : u32 = bitcast<u32>(gbuf.r);
-    if (!((packed_r & 0x80000000u) != 0u)) {
-        return vec2<i32>(-1, -1);
-    }
-
-
-    let alpha : f32 = gbuf.b;
-    let beta  : f32 = gbuf.a;
-    let gamma : f32 = 1.0 - alpha - beta;
-
-    let primitiveID : u32 = bitcast<u32>(gbuf.g);
-    let instanceID  : u32 = (packed_r >> 16u) & 0x7FFFu;
-
-    let tri        : Triangle = GetTriangleFromPrimitive(primitiveID, instanceID);
-    let hitPos     : vec3<f32> =
-          tri.Vertex_0.Position * alpha
-        + tri.Vertex_1.Position * beta
-        + tri.Vertex_2.Position * gamma;
-
-    let prevClip   : vec4<f32> = UniformBuffer.ViewProjectionMatrix_Prev * vec4<f32>(hitPos, 1.0);
-
-    if (prevClip.w <= 0.0) {
-        return vec2<i32>(-1, -1);
-    }
-
-    let prevNdc : vec3<f32> = prevClip.xyz / prevClip.w;
-
-    if (any(prevNdc.xy < vec2<f32>(-1.0, -1.0)) ||
-        any(prevNdc.xy > vec2<f32>( 1.0,  1.0))) {
-        return vec2<i32>(-1, -1);
-    }
-
-    let prevScreen01 : vec2<f32> = prevNdc.xy * 0.5 + vec2<f32>(0.5, 0.5);
-    let prevScreenPx : vec2<f32> = prevScreen01 * vec2<f32>(UniformBuffer.Resolution_Source);
-
-    var pi : vec2<i32> = vec2<i32>(prevScreenPx);
-    let resi : vec2<i32> = vec2<i32>(UniformBuffer.Resolution_Source);
-    pi = clamp(pi, vec2<i32>(0, 0), resi - vec2<i32>(1, 1));
-
-    return pi;
-}
-
-fn GetLight(LightID : u32) -> Light
-{
-    let Offset      : u32   = UniformBuffer.Offset_LightBuffer + (STRIDE_LIGHT * LightID);
-    var OutLight    : Light = Light();
-
-    OutLight.Position   = bitcast<vec3<f32>>(vec3<u32>(SceneBuffer[Offset +  0u], SceneBuffer[Offset +  1u], SceneBuffer[Offset +  2u]));
-    OutLight.Direction  = bitcast<vec3<f32>>(vec3<u32>(SceneBuffer[Offset +  3u], SceneBuffer[Offset +  4u], SceneBuffer[Offset +  5u]));
-    OutLight.Color      = bitcast<vec3<f32>>(vec3<u32>(SceneBuffer[Offset +  6u], SceneBuffer[Offset +  7u], SceneBuffer[Offset +  8u]));
-    OutLight.U          = bitcast<vec3<f32>>(vec3<u32>(SceneBuffer[Offset +  9u], SceneBuffer[Offset + 10u], SceneBuffer[Offset + 11u]));
-    OutLight.V          = bitcast<vec3<f32>>(vec3<u32>(SceneBuffer[Offset + 12u], SceneBuffer[Offset + 13u], SceneBuffer[Offset + 14u]));
-
-    OutLight.LightType  = SceneBuffer[Offset +  15u];
-    OutLight.Intensity  = bitcast<f32>(SceneBuffer[Offset + 16u]);
-    OutLight.Area       = bitcast<f32>(SceneBuffer[Offset + 17u]);
-
-    return OutLight;
 }
 
 //==========================================================================
@@ -1332,220 +1260,71 @@ fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> B
 // CompactPath + 현재 프레임 G-buffer 를 이용해서 Path 재구성
 //==========================================================================
 
-fn CreateEnvLight(X : Surface, V : vec3<f32>, L : vec3<f32>) -> LightSample
+fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
-    var OutLightSample : LightSample = LightSample();
+    var OutPath : RegeneratedPath;
 
-    OutLightSample.Position     = X.Position + L * INF;
-    OutLightSample.Type         = LIGHT_ENV;
-    OutLightSample.Direction    = -L;
-    OutLightSample.LightID      = -1;
-    OutLightSample.Emittance    = ENV_COLOR;
-
-    OutLightSample.PDF          = PDF_BSDF(X, V, L);
-
-    return OutLightSample;
-}
-
-fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
-{
-    var OutPath : Path;
-
-    if (InCompactPath.length < 2u) {
-        OutPath.length = 0u;
-        return OutPath;
-    }
-
-    // 카메라/1번째 서페이스 세팅
+    // 기본 정보 세팅 (x0, x1, XL, k, L, J, Radiance 등)
     OutPath.Surface[0].Position = Get_X0(ThreadID);
     OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
     OutPath.XL                  = InCompactPath.XL;
 
-    // 최소 길이: x0, x1
-    OutPath.length = 2u;
+    OutPath.L                   = InCompactPath.L;
+    OutPath.k                   = InCompactPath.k;
+    OutPath.J                   = InCompactPath.J;
+    OutPath.Radiance            = InCompactPath.Radiance;   // 초기값 (base-domain radiance 스케일)
 
-    // 나머지 버텍스 재생성
-    for (var i = 1u; i < InCompactPath.length - 1u; i++)
-    {
-        let X_Prev  : Surface       = OutPath.Surface[i - 1u];
-        let X_Curr  : Surface       = OutPath.Surface[i    ];
-
-        let V       : vec3<f32>     = normalize( X_Prev.Position - X_Curr.Position );
-
-        var rSeed   : u32           = InCompactPath.rSeed[i - 1u];
-        let W       : BSDFSample    = SampleBSDF(&rSeed, X_Curr, V);
-
-        OutPath.Lobe[i]             = W.Lobe;
-
-        let HitInfo : HitResult     = TraceRay( Ray(X_Curr.Position, W.Direction) );
-
-        // 히트 못하면 더 이상 유효한 surface 없음 → 여기서 path 종료
-        if (!HitInfo.IsValidHit)
-        {
-            // 현재까지의 길이 = i+1 (0..i 인덱스까지 존재)
-            OutPath.length = i + 1u;
-            return OutPath;
-        }
-
-        // 히트했다면 다음 surface 채우고 길이 갱신
-        OutPath.Surface[i + 1u] = GetSurface( HitInfo.SurfaceInfo );
-        OutPath.length = i + 2u;
-
-        // Path array 최대 길이 방어 (8개로 제한되어 있으므로)
-
-        if (i + 1u >= 8u) { break; }
-
+    // k == 0 이면 더 이상 복원할 경로가 없음
+    if (OutPath.k == 0u) {
+        return OutPath;
     }
+
+    // 재연결 지점의 Lobe 정보는 CompactPath에 이미 들어 있으므로 그대로 복사
+    OutPath.Lobe[InCompactPath.k    ] = InCompactPath.Lobe_k;
+    OutPath.Lobe[InCompactPath.k-1u] = InCompactPath.Lobe_km1;
+
+    // --- x2 ... x_{k-1} 까지 추적 ---
+    for (var i : u32 = 1u; i < InCompactPath.k - 1u; i = i + 1u)
+    {
+        let X_Prev  : Surface   = OutPath.Surface[i - 1u];
+        let X_Curr  : Surface   = OutPath.Surface[i    ];
+
+        let V       : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+
+        var rSeed   : u32       = InCompactPath.rSeed[i - 1u];
+        let W       : BSDFSample= SampleBSDF(&rSeed, X_Curr, V);
+
+        OutPath.Lobe[i]         = W.Lobe;
+
+        let HitInfo : HitResult = TraceRay( Ray(X_Curr.Position, W.Direction) );
+        OutPath.Surface[i + 1u] = GetSurface( HitInfo.SurfaceInfo );
+    }
+
+    // x_k 가 라이트가 아닌 서피스인 경우, RcVertex로부터 x_k 복원
+    if (InCompactPath.Lobe_k != LOBE_LIGHT)
+    {
+        OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
+    }
+
+    // --- 여기서 PathContribution을 한 번만 계산해서 Radiance에 반영 ---
+    // 원래 cs_main에서 하던: PathContribution(ShiftedPath) * ReservoirArray[*].Sample.Radiance
+    let contrib : vec3<f32> = PathContribution(OutPath);
+    OutPath.Radiance        = contrib * InCompactPath.Radiance;
 
     return OutPath;
 }
 
-fn IsSafeToReconnect(A : Surface, Lobe_A : u32, B : Surface, Lobe_B : u32) -> bool
-{
-    let Roughness_A     : f32   = select(A.Roughness, 1.0, Lobe_A == LOBE_LAMBERT);
-    let Roughness_B     : f32   = select(B.Roughness, 1.0, Lobe_B == LOBE_LAMBERT);
-    let bRoughEnough    : bool  = ( min(Roughness_A, Roughness_B) >= RECONNECTION_ROUGHNESS );
 
-    let bFarEnough      : bool  = ( length(A.Position - B.Position) >= RECONNECTION_DISTANCE );
-
-    return bFarEnough && bRoughEnough;
-}
-
-fn IsSafeToReconnect_Light(X : Surface, XL : LightSample) -> bool
-{
-    let bRoughEnough        : bool  = ( X.Roughness >= RECONNECTION_ROUGHNESS );
-
-    let bIsDirectionalLight : bool  = ( XL.Type == LIGHT_DIRECTION ) || ( XL.Type == LIGHT_ENV );
-    let bFarEnough          : bool  = bIsDirectionalLight || ( length(X.Position - XL.Position) >= RECONNECTION_DISTANCE );
-
-    return bFarEnough && bRoughEnough;
-}
-
-fn SafeReconnectionIndex(InPath : Path) -> u32
-{
-    for (var k = 2u; k < InPath.length; k++)
-    {
-        if ( IsSafeToReconnect(
-            InPath.Surface[k - 1], InPath.Lobe[k - 1], 
-            InPath.Surface[k    ], InPath.Lobe[k    ]
-        ) ) { return k; }
-    }
-
-    // 마지막 버텍스를 라이트로 재연결할 수 있는지
-    if ( IsSafeToReconnect_Light( InPath.Surface[InPath.length - 1], InPath.XL ) ) { 
-        return InPath.length; 
-    }
-
-    return 0u;
-}
-
-fn CompressPath(InPath : Path) -> CompactPath
-{
-    var OutCompactPath : CompactPath;
-    {
-        OutCompactPath.k        = SafeReconnectionIndex(InPath);
-        OutCompactPath.length   = InPath.length;
-        OutCompactPath.RcVertex = vec4<f32>(0.0, 0.0, 0.0, 0.0);
-        OutCompactPath.XL       = InPath.XL;
-        OutCompactPath.J        = 0.0;
-
-        OutCompactPath.rSeed[0] = InPath.rSeed[2];
-        OutCompactPath.rSeed[1] = InPath.rSeed[3];
-        OutCompactPath.rSeed[2] = InPath.rSeed[4];
-        OutCompactPath.rSeed[3] = InPath.rSeed[5];
-    }
-
-    // Unshiftable Path
-    if ( OutCompactPath.k == 0u ) { return OutCompactPath; }
-
-    let bIsLight_Xk : bool  = ( OutCompactPath.k == InPath.length );
-    OutCompactPath.Lobe_k   = select(InPath.Lobe[OutCompactPath.k], LOBE_LIGHT, bIsLight_Xk);
-    OutCompactPath.Lobe_k_1 = InPath.Lobe[OutCompactPath.k - 1u];
-
-    // --- 여기부터 J 저장 부분 수정 ---
-
-    let k : u32 = OutCompactPath.k;
-
-    // x_k 이 라이트 버텍스인 경우(=k == length) : 수식 6.16의 두번째 항이 사라진 케이스
-    if (bIsLight_Xk)
-    {
-        // k == length 이므로, k-2, k-1 은 존재
-        if (k >= 2u && k <= InPath.length)
-        {
-            let Xkm2 : Surface = InPath.Surface[k - 2u]; // x_{k-2}
-            let Xkm1 : Surface = InPath.Surface[k - 1u]; // x_{k-1}
-
-            // x_{k-1} 기준 in/out 방향
-            let V_in  : vec3<f32> = normalize(Xkm2.Position - Xkm1.Position);
-            // out 방향은 light 쪽 : XL.Direction 을 이용
-            let L_dir : vec3<f32> = DirectionToLight(Xkm1, InPath.XL);
-            let pdf_in : f32      = PDF_BSDF(Xkm1, V_in, L_dir);
-
-            // 기하학 항 |cos θ_k^x| / ||x_k - x_{k-1}||^2
-            let L_vec : vec3<f32> = normalize(InPath.XL.Position - Xkm1.Position);
-            let XkN   : vec3<f32> = Xkm1.Normal; // 마지막 서피스의 노멀
-            let cos_k : f32       = abs(dot(XkN, L_vec));
-            let d     : vec3<f32> = InPath.XL.Position - Xkm1.Position;
-            let dist2 : f32       = max(dot(d, d), EPS);
-
-            var J_light : f32 = pdf_in * (cos_k / dist2);
-            if (!isFinite(J_light) || J_light < MIN_J || J_light > MAX_J) {
-                J_light = 0.0;
-            }
-
-            OutCompactPath.J = J_light;
-        }
-        else
-        {
-            OutCompactPath.J = 0.0;
-        }
-    }
-    else
-    {
-        // 일반 surface 재연결 : calculate_J 로 베이스 J_x 계산
-        let J_base : f32 = calculate_J(InPath, k);
-        OutCompactPath.J = J_base;
-    }
-
-    return OutCompactPath;
-}
 
 
 //==========================================================================
 // 하이브리드 시프트 (prefix = prev, suffix = base)
 //==========================================================================
 
-fn DoHybridShift(
-    baseRes : CompactPath,
-    prevRes : CompactPath
-) -> CompactPath {
-    var result : CompactPath = baseRes;
 
-    let k : u32 = baseRes.k;
-
-    // k 범위 체크
-    if (k < 2u || k >= baseRes.length || prevRes.length <= k) {
-        result.length = 0;
-        return result;
-    }
-    // prefix 부분의 rSeed는 이전 프레임 걸 사용
-    for (var i : u32 = 0u; i < k; i++) {
-        result.rSeed[i] = prevRes.rSeed[i];
-    }
-
-    result.length  = baseRes.length;
-    result.RcVertex = prevRes.RcVertex;
-    result.Lobe_k_1 = prevRes.Lobe_k_1;
-
-    return result;
-}
-
-fn calculate_J(InPath : Path, k : u32) -> f32
+fn PartialJacobian(InPath : RegeneratedPath) -> f32
 {
-    // k 가 너무 작거나, 이후 버텍스가 없으면 재연결 불가 → 0 리턴
-    if (k < 2u || (k + 1u) >= InPath.length) {
-        return 0.0;
-    }
+    let k = InPath.k;
 
     // --- 주변 버텍스들 가져오기 ---
     let Xkm2 : Surface = InPath.Surface[k - 2u];
@@ -1578,31 +1357,56 @@ fn calculate_J(InPath : Path, k : u32) -> f32
     return J;
 }
 
+
+fn LoadReservoir_Init(ThreadID : vec2<u32>) -> Reservoir
+{
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
+    return ReservoirBuffer_Init[idx];
+}
+
+fn LoadReservoir_Prev(ThreadID : vec2<u32>) -> Reservoir
+{
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
+    return ReservoirBuffer_Prev[idx];
+}
+
 fn UpdateReservoir(
     pRandomSeed : ptr<function, u32>, 
-    pReservoir  : ptr<function, PathReservoir>, 
-    Sample      : Path, 
+    pReservoir  : ptr<function, Reservoir>, 
+    Sample      : CompactPath, 
     RIS         : f32,
     P_hat       : f32,
     Confidence  : u32
 )
 {
-    (*pReservoir).C     += Confidence;
-    (*pReservoir).w_sum += RIS;
+    (*pReservoir).C         = min( (*pReservoir).C + Confidence, MAX_CONFIDENCE );
+    (*pReservoir).w_sum     = RIS;
 
-    let Pr_Change     : f32  = RIS / ((*pReservoir).w_sum);
-    let bChangeSample : bool = Random(pRandomSeed) < Pr_Change;
+    let Pr_Change       : f32   = RIS / ((*pReservoir).w_sum);
+    let bChangeSample   : bool  = Random(pRandomSeed) < Pr_Change;
 
-    if (!bChangeSample) { return; }
+    if ( !bChangeSample ) { return; }
 
-    (*pReservoir).Sample = Sample;
-    (*pReservoir).P_hat  = P_hat;
+    (*pReservoir).Sample    = Sample;
+    (*pReservoir).P_hat     = P_hat;
+
+    return;
 }
+
+fn StoreReservoir(ThreadID : vec2<u32>, pReservoir : ptr<function, Reservoir>)
+{
+    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
+    ReservoirBuffer_Write[idx] = (*pReservoir);
+
+    return;
+}
+
+
 
  // ==========================================================================
 // Temporal reuse thresholds
 // ==========================================================================
-const TEMPORAL_MAX_MOTION_PIXELS : f32 = 1.0;
+const TEMPORAL_MAX_MOTION_PIXELS : f32 = 10.0;
 const TEMPORAL_MAX_POS_DIFF      : f32 = 0.01;
 const TEMPORAL_MIN_NORMAL_DOT    : f32 = 0.97;
 
@@ -1610,287 +1414,104 @@ const TEMPORAL_MIN_NORMAL_DOT    : f32 = 0.97;
 // ==========================================================================
 // Temporal Reuse: cs_main
 // ==========================================================================
+
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
+    if ( !IsInBoundary(ThreadID.xy) ) { return; }
 
+    
+    // Initialize
+    var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
+    let Delta   : i32 = 1;
+    var idx     : u32 = 1u;
+    var C_sum   : u32 = 0u;
 
-    let curPixel : vec2<u32> = ThreadID.xy;
+    var ReservoirArray      : array<Reservoir, 25u>;
+    var ShiftedPathArray    : array<RegeneratedPath, 25u>;
+    var JacobianArray       : array<f32, 25u>;
+    var MISArray            : array<f32, 25u>;
 
+    var AccumReservoir      : Reservoir;
 
-    let curIdx : u32 =
-        ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
+    // Canonical Sample
+    ReservoirArray[0] = LoadReservoir_Init(ThreadID.xy);
+    C_sum += ReservoirArray[0].C;
 
-    // ----------------------------------------------------------------------
-    // 1. base reservoir & path 재구성 (canonical technique)
-    // ----------------------------------------------------------------------
-    var baseRes  : Reservoir = ReservoirBuffer_Init[curIdx];
-
-    if (curPixel.x >= UniformBuffer.Resolution_Source.x ||
-        curPixel.y >= UniformBuffer.Resolution_Source.y || UniformBuffer.FrameCount ==0) {
-            ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-    if (baseRes.C == 0u || baseRes.Sample.length < 2u) {
-        // 아직 초기화 안된 픽셀
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    if(UniformBuffer.FrameCount == 0){
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    var basePath : Path = RegeneratePath(curPixel, baseRes.Sample);
-    if (basePath.length < 2u) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    var k_base : u32 = baseRes.Sample.k;
-
-    // 재연결 인덱스 k 유효성 검사 (spatial 과 동일)
-    if (k_base < 2u || (k_base + 1u) >= basePath.length) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // base J 안정화
-    if (!(baseRes.Sample.J > 0.0) || !isFinite(baseRes.Sample.J)) {
-        baseRes.Sample.J = 1.0;
-    }
-
-    // base contribution / canonical pdf
-    let contribBase : vec3<f32> = PathContribution(basePath);
-    let L_c         : f32       = Luminance(contribBase);
-    if (!(L_c > 0.0) || !isFinite(L_c)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let p_c_base_raw : f32 = PathPDF(basePath);
-    if (!(p_c_base_raw > 0.0) || !isFinite(p_c_base_raw)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-    let p_c_base : f32 = max(p_c_base_raw, EPS);
-
-    // ----------------------------------------------------------------------
-    // 2. motion vector 기반 prev pixel 찾기 (+ 기본 유효성 필터)
-    //    (기존 코드 그대로 유지)
-    // ----------------------------------------------------------------------
-    let motion_raw : vec4<f32> = textureLoad(MotionVectorTex, vec2<i32>(curPixel));
-    let mv_f       : vec2<f32> = motion_raw.xy;
-
-    let mvLen : f32 = length(mv_f);
-    if (mvLen > TEMPORAL_MAX_MOTION_PIXELS) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let prevPos_f : vec2<f32> = vec2<f32>(curPixel) - mv_f;
-    let res_f     : vec2<f32> = vec2<f32>(UniformBuffer.Resolution_Source);
-
-    if (any(prevPos_f < vec2<f32>(0.0)) ||
-        any(prevPos_f >= res_f)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let prevPixel_i : vec2<i32> = vec2<i32>(round(prevPos_f));
-    let res_i       : vec2<i32> = vec2<i32>(UniformBuffer.Resolution_Source);
-
-    if (!(all(prevPixel_i >= vec2<i32>(0, 0)) &&
-          all(prevPixel_i <  res_i))) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let quantError : f32 = length(prevPos_f - vec2<f32>(prevPixel_i));
-    if (quantError > 0.5) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let prevPixel : vec2<u32> = vec2<u32>(prevPixel_i);
-    let prevIdx   : u32 =
-        prevPixel.y * UniformBuffer.Resolution_Source.x +
-        prevPixel.x;
-
-    // ----------------------------------------------------------------------
-    // 3. prev reservoir & path (neighbor technique)
-    // ----------------------------------------------------------------------
-    let prevRes : Reservoir = ReservoirBuffer_Prev[prevIdx];
-    if (prevRes.C == 0u || prevRes.Sample.length < 2u) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    var prevPath : Path = RegeneratePath(prevPixel, prevRes.Sample);
-    if (prevPath.length < 2u) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // 3.5. 표면 유사도 체크 (ghosting 방지) – 기존 코드 유지
-    let curX1Compact : CompactSurface = Get_X1(curPixel);
-    if (!curX1Compact.IsValidSurface) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-    let curX1Surface : Surface = GetSurface(curX1Compact);
-
-    let prevRcSurf   : Surface = GetSurface(GetCompactSurface(prevRes.Sample.RcVertex));
-
-    let posDiff : f32 = length(curX1Surface.Position - prevRcSurf.Position);
-    let nDot    : f32 = dot(curX1Surface.Normal, prevRcSurf.Normal);
-
-    if (posDiff > TEMPORAL_MAX_POS_DIFF || nDot < TEMPORAL_MIN_NORMAL_DOT) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // ----------------------------------------------------------------------
-    // 4. Hybrid shift: prevRes -> 현재 픽셀 도메인으로 mapping
-    //    (spatial 과 동일한 DoHybridShift 사용)
-    // ----------------------------------------------------------------------
-    var shifted : CompactPath = DoHybridShift(baseRes.Sample, prevRes.Sample);
-    if (!(shifted.length > 0u) || shifted.k != k_base) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // offset path 재구성 (현재 픽셀 기준)
-    var offsetPath : Path = RegeneratePath(curPixel, shifted);
-    if (!(offsetPath.length >= 2u && shifted.k < offsetPath.length)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // 재연결 안전성 검사 (geometry / roughness)
-    if (!IsSafeToReconnect(
-        offsetPath.Surface[k_base - 1u], offsetPath.Lobe[k_base - 1u],
-        offsetPath.Surface[k_base    ], offsetPath.Lobe[k_base    ]
-    )) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // neighbor 쪽 J_y 계산
-    var J_y : f32 = calculate_J(offsetPath, shifted.k);
-    if (!(J_y > 0.0) || !isFinite(J_y)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-    shifted.J = J_y;
-
-    // prev 쪽 J_x, pdf p_i(x) 복원 (spatial 과 동일한 추정식)
-    let J_x   : f32 = max(prevRes.Sample.J, EPS);
-    let UCW_i : f32 = prevRes.UCW;
-    if (!(UCW_i > 0.0) || !isFinite(UCW_i) || !(J_x > 0.0) || !isFinite(J_x)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    let p_base_prev : f32 = 1.0 / UCW_i;            // ≈ p_i(x)
-    var p_from_prev : f32 = p_base_prev * (J_y / J_x); // ≈ p_i(y)
-
-    if (!(p_from_prev > 0.0) || !isFinite(p_from_prev)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // offset path contribution
-    let contribOff : vec3<f32> = PathContribution(offsetPath);
-    let L_i        : f32       = Luminance(contribOff);
-    if (!(L_i > 0.0) || !isFinite(L_i)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-
-    // canonical pdf for offsetPath (p_c(y))
-    let p_c_off_raw : f32 = PathPDF(offsetPath);
-    if (!(p_c_off_raw > 0.0) || !isFinite(p_c_off_raw)) {
-        ReservoirBuffer_Write[curIdx] = baseRes;
-        return;
-    }
-    let p_c_off : f32 = max(p_c_off_raw, EPS);
-
-    // ----------------------------------------------------------------------
-    // 5. Pairwise MIS (M=2: canonical + prev-tech)
-    //    spatial reuse의 eq와 동일한 형태
-    // ----------------------------------------------------------------------
-    let M : f32 = 2.0;
-
-    var outRes : PathReservoir;
-    outRes.C     = 0u;
-    outRes.w_sum = 0.0;
-    outRes.P_hat = 0.0;
-
-    var rng : u32 = GetHashValue(
-        ThreadID.x * 1973u +
-        ThreadID.y * 9277u +
-        UniformBuffer.FrameIndex * 26699u
-    );
-
-    var sum_c_term : f32 = 0.0;
-
-    // neighbor(이전 프레임) 쪽 pairwise term
+    // Non-Canonical Samples
     {
-        let p_i : f32 = p_from_prev; // p_i(y)
-        let p_c : f32 = p_c_off;     // p_c(y)
+        let MotionVector        : vec2<f32> = textureLoad(MotionVectorTexture, ThreadID.xy, 0).xy;
+        let CurrPixel_Center    : vec2<f32> = vec2<f32>(ThreadID.xy) + vec2<f32>(0.5);
+        let PrevPixel_Center    : vec2<u32> = vec2<u32>( CurrPixel_Center - MotionVector );
 
-        let denom : f32 = p_i + p_c;
-        if (!(denom > 0.0) || !isFinite(denom)) {
-            ReservoirBuffer_Write[curIdx] = baseRes;
-            return;
+        if ( IsInBoundary(PrevPixel_Center) )
+        {
+            ReservoirArray[1] = LoadReservoir_Prev(PrevPixel_Center);
+            C_sum += ReservoirArray[1].C;
+            idx = 2u;
         }
 
-        // m_i(y) = (1/M) * p_i / (p_i + p_c)
-        let m_i : f32 = (1.0 / M) * (p_i / denom);
-        let w_i : f32 = m_i * L_i;
-
-        UpdateReservoir(
-            &rng,
-            &outRes,
-            offsetPath,
-            w_i,
-            L_i,
-            max(prevRes.C, 1u)
-        );
-
-        // canonical 쪽 pairwise term 누적
-        sum_c_term += p_c / denom;
+        
     }
+    
 
-    // canonical(base) 쪽 term
-    if (L_c > 0.0 && p_c_base > 0.0)
+    if ( C_sum == 0u ) { return; }
+
+    // Shift All Samples To Current Domain
+    for (var iter : u32 = 0u; iter < idx; iter++)
     {
-        // m_c = (1/M) * (1 + Σ p_c/(p_i+p_c))
-        let m_c : f32 = (1.0 / M) * (1.0 + sum_c_term);
-        let w_c : f32 = m_c * L_c;
-
-        UpdateReservoir(
-            &rng,
-            &outRes,
-            basePath,
-            w_c,
-            L_c,
-            max(baseRes.C, 1u)
-        );
+        ShiftedPathArray[iter] = RegeneratePath(ThreadID.xy, ReservoirArray[iter].Sample);
     }
 
-    // ----------------------------------------------------------------------
-    // 6. 최종 리저버 압축 & 저장 (spatial 과 동일한 방식)
-    // ----------------------------------------------------------------------
-    var ResultReservoir : Reservoir;
-    ResultReservoir.Sample  = CompressPath(outRes.Sample);
-    ResultReservoir.UCW     = outRes.w_sum / max(outRes.P_hat, EPS);
-    ResultReservoir.C       = outRes.C;
-    ResultReservoir.Padding = vec2<f32>(0.0, 0.0);
+    // Compute Jacobians
+    JacobianArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter++)
+    {
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
+    }
 
-    ReservoirBuffer_Write[curIdx] = ResultReservoir;
-    //ReservoirBuffer_Write[curIdx] = baseRes;
+    // Compute Pairwise MIS
+    MISArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter++)
+    {
+        if ( JacobianArray[iter] < 1e-20 ) { continue; }
+
+        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+        let P_hat_cy : f32 = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
+
+        let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
+        let MIS_DL : f32 = f32(C_sum);
+        let MIS_NR : f32 = f32(ReservoirArray[iter].C) * P_hat_iy;
+        let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy + f32(ReservoirArray[0].C) * P_hat_cy );
+
+        let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+
+        MISArray[iter] = select( 0.0, MIS, MIS_DR > 1e-20 );
+
+        let RIS         : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hat_cy, ReservoirArray[iter].C);
+    }
+
+
+
+    // Compute RIS
+    {
+        let P_hat_cy    : f32 = Luminance( PathContribution( ShiftedPathArray[0] ) * ReservoirArray[0].Sample.Radiance );
+        let RIS         : f32 = MISArray[0] * P_hat_cy * ReservoirArray[0].UCW * JacobianArray[0];
+
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[0].Sample, RIS, P_hat_cy, ReservoirArray[0].C);
+    }
+
+    
+
+    // Write Reservoir To Buffer
+    {
+        AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
+        StoreReservoir(ThreadID.xy, &AccumReservoir);
+    }
+
+
+
+    return;
 }
