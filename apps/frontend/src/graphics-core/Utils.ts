@@ -63,7 +63,7 @@ export class Utils
         return [ ProjectionMatrix_Jittered , Jitter_X, Jitter_Y ];
     }
 
-    public static CreateRandomPointLight(MinPos : Vec3, MaxPos : Vec3, MinIntensity : number, MaxIntensity : number)
+    public static CreateRandomPointLight(idx : number, MinPos : Vec3, MaxPos : Vec3, MinIntensity : number, MaxIntensity : number)
     {
         // 1. 위치 랜덤 생성 (Min ~ Max 사이)
         const randX = MinPos[0] + Math.random() * (MaxPos[0] - MinPos[0]);
@@ -75,6 +75,7 @@ export class Utils
 
         // 3. 객체 반환
         return {
+            id: `random-light-${idx}`,
             type: 'point-light',
             lightParams: {
                 position: [
