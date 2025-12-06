@@ -1624,7 +1624,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // DI 경로를 좀 더 넣어봅시다
-    let DI_Count : u32 = 8u;
+    let DI_Count : u32 = 1u;
     {
         let X : Surface     = PathTree.Surface[1];
         let V : vec3<f32>   = normalize( PathTree.Surface[0].Position - X.Position );

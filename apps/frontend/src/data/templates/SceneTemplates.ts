@@ -43,6 +43,8 @@ export const TEMPLATE_SCENE_1: SceneFrontend = {
     fov: 60,
   },
 
+
+  
   assets: [
     // Window Object
     {

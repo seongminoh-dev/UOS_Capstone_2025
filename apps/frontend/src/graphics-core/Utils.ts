@@ -1,5 +1,6 @@
-import      { mat4 } from "wgpu-matrix"
+import      { mat4, vec3 } from "wgpu-matrix"
 import type { Mat4 } from "wgpu-matrix";
+import type { Vec3 } from "./lighting";
 
 function Halton(index : number, base : number) : number
 {
@@ -60,5 +61,30 @@ export class Utils
         ProjectionMatrix_Jittered[9] += NDCOffset_Y;
 
         return [ ProjectionMatrix_Jittered , Jitter_X, Jitter_Y ];
+    }
+
+    public static CreateRandomPointLight(MinPos : Vec3, MaxPos : Vec3, MinIntensity : number, MaxIntensity : number)
+    {
+        // 1. 위치 랜덤 생성 (Min ~ Max 사이)
+        const randX = MinPos[0] + Math.random() * (MaxPos[0] - MinPos[0]);
+        const randY = MinPos[1] + Math.random() * (MaxPos[1] - MinPos[1]);
+        const randZ = MinPos[2] + Math.random() * (MaxPos[2] - MinPos[2]);
+
+        // 2. 강도 랜덤 생성
+        const randIntensity = MinIntensity + Math.random() * (MaxIntensity - MinIntensity);
+
+        // 3. 객체 반환
+        return {
+            type: 'point-light',
+            lightParams: {
+                position: [
+                    Number(randX.toFixed(2)), 
+                    Number(randY.toFixed(2)), 
+                    Number(randZ.toFixed(2))
+                ],
+                color: [1, 1, 1],
+                intensity: Number(randIntensity.toFixed(1))
+            }
+        };
     }
 }
