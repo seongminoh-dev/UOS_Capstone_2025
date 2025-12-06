@@ -200,14 +200,6 @@ struct RegeneratedPath
     J           : f32,
 };
 
-// struct PathReservoir
-// {
-//     Sample  : RegeneratedPath,
-//     C       : u32,
-//     P_hat   : f32,
-//     w_sum   : f32,
-// };
-
 struct Reservoir
 {
     Sample  : CompactPath,
@@ -231,8 +223,8 @@ const STRIDE_MATERIAL   : u32 = 15u;
 const STRIDE_VERTEX     : u32 =  8u;
 const STRIDE_BLAS       : u32 =  8u;
 
-const RECONNECTION_DISTANCE     : f32 = 0.0001;
-const RECONNECTION_ROUGHNESS    : f32 = 0.0001;
+const RECONNECTION_DISTANCE     : f32 = 0.000001;
+const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
@@ -1487,12 +1479,12 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
     if ( bIsLight_Xk )
     {
         PDF = PDF_LIGHT(X_Curr, V, InPath.XL);
-        Cos = max( dot( InPath.XL.Direction, -L ), 0.0 );
+        Cos = abs( dot( InPath.XL.Direction, -L ) );
     }
     else 
     { 
         PDF = PDF_BSDF(X_Curr, V, L); 
-        Cos = max( dot( X_Next.Normal, -L ), 0.0 );
+        Cos = abs( dot( X_Next.Normal, -L ) );
     }
 
     return PDF * Cos / max( dot(r, r), 1e-4 );
@@ -1538,6 +1530,18 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
     if ( InCompactPath.Lobe_k != LOBE_LIGHT )
     {
         OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
+        if ( !IsSafeToReconnect(
+            OutPath.Surface[InCompactPath.k - 1], OutPath.Lobe[InCompactPath.k - 1],
+            OutPath.Surface[InCompactPath.k    ], OutPath.Lobe[InCompactPath.k    ]) 
+        )   { OutPath.Radiance = vec3f(0.0); return OutPath; }
+    }
+    else
+    {
+        if ( !IsSafeToReconnect_Light(OutPath.Surface[InCompactPath.k - 1], OutPath.XL) ) 
+        { 
+            OutPath.Radiance = vec3f(0.0); 
+            return OutPath; 
+        }
     }
 
     return OutPath;

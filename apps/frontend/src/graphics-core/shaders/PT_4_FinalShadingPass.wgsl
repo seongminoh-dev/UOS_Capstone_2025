@@ -1536,6 +1536,37 @@ fn IsNan_vec3(A : vec3<f32>) -> bool
     return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
 }
 
+// TEST
+
+fn PartialJacobian(InPath : RegeneratedPath) -> f32
+{
+    let bIsLight_Xk : bool = ( InPath.Lobe[InPath.k] == LOBE_LIGHT );
+
+    let X_Prev : Surface = InPath.Surface[InPath.k - 2];
+    let X_Curr : Surface = InPath.Surface[InPath.k - 1];
+    let X_Next : Surface = InPath.Surface[InPath.k    ];
+
+    let V : vec3<f32> = normalize( X_Prev.Position - X_Curr.Position );
+    let L : vec3<f32> = normalize( X_Next.Position - X_Curr.Position );
+    let r : vec3<f32> = X_Next.Position - X_Curr.Position;
+
+    var PDF : f32;
+    var Cos : f32;
+
+    if ( bIsLight_Xk )
+    {
+        PDF = PDF_LIGHT(X_Curr, V, InPath.XL);
+        Cos = abs( dot( InPath.XL.Direction, -L ) );
+    }
+    else 
+    { 
+        PDF = PDF_BSDF(X_Curr, V, L); 
+        Cos = abs( dot( X_Next.Normal, -L ) );
+    }
+
+    return PDF * Cos / max( dot(r, r), 1e-4 );
+}
+
 //==========================================================================
 // Main
 //==========================================================================
@@ -1561,6 +1592,15 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 1. Load Path
     let Reservoir : Reservoir = LoadReservoir(ThreadID.xy);
+
+    // if (true)
+    // {
+    //     if ( Reservoir.Sample.k == 0u ) { textureStore(ResultTexture, ThreadID.xy, vec4(RED, 1.0)); return; }
+
+    //     let debug = PartialJacobian( RegeneratePath(ThreadID.xy, Reservoir.Sample) ) / Reservoir.Sample.J;
+    //     textureStore(ResultTexture, ThreadID.xy, vec4(vec3f(f32(debug)), 1.0));
+    //     return;
+    // }
 
     // Store Black If Invalid Reservoir
     {

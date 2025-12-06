@@ -27,7 +27,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = false;
+let USE_RESTIR : boolean = true;
 
 const EBufferIndex =
 {

@@ -451,7 +451,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     let CurrentColor    : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV_Unjitter, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
     var WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
-    WriteColor = Decode( CurrentColor );
+    //WriteColor = Decode( CurrentColor );
     
     textureStore(ResultTexture, ThreadID.xy, vec4<f32>(select(WriteColor, CurrentColor, IsNan_vec3(WriteColor)), 1.0));
 

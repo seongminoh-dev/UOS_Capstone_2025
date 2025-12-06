@@ -200,14 +200,6 @@ struct RegeneratedPath
     J           : f32,
 };
 
-// struct PathReservoir
-// {
-//     Sample  : RegeneratedPath,
-//     C       : u32,
-//     P_hat   : f32,
-//     w_sum   : f32,
-// };
-
 struct Reservoir
 {
     Sample  : CompactPath,
@@ -231,8 +223,8 @@ const STRIDE_MATERIAL   : u32 = 15u;
 const STRIDE_VERTEX     : u32 =  8u;
 const STRIDE_BLAS       : u32 =  8u;
 
-const RECONNECTION_DISTANCE     : f32 = 0.0001;
-const RECONNECTION_ROUGHNESS    : f32 = 0.0001;
+const RECONNECTION_DISTANCE     : f32 = 0.000001;
+const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
@@ -1479,12 +1471,12 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
     if ( bIsLight_Xk )
     {
         PDF = PDF_LIGHT(X_Curr, V, InPath.XL);
-        Cos = max( dot( InPath.XL.Direction, -L ), 0.0 );
+        Cos = abs( dot( InPath.XL.Direction, -L ) );
     }
     else 
     { 
         PDF = PDF_BSDF(X_Curr, V, L); 
-        Cos = max( dot( X_Next.Normal, -L ), 0.0 );
+        Cos = abs( dot( X_Next.Normal, -L ) );
     }
 
     return PDF * Cos / max( dot(r, r), 1e-4 );
@@ -1530,6 +1522,18 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
     if ( InCompactPath.Lobe_k != LOBE_LIGHT )
     {
         OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
+        if ( !IsSafeToReconnect(
+            OutPath.Surface[InCompactPath.k - 1], OutPath.Lobe[InCompactPath.k - 1],
+            OutPath.Surface[InCompactPath.k    ], OutPath.Lobe[InCompactPath.k    ]) 
+        )   { OutPath.Radiance = vec3f(0.0); return OutPath; }
+    }
+    else
+    {
+        if ( !IsSafeToReconnect_Light(OutPath.Surface[InCompactPath.k - 1], OutPath.XL) ) 
+        { 
+            OutPath.Radiance = vec3f(0.0); 
+            return OutPath; 
+        }
     }
 
     return OutPath;
@@ -1626,7 +1630,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     var MISArray            : array<f32, 25u>;
 
     var AccumReservoir      : Reservoir;
-
+    {
+        AccumReservoir.w_sum = 0.0;
+        AccumReservoir.C     = 0u;
+    }
 
 
     // Canonical Sample
@@ -1654,31 +1661,26 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
 
-
-    if ( C_sum == 0u ) { return; }
-
-
-
     // Shift All Samples To Current Domain
     for (var iter : u32 = 0u; iter < idx; iter++)
     {
         ShiftedPathArray[iter] = RegeneratePath(ThreadID.xy, ReservoirArray[iter].Sample);
     }
 
+
     // Compute Jacobians
     JacobianArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ReservoirArray[iter].Sample.J;
     }
 
-    var DEBUG : f32 = 0.0;
 
     // Compute Pairwise MIS
     MISArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        if ( JacobianArray[iter] < 1e-20 ) { continue; }
+        if ( JacobianArray[iter] < 1e-10 ) { continue; }
 
         let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
         let P_hat_cy : f32 = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
@@ -1689,12 +1691,10 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy + f32(ReservoirArray[0].C) * P_hat_cy );
 
         let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+        MISArray[iter] = select( 0.0, MIS, MIS_DR > 1e-10 );
 
-        MISArray[iter] = select( 0.0, MIS, MIS_DR > 1e-20 );
-
-        let RIS         : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+        let RIS : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
         UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hat_cy, ReservoirArray[iter].C);
-
     }
 
 
@@ -1712,7 +1712,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // Write Reservoir To Buffer
     {
         AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
-        //AccumReservoir.UCW = DEBUG;
         StoreReservoir(ThreadID.xy, &AccumReservoir);
     }
 

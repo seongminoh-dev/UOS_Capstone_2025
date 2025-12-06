@@ -227,10 +227,12 @@ const STRIDE_MATERIAL   : u32 = 15u;
 const STRIDE_VERTEX     : u32 =  8u;
 const STRIDE_BLAS       : u32 =  8u;
 
-const RECONNECTION_DISTANCE     : f32 = 0.0001;
-const RECONNECTION_ROUGHNESS    : f32 = 0.0001;
+const RECONNECTION_DISTANCE     : f32 = 0.000001;
+const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS : f32 = 0.02;
+
+const DI_COUNT : u32 = 4u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
@@ -1474,7 +1476,7 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
     if ( k == InPath.length - 1 )
     {
         let X_k : Surface = InPath.Surface[InPath.length - 1];
-        return L_emit(InPath.XL, X_k);// * Visibility(X_k.Position, InPath.XL.Position);
+        return L_emit(InPath.XL, X_k) * Visibility(X_k.Position, InPath.XL.Position);
     }
     else if ( k == InPath.length )
     {
@@ -1506,7 +1508,7 @@ fn SuffixRadiance(InPath : Path, k : u32) -> vec3<f32>
         let N : vec3<f32> = X_Curr.Normal;
 
         f *= BSDF(X_Curr, L, V) * abs( dot(N, L) );
-        f *= L_emit(InPath.XL, X_Curr);// * Visibility(X_Curr.Position, InPath.XL.Position);
+        f *= L_emit(InPath.XL, X_Curr) * Visibility(X_Curr.Position, InPath.XL.Position);
     }
 
     return f;
@@ -1530,15 +1532,15 @@ fn PartialJacobian(InPath : Path, k : u32) -> f32
     if ( bIsLight_Xk )
     {
         PDF_X   = PDF_LIGHT(X_Curr, V, InPath.XL);
-        Cos     = max( dot( InPath.XL.Direction, -L ), 0.0 );
+        Cos     = abs( dot( InPath.XL.Direction, -L ) );
     }
     else 
     { 
         PDF_X   = PDF_BSDF(X_Curr, V, L); 
-        Cos     = max( dot( X_Next.Normal, -L ), 0.0 );
+        Cos     = abs( dot( X_Next.Normal, -L ) );
     }
 
-    return PDF_X * Cos / max( dot(r, r), 1e-4 );
+    return PDF_X * Cos / max( dot(r, r), 1e-8 );
 }
 
 fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactPath
@@ -1624,14 +1626,13 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // DI 경로를 좀 더 넣어봅시다
-    let DI_Count : u32 = 1u;
     {
         let X : Surface     = PathTree.Surface[1];
         let V : vec3<f32>   = normalize( PathTree.Surface[0].Position - X.Position );
         var L : vec3<f32>;
 
         // Submit NEE Path
-        for (var iter : u32 = 0u; iter < DI_Count - 1; iter++)
+        for (var iter : u32 = 0u; iter < DI_COUNT - 1; iter++)
         {
             PathTree.rSeed[2] = rSeed;
             PathTree.XL = SampleNEE(&rSeed, X, V);
@@ -1642,7 +1643,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
             let P_hat   : f32 = Luminance( PathContribution );
             let PathPDF : f32 = p * PathTree.XL.PDF;
-            let RIS     : f32 = (1.0 / f32(DI_Count)) * P_hat / PathPDF;
+            let RIS     : f32 = (1.0 / f32(DI_COUNT)) * P_hat / PathPDF;
 
             UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
         }   
@@ -1666,7 +1667,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
             let P_hat   : f32 = Luminance( PathContribution );
             let PathPDF : f32 = p * PathTree.XL.PDF;
-            let RIS     : f32 = P_hat / PathPDF * select((1.0 / f32(DI_Count)), 1.0, i != 1u);
+            let RIS     : f32 = P_hat / PathPDF * select((1.0 / f32(DI_COUNT)), 1.0, i != 1u);
 
             UpdateReservoir(&rSeed, &PathTreeReservoir, PathTree, RIS, P_hat, 1u);
         }
@@ -1717,20 +1718,13 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     }
 
-    // var VisibilityFactor : f32;
-    // {
-    //     let Start   : vec3<f32> = PathTreeReservoir.Sample.Surface[PathTreeReservoir.Sample.length - 1].Position;
-    //     let End     : vec3<f32> = PathTreeReservoir.Sample.XL.Position;
-    //     VisibilityFactor        = Visibility(Start, End);
-    // }
-
     // 3. 최종 살아남은 경로를 Reservoir 에 저장
     {
         var ResultReservoir : Reservoir;
 
         ResultReservoir.Sample          = CompressPath(PathTreeReservoir.Sample, CSurface);
         ResultReservoir.Sample.P_hat    = PathTreeReservoir.P_hat;
-        ResultReservoir.UCW             = ( PathTreeReservoir.w_sum / PathTreeReservoir.P_hat );// * VisibilityFactor;
+        ResultReservoir.UCW             = ( PathTreeReservoir.w_sum / PathTreeReservoir.P_hat );
         ResultReservoir.C               = PathTreeReservoir.C;
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
