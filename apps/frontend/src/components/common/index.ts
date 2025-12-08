@@ -43,6 +43,14 @@ export { EmptyState } from './EmptyState';
 // LoadingState
 export { LoadingState } from './LoadingState';
 
+// GlobalLoadingOverlay
+export { GlobalLoadingOverlay } from './GlobalLoadingOverlay';
+export type { GlobalLoadingOverlayProps, LoadingProgress } from './GlobalLoadingOverlay';
+
+// GlobalErrorOverlay
+export { GlobalErrorOverlay, ERROR_SOLUTIONS } from './GlobalErrorOverlay';
+export type { GlobalErrorOverlayProps, ErrorSolution } from './GlobalErrorOverlay';
+
 // Form
 export { Vec3Input, FormField, ColorInput } from './Form';
 export type { Vec3InputProps, Vec3Labels, FormFieldProps, ColorInputProps } from './Form';

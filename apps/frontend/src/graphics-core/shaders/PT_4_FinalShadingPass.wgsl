@@ -223,8 +223,8 @@ const STRIDE_MATERIAL   : u32 = 15u;
 const STRIDE_VERTEX     : u32 =  8u;
 const STRIDE_BLAS       : u32 =  8u;
 
-const RECONNECTION_DISTANCE     : f32 = 0.1;
-const RECONNECTION_ROUGHNESS    : f32 = 0.5;
+const RECONNECTION_DISTANCE     : f32 = 0.000001;
+const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS : f32 = 0.02;
 
@@ -344,6 +344,7 @@ const LOBE_LIGHT    : u32 = 3u;
 
 @group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
+@group(0) @binding(12) var DITexture : texture_storage_2d<rgba16float, read>;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
@@ -1540,6 +1541,7 @@ fn IsNan_vec3(A : vec3<f32>) -> bool
 
 fn PartialJacobian(InPath : RegeneratedPath) -> f32
 {
+    if (InPath.k == 0u) { return 0.0; }
     let bIsLight_Xk : bool = ( InPath.Lobe[InPath.k] == LOBE_LIGHT );
 
     let X_Prev : Surface = InPath.Surface[InPath.k - 2];
@@ -1575,6 +1577,9 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
+    storageBarrier();
+    workgroupBarrier();
+
     // 0. 범위 밖 스레드는 계산 X
     {
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
@@ -1593,14 +1598,26 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     // 1. Load Path
     let Reservoir : Reservoir = LoadReservoir(ThreadID.xy);
 
-    // if (true)
-    // {
-    //     if ( Reservoir.Sample.k == 0u ) { textureStore(ResultTexture, ThreadID.xy, vec4(RED, 1.0)); return; }
+    if (false)
+    {
+        let ris : f32 = bitcast<f32>(Reservoir.Sample.Padding_0);
 
-    //     let debug = PartialJacobian( RegeneratePath(ThreadID.xy, Reservoir.Sample) ) / Reservoir.Sample.J;
-    //     textureStore(ResultTexture, ThreadID.xy, vec4(vec3f(f32(debug)), 1.0));
-    //     return;
-    // }
+        var color : vec3<f32> = vec3f(ris);
+        if (IsNan_f32(ris)) { color = PURPLE; }
+
+        textureStore(ResultTexture, ThreadID.xy, vec4(color, 1.0));
+        return;
+    }
+
+    if (false)
+    {
+        if ( Reservoir.Sample.k == 0u ) { textureStore(ResultTexture, ThreadID.xy, vec4(RED, 1.0)); return; }
+        let debug = PartialJacobian( RegeneratePath(ThreadID.xy, Reservoir.Sample) ) / Reservoir.Sample.J;
+        if ( Reservoir.Sample.J < 1e-20 ) { textureStore(ResultTexture, ThreadID.xy, vec4(GREEN, 1.0)); return; }
+
+        textureStore(ResultTexture, ThreadID.xy, vec4(vec3f(f32(debug)), 1.0));
+        return;
+    }
 
     // Store Black If Invalid Reservoir
     {

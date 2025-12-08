@@ -361,6 +361,11 @@ export class WebGPUEngine {
 
     /**
      * 카메라 위치 설정
+     *
+     * 좌표계 규칙:
+     * - Three.js와 WebGPU 모두 오른손 좌표계 사용
+     * - 기본 forward 방향: -Z
+     * - Yaw: Y축 회전 (좌우), Pitch: X축 회전 (상하)
      */
     public setCamera(
         position: [number, number, number],
@@ -379,11 +384,14 @@ export class WebGPUEngine {
         const dy = target[1] - position[1];
         const dz = target[2] - position[2];
 
-        // Yaw: XZ 평면에서의 각도 (Y축 회전) - radian to degree
-        const yawRad = Math.atan2(dx, dz);
+        // Yaw: XZ 평면에서의 각도 (Y축 회전)
+        // Camera.GetForwardVector()는 BaseForward = (0, 0, -1) 사용
+        // 따라서 yaw=0일 때 카메라는 -Z 방향을 바라봄
+        // atan2(-dx, -dz)를 사용하여 -Z가 기본 방향이 되도록 함
+        const yawRad = Math.atan2(-dx, -dz);
         const yawDeg = (yawRad * 180) / Math.PI;
 
-        // Pitch: 수직 각도 - radian to degree
+        // Pitch: 수직 각도 (X축 회전)
         const horizontalDist = Math.sqrt(dx * dx + dz * dz);
         const pitchRad = Math.atan2(dy, horizontalDist);
         const pitchDeg = (pitchRad * 180) / Math.PI;
@@ -396,7 +404,7 @@ export class WebGPUEngine {
         //     camera.SetFOV(fov);
         // }
 
-        console.log(`[WebGPUEngine] Camera set: position=[${position}], target=[${target}]`);
+        console.log(`[WebGPUEngine] Camera set: position=[${position}], target=[${target}], yaw=${yawDeg.toFixed(1)}, pitch=${pitchDeg.toFixed(1)}`);
     }
 
     /**
