@@ -496,11 +496,6 @@ export class World
             {
                 VertexCount        = RawMesh.geometry.attributes["position"].count;
                 VertexPositions    = new Float32Array(RawMesh.geometry.attributes["position"].array);
-
-                // Normal이 없으면 자동 계산
-                if (!RawMesh.geometry.attributes["normal"]) {
-                    RawMesh.geometry.computeVertexNormals();
-                }
                 VertexNormals      = new Float32Array(RawMesh.geometry.attributes["normal"].array);
                 VertexUVs          = RawMesh.geometry.attributes["uv"] ? new Float32Array(RawMesh.geometry.attributes["uv"].array) : new Float32Array();
             }
