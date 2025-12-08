@@ -27,7 +27,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = true;
+let USE_RESTIR : boolean = false;
 
 const EBufferIndex =
 {
@@ -124,6 +124,13 @@ export class Renderer
     private EnvIntensity        : number;
     private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
     private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
+
+
+    // Test Purpose
+    private StartTime : number = 0;
+    private bStopRendering : boolean = false;
+    private readonly FREEZE_TIME_MS : number = 400;
+
 
     constructor
     (
@@ -313,6 +320,13 @@ export class Renderer
         // Step 7: Warm-up complete
         reportProgress('warmup', 7, '렌더러 준비 완료');
 
+
+        // TEST : Start!
+        {
+            this.StartTime = performance.now();
+            this.bStopRendering = false;
+        }
+
         return;
     }
 
@@ -402,6 +416,17 @@ export class Renderer
 
     public Render() : void
     {
+
+        {
+            if (this.bStopRendering) { return; }
+            const currentTime = performance.now();
+            const elapsedTime = (currentTime - this.StartTime);
+            if (elapsedTime >= this.FREEZE_TIME_MS) { this.bStopRendering = true; return; }
+        }
+
+
+
+
         const WorkgroupCount_HighResolution : number[] = [Math.ceil(this.Canvas.width/8), Math.ceil(this.Canvas.height/8), 1];
         const WorkgroupCount_LowResolution  : number[] = [Math.ceil(this.Canvas.width/16), Math.ceil(this.Canvas.height/16), 1];
 
