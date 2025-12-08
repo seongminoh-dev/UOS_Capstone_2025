@@ -29,111 +29,68 @@ const DEFAULT_ROOM_CONFIG: RoomConfig = {
 export const ASSET_REGISTRY: AssetMetadata[] = [
   // ===== Room (방 구조) =====
   {
-    name: '벽면이 없는 작은 방',
-    meshName: 'TestScene',
+    name: '작은 방',
+    meshName: 'small_room',
     category: 'room',
     icon: '🏠',
     isRequired: true,
-    description: '한쪽 벽면이 없는 작은 방입니다.',
+    description: '4평정도의 작은 방 입니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
-        position: [0.06, 2.12, 7.38],
-        target: [-0.1, -0.22, 0.06],
+        position: [0.11, 0.90, 1.16],
+        target: [0.05, 0.95, -0.24],
         fov: 50,
       },
     },
   },
   {
-    name: '침실(안방)',
-    meshName: 'BedroomEdit',
+    name: '안방(침실)',
+    meshName: 'bed_room',
     category: 'room',
     icon: '🛏️',
-    description: '침대, 책상, 의자, 옷장을 포함하는 창문이 없는 방입니다.',
+    description: '창문이 없는 8평정도의 침실 방입니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
-        position: [6.83, 3.49, -0.33],
-        target: [0, 0, 0],
-        fov: 60,
-      },
-    },
-  },
-  {
-    name: '욕실',
-    meshName: 'Bathroom',
-    category: 'room',
-    icon: '🚿',
-    description: '샤워기, 세면대를 포함하는 욕실 방입니다.',
-    roomConfig: {
-      scale: [1, 1, 1],
-      camera: {
-        position: [100, 100, 100],
-        target: [0, 0.5, 0],
+        position: [0.11, 0.90, 1.16],
+        target: [0.05, 0.95, -0.24],
         fov: 50,
       },
     },
   },
   {
-    name: '침실',
+    name: '거실',
+    meshName: 'living_room',
+    category: 'room',
+    icon: '🏠',
+    description: '14평정도의 넓은 공간입니다.',
+    roomConfig: {
+      scale: [1, 1, 1],
+      camera: {
+        position: [0.11, 0.90, 1.16],
+        target: [0.05, 0.95, -0.24],
+        fov: 50,
+      },
+    },
+  },
+  {
+    name: '안방(침실)',
     meshName: 'Bedroom',
     category: 'room',
     icon: '🛏️',
-    description: '침실 방입니다.',
+    description: '침실로 꾸며진 방입니다. 가구가 배치되어 있습니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
-        position: [5, 5, 5],
-        target: [0, 1, 0],
+        position: [0.11, 0.90, 1.16],
+        target: [0.05, 0.95, -0.24],
         fov: 50,
       },
     },
   },
-  {
-    name: '테스트 룸 1',
-    meshName: 'TestScene1',
-    category: 'room',
-    icon: '🏠',
-    description: '테스트 룸 1',
-    roomConfig: {
-      scale: [1, 1, 1],
-      camera: {
-        position: [5, 5, 5],
-        target: [0, 1, 0],
-        fov: 50,
-      },
-    },
-  },
-  {
-    name: '테스트 룸 2',
-    meshName: 'TestScene2',
-    category: 'room',
-    icon: '🏠',
-    description: '테스트 룸 2',
-    roomConfig: {
-      scale: [1, 1, 1],
-      camera: {
-        position: [5, 5, 5],
-        target: [0, 1, 0],
-        fov: 50,
-      },
-    },
-  },
-  {
-    name: '테스트 룸 3',
-    meshName: 'TestScene3',
-    category: 'room',
-    icon: '🏠',
-    description: '테스트 룸 3',
-    roomConfig: {
-      scale: [1, 1, 1],
-      camera: {
-        position: [5, 5, 5],
-        target: [0, 1, 0],
-        fov: 50,
-      },
-    },
-  },
+
+
 
   // ===== Furniture > Seating (앉는 가구) =====
   {
