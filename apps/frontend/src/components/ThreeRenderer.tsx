@@ -257,11 +257,33 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
           onSaveCamera(cameraSettings);
         }
       }
+
+      // B키: 현재 Scene(SceneFrontend)을 JSON으로 저장
+      if (e.key === 'b' || e.key === 'B') {
+        if (!scene) {
+          console.warn('[ThreeRenderer] No scene data to export');
+          return;
+        }
+
+        const jsonString = JSON.stringify(scene, null, 2);
+        const blob = new Blob([jsonString], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `scene_${scene.name || 'untitled'}_${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        console.log('[ThreeRenderer] SceneFrontend exported to JSON:', scene.name);
+      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSaveCamera]);
+  }, [onSaveCamera, scene]);
 
   // Scene 데이터 변경 시 모델 로드
   // IMPORTANT: scene.id가 변경된 경우에만 전체 재로드

@@ -125,7 +125,7 @@ export class Renderer
     // Test Purpose
     private StartTime : number = 0;
     private bStopRendering : boolean = false;
-    private readonly FREEZE_TIME_MS : number = 400;
+    private readonly FREEZE_TIME_MS : number = 100;
 
 
     constructor

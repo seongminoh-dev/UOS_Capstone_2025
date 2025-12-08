@@ -5,7 +5,6 @@
 export {
   SCENE_TEMPLATES,
   TEMPLATE_SCENE_1,
-  TEMPLATE_SCENE_2,
   getTemplateById,
   getDefaultTemplate,
 } from './SceneTemplates';

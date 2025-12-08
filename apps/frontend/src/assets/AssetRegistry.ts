@@ -34,7 +34,7 @@ export const ASSET_REGISTRY: AssetMetadata[] = [
     category: 'room',
     icon: '🏠',
     isRequired: true,
-    description: '4평정도의 작은 방 입니다.',
+    description: '창문이 있는 4평정도의 작은 방 입니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
@@ -49,7 +49,7 @@ export const ASSET_REGISTRY: AssetMetadata[] = [
     meshName: 'bed_room',
     category: 'room',
     icon: '🛏️',
-    description: '창문이 없는 8평정도의 침실 방입니다.',
+    description: '창문이 있는 8평정도의 침실 방입니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
@@ -64,7 +64,7 @@ export const ASSET_REGISTRY: AssetMetadata[] = [
     meshName: 'living_room',
     category: 'room',
     icon: '🏠',
-    description: '14평정도의 넓은 공간입니다.',
+    description: '넓은 창이 있는 14평정도의 넓은 공간입니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
@@ -75,11 +75,11 @@ export const ASSET_REGISTRY: AssetMetadata[] = [
     },
   },
   {
-    name: '안방(침실)',
+    name: '침실(창문없음/사전구성)',
     meshName: 'Bedroom',
     category: 'room',
     icon: '🛏️',
-    description: '침실로 꾸며진 방입니다. 가구가 배치되어 있습니다.',
+    description: '침실로 가구를 포함하여 꾸며져 있는 방, 창문이 없습습니다.',
     roomConfig: {
       scale: [1, 1, 1],
       camera: {
@@ -89,7 +89,21 @@ export const ASSET_REGISTRY: AssetMetadata[] = [
       },
     },
   },
-
+  {
+    name: '침실(창문/사전구성)',
+    meshName: 'BedroomAndWindow',
+    category: 'room',
+    icon: '🛏️',
+    description: '침실로 가구를 포함하여 꾸며져 있는 방, 창문이 존재합니다.',
+    roomConfig: {
+      scale: [1, 1, 1],
+      camera: {
+        position: [-2.28, 4.11, 6.15],
+        target: [-1.04, 3.90, 5.52],
+        fov: 50,
+      },
+    },
+  },
 
 
   // ===== Furniture > Seating (앉는 가구) =====
