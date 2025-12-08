@@ -1,574 +1,405 @@
-import { mat4 } from 'wgpu-matrix';
+import      { mat4 }                from "wgpu-matrix";
+import type { Mat4 }                from "wgpu-matrix";
+import      { Camera }              from "./Camera";
+import      { ComputePass }         from "./ComputePass";
+import      { World }               from "./World";
+import type { OnProgressCallback }  from "./service/types/InitProgress";
+import      { Utils }               from "./Utils";
 
-// ComputeShader  TEST_MCPT
-import computeShaderCode from './shaders/TEST_MCPT.wgsl?raw';
-import vertexShaderCode from './shaders/VertexShader.wgsl?raw';
-import fragmentShaderCode from './shaders/FragmentShader.wgsl?raw';
+import      { ZENITH_BLUE, HORIZON_BLUE, DEFAULT_SKY_MODE, DEFAULT_ENV_INDIRECT_MULT } from "./lighting";
 
-import { World } from './World';
-import { Camera } from './Camera';
+import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
 
-export class Renderer {
-  // GPU Device Stuff
-  public readonly Adapter: GPUAdapter;
-  public readonly Device: GPUDevice;
-  public readonly Canvas: HTMLCanvasElement;
-  public readonly Context: GPUCanvasContext;
-  public readonly PreferredFormat: GPUTextureFormat;
+import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
+import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
+import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
+import ShaderCode_REUSE_TEMPORAL    from './shaders/ReuseTest_Temporal.wgsl?raw';
+import ShaderCode_REUSE_SPATIAL     from './shaders/ReuseTest_Spatial.wgsl?raw';
+import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
+import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
+import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
+import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-  // WebGPU Resources
-  public SceneTexture: GPUTexture;
-  public AccumTexture: GPUTexture;
+let USE_RESTIR : boolean = true;
+let USE_PERFORMANCE_TEST : boolean = false;
 
-  public UniformBuffer: GPUBuffer;
-  public SceneBuffer: GPUBuffer;
-  public GeometryBuffer: GPUBuffer;
-  public AccelBuffer: GPUBuffer;
+const EBufferIndex =
+{
+    Uniform                     : 0,
+    Scene                       : 1,
+    Geometry                    : 2,
+    Accel                       : 3,
+    Reservoir_Write_Init        : 4,
+    Reservoir_Write_Temporal    : 5,
+    Reservoir_Write_Spatial     : 6,
+    Reservoir_PrevFrame         : 7,
+    SIZE                        : 8
+} as const;
 
-  public Textures: GPUTexture[];
+const ETextureIndex =
+{
+    TexturePool     : 0,
+    G_Buffer        : 1,
+    MotionVector    : 2,
+    Radiance        : 3,
+    History_Read    : 4,
+    History_Write   : 5,
+    SIZE            : 6
+} as const;
 
-  // WebGPU Pipelines
-  public ComputePipeline: GPUComputePipeline;
-  public RenderPipeline: GPURenderPipeline;
+const ESamplerIndex =
+{
+    Default : 0,
+    Linear  : 1,
+    SIZE    : 2
+} as const;
 
-  // WebGPU BindGroups
-  public ComputeBindGroup: GPUBindGroup;
-  public RenderBindGroup: GPUBindGroup;
+const EDataOffsetIndex =
+{
+    MeshDescriptor      : 0,
+    MaterialID          : 1,
+    Material            : 2,
+    Light               : 3,
+    LightsCDF           : 4,
+    Index               : 5,
+    SubBlasRootArray    : 6,
+    Blas                : 7,
+    SIZE                : 8
+} as const;
 
-  // World Data
-  public World: World;
-  public FrameCount: number;
+const EComputePassIndex =
+{
+    GBufferCreation         : 0,
+    MotionVectorCreation    : 1,
+    ReSTIR_DI               : 2,
+    Initialize              : 3,
+    TemporalReuse           : 4,
+    SpatialReuse            : 5,
+    FinalShading            : 6,
+    PostProcess             : 7,
+    MCPT                    : 8,
+    SIZE                    : 9
+} as const;
 
-  // Data Offsets
-  public Offset_MeshDescriptorBuffer: number;
-  public Offset_MaterialBuffer: number;
-  public Offset_LightBuffer: number;
-  public Offset_LightsCDFBuffer: number;
-  public Offset_IndexBuffer: number;
-  public Offset_SubBlasRootArrayBuffer: number;
-  public Offset_BlasBuffer: number;
 
-  // Camera
-  private Camera!: Camera;
 
-  constructor(
-    Adapter: GPUAdapter,
-    Device: GPUDevice,
-    Canvas: HTMLCanvasElement
-  ) {
-    // Get GPU Device Stuffs
-    this.Adapter = Adapter;
-    this.Device = Device;
-    this.Canvas = Canvas;
-    this.Context = Canvas.getContext('webgpu')!;
-    this.PreferredFormat = navigator.gpu.getPreferredCanvasFormat();
+export class Renderer
+{
+    // GPU Device Stuff
+    private readonly Adapter         : GPUAdapter;
+    private readonly Device          : GPUDevice;
+    private readonly Canvas          : HTMLCanvasElement;
+    private readonly Context         : GPUCanvasContext;
+    private readonly PreferredFormat : GPUTextureFormat;
 
-    // Configure Context
+    // Resources
+    private GPUBuffers  : GPUBuffer[];
+    private GPUTextures : GPUTexture[];
+    private GPUSamplers : GPUSampler[];
+    private Offsets     : number[];
+
+    // Passes
+    private ComputePasses   : ComputePass[];
+    private RenderPipeline  : GPURenderPipeline;
+    private RenderBindGroup : GPUBindGroup;
+
+    // Scene Data
+    private World       : World;
+    private Camera      : Camera;
+    private FrameID     : number;
+    private FrameCount  : number;
+    private Prev_VPMat  : Mat4;
+
+    // Environment Parameters (물리 기반 하늘/환경광)
+    private EnvSkyColor         : [number, number, number];
+    private EnvHorizonColor     : [number, number, number];
+    private EnvGroundColor      : [number, number, number];
+    private EnvSunDirection     : [number, number, number];
+    private EnvSunIntensity     : number;
+    private EnvIntensity        : number;
+    private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
+    private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
+
+
+    // Test Purpose
+    private StartTime : number = 0;
+    private bStopRendering : boolean = false;
+    private readonly FREEZE_TIME_MS : number = 400;
+
+
+    constructor
+    (
+        Adapter : GPUAdapter,
+        Device  : GPUDevice,
+        Canvas  : HTMLCanvasElement,
+    )
     {
-      const CanvasConfiguration: GPUCanvasConfiguration = {
-        device: this.Device,
-        format: this.PreferredFormat,
-        alphaMode: 'opaque',
-      };
+        // Get GPU Device Stuffs
+        {
+            this.Adapter            = Adapter;
+            this.Device             = Device;
+            this.Canvas             = Canvas;
+            this.Context            = Canvas.getContext('webgpu')!;
+            this.PreferredFormat    = navigator.gpu.getPreferredCanvasFormat();
+        }
 
-      this.Context.configure(CanvasConfiguration);
+        // Configure Context
+        {
+            const CanvasConfiguration : GPUCanvasConfiguration =
+            {
+                device : this.Device,
+                format : this.PreferredFormat,
+                alphaMode : "opaque",
+            };
+
+            this.Context.configure(CanvasConfiguration);
+        }
+
+        // Declare Resources
+        {
+            this.GPUBuffers         = new Array(EBufferIndex.SIZE);
+            this.GPUTextures        = new Array(ETextureIndex.SIZE);
+            this.GPUSamplers        = new Array(ESamplerIndex.SIZE);
+            this.Offsets            = new Array(EDataOffsetIndex.SIZE);
+
+            this.ComputePasses      = new Array(EComputePassIndex.SIZE);
+            this.RenderPipeline     = GPURenderPipeline.prototype;
+            this.RenderBindGroup    = GPUBindGroup.prototype;
+
+            this.World              = World.prototype;
+            this.Camera             = Camera.prototype;
+            this.FrameID            = 0;
+            this.FrameCount         = 0;
+            this.Prev_VPMat         = mat4.create();
+
+            // 환경 파라미터 기본값 (정오 맑은 하늘 - lighting 모듈 상수 사용)
+            this.EnvSkyColor        = [...ZENITH_BLUE] as [number, number, number];
+            this.EnvHorizonColor    = [...HORIZON_BLUE] as [number, number, number];
+            this.EnvGroundColor     = [0.1, 0.15, 0.1];
+            this.EnvSunDirection    = [0, -1, 0];
+            this.EnvSunIntensity    = 1.0;
+            this.EnvIntensity       = 1.0;
+            this.EnvMode            = DEFAULT_SKY_MODE;
+            this.EnvIndirectMult    = DEFAULT_ENV_INDIRECT_MULT;
+        }
+
     }
 
-    // Create WebGPU Resources
-    this.SceneTexture = GPUTexture.prototype;
-    this.AccumTexture = GPUTexture.prototype;
 
-    this.UniformBuffer = GPUBuffer.prototype;
-    this.SceneBuffer = GPUBuffer.prototype;
-    this.GeometryBuffer = GPUBuffer.prototype;
-    this.AccelBuffer = GPUBuffer.prototype;
-
-    this.Textures = [];
-
-    // Create WebGPU Pipelines
-    this.ComputePipeline = GPUComputePipeline.prototype;
-    this.RenderPipeline = GPURenderPipeline.prototype;
-
-    // Create WebGPU BindGroups
-    this.ComputeBindGroup = GPUBindGroup.prototype;
-    this.RenderBindGroup = GPUBindGroup.prototype;
-
-    // World Data
-    this.World = World.prototype;
-    this.FrameCount = 0;
-
-    this.Offset_BlasBuffer = 0;
-    this.Offset_MaterialBuffer = 0;
-    this.Offset_LightBuffer = 0;
-    this.Offset_LightsCDFBuffer = 0;
-    this.Offset_MeshDescriptorBuffer = 0;
-    this.Offset_IndexBuffer = 0;
-    this.Offset_SubBlasRootArrayBuffer = 0;
-
-    {
-      this.Camera = new Camera(this.Canvas.width, this.Canvas.height);
-
-      this.Camera.SetLocationFromXYZ(0, 0, 10);
-    }
-  }
-
-  PrepareWorldData(): [ArrayBuffer, ArrayBuffer, ArrayBuffer, ImageBitmap[]] {
-    // World의 모든 정보 취합
-    const [InstanceArray, MeshArray, MeshIDToIndexMap] =
-      this.World.PackWorldData();
-
-    // World의 정보들로부터 GPU에 올릴 데이터들 모두 병합
-
-    let InstanceRawData: Uint32Array;
-    {
-      const SerializedInstanceArray: Uint32Array[] = [];
-      for (const InstanceToSerialize of InstanceArray) {
-        const InstanceSerialized: Uint32Array =
-          InstanceToSerialize.Serialize(MeshIDToIndexMap);
-        SerializedInstanceArray.push(InstanceSerialized);
-      }
-
-      InstanceRawData = ResourceManager.MergeArrays(SerializedInstanceArray)[0];
+    public GetCamera() : Camera 
+    { 
+        return this.Camera;
     }
 
-    let LightRawData: Uint32Array;
+    public ResetFrameCount() : void
     {
-      const SerializedLightArray: Uint32Array[] = [];
-      for (const LightToSerialize of this.World.Lights) {
-        const LightSerialized: Uint32Array = LightToSerialize.Serialize();
-        SerializedLightArray.push(LightSerialized);
-      }
-
-      LightRawData = ResourceManager.MergeArrays(SerializedLightArray)[0];
+        this.FrameCount = 0;
+        return;
     }
 
-    let LightsCDFRawData: Uint32Array;
+    /**
+     * Light 데이터만 동적으로 업데이트합니다 (전체 재초기화 없이)
+     * Scene 버퍼의 Light 영역과 LightCDF 영역만 업데이트합니다.
+     */
+    public UpdateLights(InWorld: World): void
     {
-      const LightsCDFArrayBuffer: ArrayBuffer = this.World.GetLightCDFBuffer();
-      LightsCDFRawData = new Uint32Array(LightsCDFArrayBuffer);
-    }
+        // 1. Light 데이터 직렬화
+        const SerializedLightArray: Uint32Array[] = [];
+        for (const LightToSerialize of InWorld.Lights) {
+            const LightSerialized: Uint32Array = LightToSerialize.Serialize();
+            SerializedLightArray.push(LightSerialized);
+        }
 
-    let VertexRawData: Uint32Array;
-    let VertexOffsetData: Uint32Array;
-    {
-      const SerializedVertexArray: Uint32Array[] = [];
-      for (const SerializedMesh of MeshArray) {
-        SerializedVertexArray.push(SerializedMesh.VertexArray);
-      }
+        // Merge Light Arrays
+        let LightRawData: Uint32Array;
+        if (SerializedLightArray.length > 0) {
+            const totalLength = SerializedLightArray.reduce((sum, arr) => sum + arr.length, 0);
+            LightRawData = new Uint32Array(totalLength);
+            let offset = 0;
+            for (const arr of SerializedLightArray) {
+                LightRawData.set(arr, offset);
+                offset += arr.length;
+            }
+        } else {
+            LightRawData = new Uint32Array(0);
+        }
 
-      [VertexRawData, VertexOffsetData] = ResourceManager.MergeArrays(
-        SerializedVertexArray
-      );
-    }
+        // 2. Light CDF 데이터 생성
+        const LightsCDFArrayBuffer: ArrayBuffer = InWorld.GetLightCDFBuffer();
+        const LightsCDFRawData = new Uint32Array(LightsCDFArrayBuffer);
 
-    let IndexRawData: Uint32Array;
-    let IndexOffsetData: Uint32Array;
-    {
-      const SerializedIndexArray: Uint32Array[] = [];
-      for (const SerializedMesh of MeshArray) {
-        SerializedIndexArray.push(SerializedMesh.IndexArray);
-      }
-
-      [IndexRawData, IndexOffsetData] =
-        ResourceManager.MergeArrays(SerializedIndexArray);
-    }
-
-    let MaterialRawData: Uint32Array;
-    let MaterialOffsetData: Uint32Array;
-    {
-      const SerializedMaterialArray: Uint32Array[] = [];
-      for (const SerializedMesh of MeshArray) {
-        SerializedMaterialArray.push(SerializedMesh.MaterialArray);
-      }
-
-      [MaterialRawData, MaterialOffsetData] = ResourceManager.MergeArrays(
-        SerializedMaterialArray
-      );
-    }
-
-    let SubBlasRootRawData: Uint32Array;
-    let SubBlasRootOffsetData: Uint32Array;
-    {
-      const SerializedSubBlasRootArray: Uint32Array[] = [];
-      for (const SerializedMesh of MeshArray) {
-        SerializedSubBlasRootArray.push(SerializedMesh.SubBlasRootArray);
-      }
-
-      [SubBlasRootRawData, SubBlasRootOffsetData] = ResourceManager.MergeArrays(
-        SerializedSubBlasRootArray
-      );
-    }
-
-    let BlasRawData: Uint32Array;
-    let BlasOffsetData: Uint32Array;
-    {
-      const SerializedBlasArray: Uint32Array[] = [];
-      for (const SerializedMesh of MeshArray) {
-        SerializedBlasArray.push(SerializedMesh.BlasArray);
-      }
-
-      [BlasRawData, BlasOffsetData] =
-        ResourceManager.MergeArrays(SerializedBlasArray);
-    }
-
-    let TlasRawData: Uint32Array; // TODO
-    {
-      TlasRawData = new Uint32Array();
-    }
-
-    let MeshDescriptorRawData: Uint32Array;
-    {
-      const SerializedMeshDescriptorArray: Uint32Array[] = [];
-
-      for (let iter = 0; iter < MeshArray.length; iter++) {
-        const CurrentMeshDescriptor: MeshDescriptor = new MeshDescriptor(
-          VertexOffsetData[iter],
-          IndexOffsetData[iter],
-          MaterialOffsetData[iter],
-          SubBlasRootOffsetData[iter],
-          BlasOffsetData[iter],
-          MeshArray[iter].SubBlasRootArray.length
+        // 3. Scene 버퍼의 Light 영역 업데이트
+        const lightOffset = this.Offsets[EDataOffsetIndex.Light];
+        const lightByteOffset = lightOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightByteOffset,
+            LightRawData.buffer
         );
 
-        SerializedMeshDescriptorArray.push(CurrentMeshDescriptor.Serialize());
-      }
+        // 4. Scene 버퍼의 LightCDF 영역 업데이트
+        const lightsCDFOffset = this.Offsets[EDataOffsetIndex.LightsCDF];
+        const lightsCDFByteOffset = lightsCDFOffset * 4; // Uint32 → bytes
+        this.Device.queue.writeBuffer(
+            this.GPUBuffers[EBufferIndex.Scene],
+            lightsCDFByteOffset,
+            LightsCDFRawData.buffer
+        );
 
-      MeshDescriptorRawData = ResourceManager.MergeArrays(
-        SerializedMeshDescriptorArray
-      )[0];
+        // 5. World 참조 업데이트 및 프레임 카운트 리셋
+        this.World = InWorld;
+        this.ResetFrameCount();
+
+        return;
     }
 
-    // Scene Buffer에 들어갈 데이터 채우기 | Instance + MeshDescriptor + Material  + Light + LightsCDF
-    const ArraysInSceneBuffer = [
-      InstanceRawData,
-      MeshDescriptorRawData,
-      MaterialRawData,
-      LightRawData,
-      LightsCDFRawData,
-    ];
-    const [SceneBufferData, SceneBufferOffsets] =
-      ResourceManager.MergeArrays(ArraysInSceneBuffer);
-    {
-      this.Offset_MeshDescriptorBuffer = SceneBufferOffsets[1];
-      this.Offset_MaterialBuffer = SceneBufferOffsets[2];
-      this.Offset_LightBuffer = SceneBufferOffsets[3];
-      this.Offset_LightsCDFBuffer = SceneBufferOffsets[4];
+    /**
+     * 환경 파라미터를 업데이트합니다 (Procedural Sky용).
+     * GPU Uniform 버퍼는 Update()에서 자동으로 반영됩니다.
+     * @param envMode - 0: 없음(회색), 1: 일반 하늘, 2: 고품질 하늘
+     * @param envIndirectMult - 환경 간접광 강도 (0.0~1.0)
+     */
+    public UpdateEnvironment(
+        skyColor: [number, number, number],
+        horizonColor: [number, number, number],
+        groundColor: [number, number, number],
+        sunDirection: [number, number, number],
+        sunIntensity: number,
+        environmentIntensity: number,
+        envMode: number = DEFAULT_SKY_MODE,
+        envIndirectMult: number = DEFAULT_ENV_INDIRECT_MULT
+    ): void {
+        this.EnvSkyColor = skyColor;
+        this.EnvHorizonColor = horizonColor;
+        this.EnvGroundColor = groundColor;
+        this.EnvSunDirection = sunDirection;
+        this.EnvSunIntensity = sunIntensity;
+        this.EnvIntensity = environmentIntensity;
+        this.EnvMode = envMode;
+        this.EnvIndirectMult = envIndirectMult;
+
+        // 환경이 바뀌면 경로 추적 누적 리셋
+        this.ResetFrameCount();
+
+        return;
     }
 
-    // Geometry Buffer에 들어갈 데이터 채우기 | Vertex + Index + PrimitiveToMaterial
-    const ArraysInGeometryBuffer = [
-      VertexRawData,
-      IndexRawData,
-      SubBlasRootRawData,
-    ];
-    const [GeometryBufferData, GeometryBufferOffsets] =
-      ResourceManager.MergeArrays(ArraysInGeometryBuffer);
+    public async Initialize(InWorld : World, onProgress?: OnProgressCallback) : Promise<void>
     {
-      this.Offset_IndexBuffer = GeometryBufferOffsets[1];
-      this.Offset_SubBlasRootArrayBuffer = GeometryBufferOffsets[2];
-    }
+        const totalSteps = 7; // 전체 초기화 단계 수
 
-    // Accel Buffer에 들어갈 데이터 채우기 | Tlas + Blas
-    const ArraysInAccelBuffer = [TlasRawData, BlasRawData];
-    const [AccelBufferData, AccelBufferOffsets] =
-      ResourceManager.MergeArrays(ArraysInAccelBuffer);
-    {
-      this.Offset_BlasBuffer = AccelBufferOffsets[1];
-    }
-
-    const SceneBufferRawData: ArrayBuffer = new ArrayBuffer(
-      4 * SceneBufferData.length
-    );
-    {
-      const Uint32View: Uint32Array = new Uint32Array(SceneBufferRawData);
-      Uint32View.set(SceneBufferData);
-    }
-
-    const GeometryBufferRawData: ArrayBuffer = new ArrayBuffer(
-      4 * GeometryBufferData.length
-    );
-    {
-      const Uint32View: Uint32Array = new Uint32Array(GeometryBufferRawData);
-      Uint32View.set(GeometryBufferData);
-    }
-
-    const AccelBufferRawData: ArrayBuffer = new ArrayBuffer(
-      4 * AccelBufferData.length
-    );
-    {
-      const Uint32View: Uint32Array = new Uint32Array(AccelBufferRawData);
-      Uint32View.set(AccelBufferData);
-    }
-
-    return [SceneBufferRawData, GeometryBufferRawData, AccelBufferRawData, []]; // TODO : Texture 채우기
-  }
-
-  /**
-   * Renderer를 새로운 World로 재초기화
-   * Scene 전환 시 사용
-   * TODO: 차후 Backend API에서 Scene을 가져와서 동적으로 Scene을 전환할 때 사용
-   * @param World - 새로운 World 객체
-   */
-  async Reinitialize(World: World): Promise<void> {
-    // GPU 리소스 정리 (기존 버퍼/텍스처 제거)
-    this.SceneBuffer?.destroy();
-    this.GeometryBuffer?.destroy();
-    this.AccelBuffer?.destroy();
-
-    // 새로운 World로 초기화
-    await this.Initialize(World);
-  }
-
-  async Initialize(World: World): Promise<void> {
-    
-    // if ( this.SceneBuffer ) this.SceneBuffer.destroy();
-    // if ( this.GeometryBuffer ) this.GeometryBuffer.destroy();
-    // if ( this.AccelBuffer ) this.AccelBuffer.destroy();
-
-
-
-    // Initialize Scene Stuffs
-    {
-      this.World = World;
-      this.FrameCount = 0;
-      this.Camera.SetLocationFromXYZ(0, 0, 6);
-      this.Camera.SetYaw(0);
-      this.Camera.SetPitch(0);
-    }
-
-    // Build Scene
-    const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps] =
-      this.PrepareWorldData();
-
-    // Create Uniform Buffer
-    {
-      const UniformBufferUsageFlags: GPUBufferUsageFlags =
-        GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST;
-
-      this.UniformBuffer = this.Device.createBuffer({
-        size: 256,
-        usage: UniformBufferUsageFlags,
-      });
-    }
-
-    // Create Storage Buffers
-    {
-      const StorageBufferUsageFlags: GPUBufferUsageFlags =
-        GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST;
-
-      // 1. Scene Buffer
-      const SceneBufferDescriptor: GPUBufferDescriptor = {
-        size: SceneBufferData.byteLength,
-        usage: StorageBufferUsageFlags,
-      };
-
-      this.SceneBuffer = this.Device.createBuffer(SceneBufferDescriptor);
-      this.Device.queue.writeBuffer(this.SceneBuffer, 0, SceneBufferData);
-
-      // 2. GeometryBuffer
-      const GeometryBufferDescriptor: GPUBufferDescriptor = {
-        size: GeometryBufferData.byteLength,
-        usage: StorageBufferUsageFlags,
-      };
-
-      this.GeometryBuffer = this.Device.createBuffer(GeometryBufferDescriptor);
-      this.Device.queue.writeBuffer(this.GeometryBuffer, 0, GeometryBufferData);
-
-      // 3. AccelBuffer
-      const AccelBufferDescriptor: GPUBufferDescriptor = {
-        size: AccelBufferData.byteLength,
-        usage: StorageBufferUsageFlags,
-      };
-
-      this.AccelBuffer = this.Device.createBuffer(AccelBufferDescriptor);
-      this.Device.queue.writeBuffer(this.AccelBuffer, 0, AccelBufferData);
-    }
-
-    // Create TextureViews
-    {
-      const TextureFormat: GPUTextureFormat = 'rgba8unorm';
-      const TextureUsageFlags: GPUTextureUsageFlags =
-        GPUTextureUsage.TEXTURE_BINDING |
-        GPUTextureUsage.COPY_DST |
-        GPUTextureUsage.RENDER_ATTACHMENT;
-
-      for (let iter = 0; iter < ImageBitmaps.length; iter++) {
-        const TextureDescriptor: GPUTextureDescriptor = {
-          size: [ImageBitmaps[iter].width, ImageBitmaps[iter].height, 1],
-          format: TextureFormat,
-          usage: TextureUsageFlags,
+        // Helper function to report progress
+        const reportProgress = (phase: 'loadAssets' | 'buildPipelines' | 'warmup', step: number, message?: string) => {
+            onProgress?.({ phase, step, totalSteps, message });
         };
 
-        const TextureCreated = this.Device.createTexture(TextureDescriptor);
+        // Step 5: Asset loading (World serialization)
+        reportProgress('loadAssets', 5, '모델·텍스처 로딩 중...');
 
-        this.Device.queue.copyExternalImageToTexture(
-          { source: ImageBitmaps[iter] },
-          { texture: TextureCreated },
-          [ImageBitmaps[iter].width, ImageBitmaps[iter].height]
-        );
+        // Prevent VRAM Leak
+        this.DestroyGPUResources();
 
-        this.Textures.push(TextureCreated);
-      }
+        // Initialize Scene Datas
+        {
+            this.Camera = new Camera(this.Canvas.width, this.Canvas.height);
+            this.World  = InWorld;
+            this.ResetFrameCount();
+        }
+
+        // Step 6: Build GPU resources and pipelines
+        reportProgress('buildPipelines', 6, 'Shader/Pipeline 빌드 중...');
+        this.CreateGPUResources();
+        this.CreateRenderPass();
+        await this.CreateComputePasses();
+
+        // Step 7: Warm-up complete
+        reportProgress('warmup', 7, '렌더러 준비 완료');
+
+
+        // TEST : Start!
+        {
+            this.StartTime = performance.now();
+            this.bStopRendering = false;
+        }
+
+        return;
     }
-
-    // Create Scene Texture, AccumTexture
-    {
-      const SceneTextureUsageFlags: GPUTextureUsageFlags =
-        GPUTextureUsage.TEXTURE_BINDING |
-        GPUTextureUsage.COPY_SRC |
-        GPUTextureUsage.COPY_DST;
-      const AccumTextureUsageFlags: GPUTextureUsageFlags =
-        GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.COPY_SRC;
-
-      const SceneTextureDescriptor: GPUTextureDescriptor = {
-        size: { width: this.Canvas.width, height: this.Canvas.height },
-        format: 'rgba32float',
-        usage: SceneTextureUsageFlags,
-      };
-
-      const AccumTextureDescriptor: GPUTextureDescriptor = {
-        size: { width: this.Canvas.width, height: this.Canvas.height },
-        format: 'rgba32float',
-        usage: AccumTextureUsageFlags,
-      };
-
-      this.SceneTexture = this.Device.createTexture(SceneTextureDescriptor);
-      this.AccumTexture = this.Device.createTexture(AccumTextureDescriptor);
-    }
-
-    // Create Compute Pipeline, Render Pipeline
-    {
-      const ComputeShaderModuleDescriptor: GPUShaderModuleDescriptor = {
-        code: computeShaderCode,
-      };
-      const VertexShaderModuleDescriptor: GPUShaderModuleDescriptor = {
-        code: vertexShaderCode,
-      };
-      const FragmentShaderModuleDescriptor: GPUShaderModuleDescriptor = {
-        code: fragmentShaderCode,
-      };
-
-      const ComputeShaderEntryPoint: string = 'cs_main';
-      const VertexShaderEntryPoint: string = 'vs_main';
-      const FragmentShaderEntryPoint: string = 'fs_main';
-
-      const ComputeShaderModule: GPUShaderModule =
-        this.Device.createShaderModule(ComputeShaderModuleDescriptor);
-      const VertexShaderModule: GPUShaderModule =
-        this.Device.createShaderModule(VertexShaderModuleDescriptor);
-      const FragmentShaderModule: GPUShaderModule =
-        this.Device.createShaderModule(FragmentShaderModuleDescriptor);
-
-      const ComputePipelineDescriptor: GPUComputePipelineDescriptor = {
-        layout: 'auto',
-        compute: {
-          module: ComputeShaderModule,
-          entryPoint: ComputeShaderEntryPoint,
-        },
-      };
-
-      const RenderPipelineDescriptor: GPURenderPipelineDescriptor = {
-        layout: 'auto',
-        vertex: {
-          module: VertexShaderModule,
-          entryPoint: VertexShaderEntryPoint,
-        },
-        fragment: {
-          module: FragmentShaderModule,
-          entryPoint: FragmentShaderEntryPoint,
-          targets: [{ format: this.PreferredFormat }],
-        },
-        primitive: { topology: 'triangle-list' },
-      };
-
-      this.ComputePipeline = this.Device.createComputePipeline(
-        ComputePipelineDescriptor
-      );
-      this.RenderPipeline = this.Device.createRenderPipeline(
-        RenderPipelineDescriptor
-      );
-    }
-
-    // Create Bindgroups
-    {
-      const SceneTextureView: GPUTextureView = this.SceneTexture.createView();
-      const AccumTextureView: GPUTextureView = this.AccumTexture.createView();
-
-      const ComputeBindGroupDescriptor: GPUBindGroupDescriptor = {
-        layout: this.ComputePipeline.getBindGroupLayout(0),
-        entries: [
-          { binding: 0, resource: { buffer: this.UniformBuffer } },
-          { binding: 1, resource: { buffer: this.SceneBuffer } },
-          { binding: 2, resource: { buffer: this.GeometryBuffer } },
-          { binding: 3, resource: { buffer: this.AccelBuffer } },
-
-          { binding: 10, resource: SceneTextureView },
-          { binding: 11, resource: AccumTextureView },
-        ],
-      };
-
-      const RenderBindGroupDescriptor: GPUBindGroupDescriptor = {
-        layout: this.RenderPipeline.getBindGroupLayout(0),
-        entries: [{ binding: 0, resource: SceneTextureView }],
-      };
-
-      this.ComputeBindGroup = this.Device.createBindGroup(
-        ComputeBindGroupDescriptor
-      );
-      this.RenderBindGroup = this.Device.createBindGroup(
-        RenderBindGroupDescriptor
-      );
-    }
-
-    return;
-  }
-
-  GetCamera(): Camera {
-    return this.Camera;
-  }
-
-  ResetFrameCount(): void {
-    this.FrameCount = 0;
-  }
 
     public Update() : void
     {
+        this.FrameID++;
         this.FrameCount++;
 
         // Camera Properties
         const CameraLocation            = this.Camera.GetLocation();
-        const ViewProjection            = this.Camera.GetViewProjectionMatrix();
+        const ViewMatrix                = this.Camera.GetViewMatrix();
+        const ProjectionMatrix          = this.Camera.GetProjectionMatrix();
+        const [ProjectionMatrix_Jittered, Jitter_X, Jitter_Y] = Utils.ProjectionMatrix_Jittered(ProjectionMatrix, this.FrameCount, this.Canvas.width / 2, this.Canvas.height / 2);
+
+        const ViewProjection            = mat4.multiply(ProjectionMatrix, ViewMatrix);
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ELEMENT_COUNT = 48;
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix, ViewMatrix);
+        const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
+
+        const ELEMENT_COUNT = 104;
         const UniformData   = new ArrayBuffer(4 * ELEMENT_COUNT);
         {
             const Float32View   = new Float32Array(UniformData);
             const Uint32View    = new Uint32Array(UniformData);
 
-            Uint32View[0] = this.Canvas.width;
-            Uint32View[1] = this.Canvas.height;
-            Uint32View[2] = this.World.InstancePool.GetResourceArray().length;
-            Uint32View[3] = this.World.Lights.length;
-            
-            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Inverse?.[iter]!;
-            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection_Prev[iter]!;
+            Uint32View[0] = this.Canvas.width / 2;
+            Uint32View[1] = this.Canvas.height / 2;
+            Uint32View[2] = this.Canvas.width;
+            Uint32View[3] = this.Canvas.height;
 
-            Float32View[36] = CameraLocation[0];
-            Float32View[37] = CameraLocation[1];
-            Float32View[38] = CameraLocation[2];
-            Uint32View [39] = this.FrameCount;
+            for(let iter=0; iter<16; iter++) Float32View[ 4 + iter] = ViewProjection_Jittered_Inverse?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[20 + iter] = ViewProjection?.[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[36 + iter] = ViewProjection_Inverse[iter]!;
+            for(let iter=0; iter<16; iter++) Float32View[52 + iter] = ViewProjection_Prev[iter]!;
 
-            Uint32View[40] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
-            Uint32View[41] = this.Offsets[EDataOffsetIndex.MaterialID];
-            Uint32View[42] = this.Offsets[EDataOffsetIndex.Material];
-            Uint32View[43] = this.Offsets[EDataOffsetIndex.Light];
+            Float32View[68] = CameraLocation[0];
+            Float32View[69] = CameraLocation[1];
+            Float32View[70] = CameraLocation[2];
+            Uint32View [71] = this.FrameID;
 
-            Uint32View[44] = this.Offsets[EDataOffsetIndex.LightsCDF];
-            Uint32View[45] = this.Offsets[EDataOffsetIndex.Index];
-            Uint32View[46] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
-            Uint32View[47] = this.Offsets[EDataOffsetIndex.Blas];
+            Uint32View [72] = this.Offsets[EDataOffsetIndex.MeshDescriptor];
+            Uint32View [73] = this.Offsets[EDataOffsetIndex.MaterialID];
+            Uint32View [74] = this.Offsets[EDataOffsetIndex.Material];
+            Uint32View [75] = this.Offsets[EDataOffsetIndex.Light];
+
+            Uint32View [76] = this.Offsets[EDataOffsetIndex.LightsCDF];
+            Uint32View [77] = this.Offsets[EDataOffsetIndex.Index];
+            Uint32View [78] = this.Offsets[EDataOffsetIndex.SubBlasRootArray];
+            Uint32View [79] = this.Offsets[EDataOffsetIndex.Blas];
+
+            Uint32View [80] = this.World.InstancePool.GetResourceArray().length;
+            Uint32View [81] = this.World.Lights.length;
+            Float32View[82] = (Jitter_X * 2) / this.Canvas.width * 0;
+            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height * 0;
+
+            Uint32View [87] = this.FrameCount;
+
+            Float32View[88] = this.EnvSkyColor[0];
+            Float32View[89] = this.EnvSkyColor[1];
+            Float32View[90] = this.EnvSkyColor[2];
+            Uint32View [91] = this.EnvMode;
+
+            Float32View[92] = this.EnvHorizonColor[0];
+            Float32View[93] = this.EnvHorizonColor[1];
+            Float32View[94] = this.EnvHorizonColor[2];
+            Float32View[95] = this.EnvSunIntensity * 0;
+
+            Float32View[96] = this.EnvGroundColor[0];
+            Float32View[97] = this.EnvGroundColor[1];
+            Float32View[98] = this.EnvGroundColor[2];
+            Float32View[99] = this.EnvIntensity * 0;
+
+            Float32View[100] = this.EnvSunDirection[0];
+            Float32View[101] = this.EnvSunDirection[1];
+            Float32View[102] = this.EnvSunDirection[2];
+            Float32View[103] = this.EnvIndirectMult * 0;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -578,72 +409,525 @@ export class Renderer {
         return;
     }
 
-  async Render(): Promise<void> {
-    const CommandEncoder: GPUCommandEncoder =
-      this.Device.createCommandEncoder();
-
-    // ComputePass (Path Tracing)
+    public Render() : void
     {
-      const ComputePass: GPUComputePassEncoder =
-        CommandEncoder.beginComputePass();
 
-      ComputePass.setPipeline(this.ComputePipeline);
-      ComputePass.setBindGroup(0, this.ComputeBindGroup);
-      ComputePass.dispatchWorkgroups(
-        Math.ceil(this.Canvas.width / 8),
-        Math.ceil(this.Canvas.height / 8),
-        1
-      );
+        if (USE_PERFORMANCE_TEST)
+        {
+            if (this.bStopRendering) { return; }
+            const currentTime = performance.now();
+            const elapsedTime = (currentTime - this.StartTime);
+            if (elapsedTime >= this.FREEZE_TIME_MS) { this.bStopRendering = true; return; }
+        }
 
-      ComputePass.end();
+        const WorkgroupCount_HighResolution : number[] = [Math.ceil(this.Canvas.width/8), Math.ceil(this.Canvas.height/8), 1];
+        const WorkgroupCount_LowResolution  : number[] = [Math.ceil(this.Canvas.width/16), Math.ceil(this.Canvas.height/16), 1];
+
+        const CommandEncoder : GPUCommandEncoder = this.Device.createCommandEncoder();
+
+        // Dispatch Compute Passes
+        {
+            const ComputePassEncoder : GPUComputePassEncoder = CommandEncoder.beginComputePass();
+
+            this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                        
+            this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+
+            if (USE_RESTIR)
+            {
+                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+
+            this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
+
+            ComputePassEncoder.end();
+        }
+
+        // Copy GPU Resources
+        {
+            CommandEncoder.copyTextureToTexture
+            ( 
+                { texture : this.GPUTextures[ETextureIndex.History_Write] },
+                { texture : this.GPUTextures[ETextureIndex.History_Read] },
+                { width : this.Canvas.width, height : this.Canvas.height }
+            );
+
+            CommandEncoder.copyBufferToBuffer
+            (
+                this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal], 0,
+                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
+                4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
+            );
+        }
+
+        // RenderPass (Draw ResultTexture)
+        {
+            const RenderPassDescriptor : GPURenderPassDescriptor =
+            {
+                colorAttachments :
+                [
+                    {
+                        view : this.Context.getCurrentTexture().createView(),
+                        loadOp : "clear",
+                        storeOp : "store",
+                        clearValue : { r:0, g:0, b:0, a:1 }
+                    }
+                ]
+            };
+
+            const RenderPass : GPURenderPassEncoder = CommandEncoder.beginRenderPass(RenderPassDescriptor);
+
+            RenderPass.setPipeline(this.RenderPipeline);
+            RenderPass.setBindGroup(0, this.RenderBindGroup);
+            RenderPass.draw(6);
+
+            RenderPass.end();
+        }
+
+        // Submit Encoder
+        this.Device.queue.submit( [ CommandEncoder.finish() ] );
+
+        return;
     }
 
-    // Copy Texture : AccumTexture -> SceneTexture
-    {
-      const SourceTextureInfo: GPUTexelCopyTextureInfo = {
-        texture: this.AccumTexture,
-      };
-      const DestTextureInfo: GPUTexelCopyTextureInfo = {
-        texture: this.SceneTexture,
-      };
-      const TextureSize: GPUExtent3DStrict = {
-        width: this.SceneTexture.width,
-        height: this.SceneTexture.height,
-      };
 
-      CommandEncoder.copyTextureToTexture(
-        SourceTextureInfo,
-        DestTextureInfo,
-        TextureSize
-      );
+    private CreateGPUStorageBuffer(InArrayBuffer : ArrayBuffer) : GPUBuffer
+    {
+        const StorageBufferUsageFlags   : GPUBufferUsageFlags   = GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST | GPUBufferUsage.COPY_SRC;
+        const BufferDescriptor          : GPUBufferDescriptor   = { size : InArrayBuffer.byteLength, usage : StorageBufferUsageFlags };
+        const GPUBufferCreated          : GPUBuffer             = this.Device.createBuffer(BufferDescriptor);
+
+        this.Device.queue.writeBuffer(GPUBufferCreated, 0, InArrayBuffer);
+
+        return GPUBufferCreated;
     }
 
-    // RenderPass (Draw SceneTexture)
+    private CreateGPUTexture(width : number, height : number, format : GPUTextureFormat) : GPUTexture
     {
-      const RenderPassDescriptor: GPURenderPassDescriptor = {
-        colorAttachments: [
-          {
-            view: this.Context.getCurrentTexture().createView(),
-            loadOp: 'clear',
-            storeOp: 'store',
-            clearValue: { r: 0, g: 0, b: 0, a: 1 },
-          },
-        ],
-      };
+        const TextureDescriptor : GPUTextureDescriptor =
+        {
+            size    : { width : width, height : height },
+            format  : format,
+            usage   : GPUTextureUsage.STORAGE_BINDING | GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_SRC | GPUTextureUsage.COPY_DST,
+        };
 
-      const RenderPass: GPURenderPassEncoder =
-        CommandEncoder.beginRenderPass(RenderPassDescriptor);
-
-      RenderPass.setPipeline(this.RenderPipeline);
-      RenderPass.setBindGroup(0, this.RenderBindGroup);
-      RenderPass.draw(6);
-
-      RenderPass.end();
+        return this.Device.createTexture(TextureDescriptor);
     }
 
-    // Submit Encoder
-    this.Device.queue.submit([CommandEncoder.finish()]);
+    private CreateGPUSampler_Default() : GPUSampler
+    {
+        const SamplerDescriptor : GPUSamplerDescriptor = 
+        {
+            magFilter: 'linear',
+            minFilter: 'linear',
+            mipmapFilter: 'linear',
+            addressModeU: 'repeat',
+            addressModeV: 'repeat',
+            addressModeW: 'repeat',
+            maxAnisotropy: 1, 
+        };
 
-    return;
-  }
-}
+        return this.Device.createSampler(SamplerDescriptor);
+    }
+
+    private CreateGPUSampler_Linear() : GPUSampler
+    {
+        const SamplerDescriptor : GPUSamplerDescriptor = 
+        {
+            magFilter: 'linear',
+            minFilter: 'linear',
+            mipmapFilter: 'linear',
+            addressModeU: 'clamp-to-edge',
+            addressModeV: 'clamp-to-edge',
+            addressModeW: 'clamp-to-edge',
+            maxAnisotropy: 1, 
+        };
+
+        return this.Device.createSampler(SamplerDescriptor);
+    }
+
+    private CreateGPUResources() : void
+    {
+        const [SceneBufferData, GeometryBufferData, AccelBufferData, ImageBitmaps, Offsets] = this.World.Serialize();
+
+        this.Offsets = Offsets;
+
+        this.GPUBuffers[EBufferIndex.Uniform]                   = this.Device.createBuffer( { size : 1024, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Scene]                     = this.CreateGPUStorageBuffer(SceneBufferData);
+        this.GPUBuffers[EBufferIndex.Geometry]                  = this.CreateGPUStorageBuffer(GeometryBufferData);
+        this.GPUBuffers[EBufferIndex.Accel]                     = this.CreateGPUStorageBuffer(AccelBufferData);
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Init]      = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal]  = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial]   = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame]       = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+
+        this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
+        this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba32float");
+        this.GPUTextures[ETextureIndex.MotionVector]    = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+        this.GPUTextures[ETextureIndex.Radiance]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba16float");
+        this.GPUTextures[ETextureIndex.History_Read]    = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height, "rgba16float");
+        this.GPUTextures[ETextureIndex.History_Write]   = this.CreateGPUTexture(this.Canvas.width, this.Canvas.height, "rgba16float");
+
+        this.GPUSamplers[ESamplerIndex.Default] = this.CreateGPUSampler_Default();
+        this.GPUSamplers[ESamplerIndex.Linear]  = this.CreateGPUSampler_Linear();
+
+        return;
+    }
+
+    private DestroyGPUResources() : void
+    {
+
+        for (let iter = 0; iter < EBufferIndex.SIZE; iter++)
+        {
+            this.GPUBuffers[iter]?.destroy();
+        }
+
+        for (let iter = 0; iter < ETextureIndex.SIZE; iter++)
+        {
+            this.GPUTextures[iter]?.destroy();
+        }
+
+        return;
+    }
+
+    private async CreateComputePasses() : Promise<void>
+    {
+        // Define All Compute Passes (Orders Respect To EComputePassIndex)
+        const ComputePassesToCreate : Promise<ComputePass>[] =
+        [
+
+            ComputePass.Create // GBuffer Creation
+            (
+                this.Device, 
+                ShaderCode_GBufferCreation, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                ],
+                [   // Read GPUSampler
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ]
+            ),
+
+            ComputePass.Create // Motion Vector Creation
+            (
+                this.Device, 
+                ShaderCode_GetMotionVector,
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
+                ]
+            ),
+
+            ComputePass.Create // Initialize
+            (
+                this.Device, 
+                ShaderCode_Initialize, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
+                ],
+                [   // Write GPUTextureView
+                ]
+            ),
+
+            ComputePass.Create // Temporal Reuse
+            (
+                this.Device, 
+                ShaderCode_REUSE_TEMPORAL, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
+                ],
+                [   // Write GPUTextureView
+                ]
+            ),
+
+            ComputePass.Create // Spatial Reuse
+            (
+                this.Device, 
+                ShaderCode_REUSE_SPATIAL, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial],
+                ],
+                [   // Write GPUTextureView
+                ]
+            ),
+
+            ComputePass.Create // Final Shading
+            (
+                this.Device, 
+                ShaderCode_FinalShading, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.Radiance].createView(),
+                ]
+            ),
+
+            ComputePass.Create // Post Processing
+            (
+                this.Device, 
+                ShaderCode_PostProcess, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.Radiance].createView(),
+                    this.GPUTextures[ETextureIndex.History_Read].createView(),
+                    this.GPUTextures[ETextureIndex.MotionVector].createView(),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Linear],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.History_Write].createView(),
+                ]
+            ),
+
+            ComputePass.Create // MCPT (Test Purpose)
+            (
+                this.Device, 
+                ShaderCode_MCPT, 
+                [   // Read GPUBuffer
+                    this.GPUBuffers[EBufferIndex.Uniform],
+                    this.GPUBuffers[EBufferIndex.Scene],
+                    this.GPUBuffers[EBufferIndex.Geometry],
+                    this.GPUBuffers[EBufferIndex.Accel],
+                ],
+                [   // Read GPUTextureView
+                    this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
+                    this.GPUTextures[ETextureIndex.G_Buffer].createView(),
+                ],
+                [   // Read GPUSampler
+                    this.GPUSamplers[ESamplerIndex.Default],
+                ],
+                [   // Write GPUBuffer
+                ],
+                [   // Write GPUTextureView
+                    this.GPUTextures[ETextureIndex.Radiance].createView(),
+                ]
+            ),
+        ];
+
+        this.ComputePasses = await Promise.all(ComputePassesToCreate);
+
+        return;
+    }
+
+    private CreateRenderPass() : void
+    {
+
+        // Create Render Pipeline
+        {
+            const ShaderModuleDescriptor_Vertex   : GPUShaderModuleDescriptor = { code : ShaderCode_Vertex };
+            const ShaderModuleDescriptor_Fragment : GPUShaderModuleDescriptor = { code : ShaderCode_Fragment };
+
+            const ShaderModule_Vertex    : GPUShaderModule = this.Device.createShaderModule(ShaderModuleDescriptor_Vertex);
+            const ShaderModule_Fragment  : GPUShaderModule = this.Device.createShaderModule(ShaderModuleDescriptor_Fragment);
+
+            const RenderPipelineDescriptor : GPURenderPipelineDescriptor =
+            {
+                layout      : "auto",
+                vertex      : { module: ShaderModule_Vertex,    entryPoint: "vs_main" },
+                fragment    : { module: ShaderModule_Fragment,  entryPoint: "fs_main", targets : [{ format: this.PreferredFormat }] },
+                primitive   : { topology: "triangle-list" },
+            };
+
+            this.RenderPipeline = this.Device.createRenderPipeline(RenderPipelineDescriptor);
+        }
+
+        // Create Render BindGroup
+        {
+            const RenderBindGroupDescriptor: GPUBindGroupDescriptor =
+            {
+                layout  : this.RenderPipeline.getBindGroupLayout(0),
+                entries : 
+                [
+                    { binding :  0, resource : this.GPUBuffers[EBufferIndex.Uniform] },
+                    { binding : 10, resource : this.GPUTextures[ETextureIndex.History_Write].createView() },
+                    { binding : 20, resource : this.GPUSamplers[ESamplerIndex.Linear] },
+                ],
+            };
+
+            this.RenderBindGroup = this.Device.createBindGroup(RenderBindGroupDescriptor);
+        }
+
+        return;
+    }
+
+    private CreateTextureArray2048(bitmaps: ImageBitmap[]) : GPUTexture
+    {
+        const WIDTH = 2048;
+        const HEIGHT = 2048;
+        const layerCount = bitmaps.length;
+
+        // 1. 텍스처가 1장도 없으면 에러 처리 혹은 1x1 더미 텍스처 반환
+        if (layerCount === 0) {
+            // 1x1 크기, 1개 레이어 텍스처 생성
+            const dummyTexture = this.Device.createTexture({
+                size: [1, 1, 1], 
+                format: 'rgba8unorm',
+                usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST,
+                dimension: '2d',
+                label: 'Dummy_White_1x1'
+            });
+
+            // 흰색 픽셀 데이터 (R, G, B, A) = (255, 255, 255, 255)
+            const whitePixel = new Uint8Array([255, 255, 255, 255]);
+
+            // 텍스처에 데이터 쓰기 (writeTexture 사용)
+            this.Device.queue.writeTexture(
+                { texture: dummyTexture },
+                whitePixel,
+                { bytesPerRow: 4, rowsPerImage: 1 },
+                [1, 1, 1]
+            );
+
+            return dummyTexture;
+        }
+
+        // 2. GPUTexture 생성 (2D Array)
+        const textureDescriptor: GPUTextureDescriptor = {
+            size: [WIDTH, HEIGHT, layerCount], // [Width, Height, LayerCount]
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | 
+                GPUTextureUsage.COPY_DST | 
+                GPUTextureUsage.RENDER_ATTACHMENT,
+            dimension: '2d',
+            label: 'Global_Material_TextureArray_2048'
+        };
+        
+        const textureArray = this.Device.createTexture(textureDescriptor);
+
+        // 3. 리사이징을 위한 임시 캔버스 (재사용)
+        // OffscreenCanvas가 지원되지 않는 환경을 대비해 분기 처리 가능하나, WebGPU 환경이면 보통 지원됨
+        let resizeContext: OffscreenCanvasRenderingContext2D | null = null;
+        let resizeCanvas: OffscreenCanvas | null = null;
+
+        // 4. 순회 및 업로드
+        for (let i = 0; i < layerCount; i++) {
+            const bitmap = bitmaps[i];
+            
+            // 업로드 소스 (기본은 원본 비트맵)
+            let source: ImageBitmap | OffscreenCanvas = bitmap;
+
+            // A. 크기가 2048x2048이 아닌 경우 -> 캔버스를 거쳐서 리사이징
+            if (bitmap.width !== WIDTH || bitmap.height !== HEIGHT) {
+                
+                // 캔버스는 필요할 때 한 번만 생성 (Lazy Init)
+                if (!resizeCanvas || !resizeContext) {
+                    resizeCanvas = new OffscreenCanvas(WIDTH, HEIGHT);
+                    resizeContext = resizeCanvas.getContext('2d') as OffscreenCanvasRenderingContext2D;
+                    
+                    if (!resizeContext) {
+                        throw new Error("OffscreenCanvas Context 생성 실패");
+                    }
+                    // 이미지 보간 품질 설정 (취향에 따라 'low', 'medium', 'high')
+                    resizeContext.imageSmoothingQuality = 'high'; 
+                }
+
+                // 캔버스 초기화 및 그리기 (Stretch)
+                resizeContext.clearRect(0, 0, WIDTH, HEIGHT);
+                resizeContext.drawImage(bitmap, 0, 0, WIDTH, HEIGHT);
+                
+                // 소스를 캔버스로 교체
+                source = resizeCanvas;
+            }
+
+            // B. GPU 업로드
+            this.Device.queue.copyExternalImageToTexture(
+                { source: source },
+                { 
+                    texture: textureArray, 
+                    origin: [0, 0, i], // z축이 곧 배열의 인덱스(Layer)입니다.
+                },
+                [WIDTH, HEIGHT]
+            );
+        }
+
+        return textureArray;
+    }
+};

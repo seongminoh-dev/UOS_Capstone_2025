@@ -10,7 +10,7 @@ import { WebGPUError } from './types/WebGPUError';
 import type { WebGPUErrorCode } from './types/WebGPUError';
 
 // Renderer
-import { Renderer } from '../Renderer_TEST';
+import { Renderer } from '../Renderer';
 
 // Lighting Module (새로운 통합 모듈)
 import {
