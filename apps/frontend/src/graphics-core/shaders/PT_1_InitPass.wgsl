@@ -243,6 +243,81 @@ const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
+const MIN_J      : f32 = 1e-4;
+const MAX_J      : f32 = 1e+4;
+
+//==========================================================================
+// Procedural Sky (물리 기반 환경광)
+//==========================================================================
+
+fn SampleProceduralSky(rayDir : vec3<f32>) -> vec3<f32>
+{
+    // Uniform에서 환경 파라미터 가져오기
+    let skyColor     = UniformBuffer.EnvSkyColor;
+    let horizonColor = UniformBuffer.EnvHorizonColor.xyz;
+    let groundColor  = UniformBuffer.EnvGroundColor.xyz;
+    let sunDir       = UniformBuffer.EnvSunDirection;
+    let sunIntensity = UniformBuffer.EnvSunIntensity;
+    let envIntensity = UniformBuffer.EnvIntensity;
+
+    // 시선 방향의 수직 성분 (y = 1: 천정, y = 0: 지평선, y = -1: 지면)
+    let cosTheta = rayDir.y;
+
+    // === 하늘/지면 구분 ===
+    if (cosTheta < 0.0) {
+        // 지면 방향: 지면 반사색 반환
+        let groundFactor = clamp(-cosTheta, 0.0, 1.0);
+        return groundColor * envIntensity * (0.5 + groundFactor * 0.5);
+    }
+
+    // === Rayleigh 산란 근사 ===
+    // 천정(cosTheta=1)에서 skyColor, 지평선(cosTheta=0)에서 horizonColor
+    let heightFactor = pow(cosTheta, 0.4); // 비선형 보간 (지평선 근처에서 더 넓게)
+    var skyResult = mix(horizonColor, skyColor, heightFactor);
+
+    // === Mie 산란 근사 (태양 광채/aureole) ===
+    if (sunIntensity > 0.0) {
+        let cosSun = dot(rayDir, -sunDir); // 태양 방향과의 각도
+
+        // 태양 디스크 (매우 밝은 중심)
+        let sunDisk = smoothstep(0.9995, 0.9999, cosSun) * 50.0;
+
+        // 태양 주변 광채 (Mie forward scattering)
+        let aureole = pow(max(cosSun, 0.0), 64.0) * 2.0;
+
+        // 태양빛 색상 (색온도 기반 - Uniform에서 계산된 값 사용)
+        // 여기서는 단순히 따뜻한 흰색 사용
+        let sunColor = vec3<f32>(1.0, 0.95, 0.9);
+
+        skyResult += sunColor * (sunDisk + aureole) * sunIntensity;
+    }
+
+    return skyResult * envIntensity;
+}
+
+// 기본 회색 환경색 (없음 모드용)
+const DEFAULT_ENV_COLOR : vec3<f32> = vec3<f32>(0.5, 0.5, 0.5);
+
+fn GetEnvironmentColor(rayDir : vec3<f32>) -> vec3<f32>
+{
+    var EnvColor : vec3<f32>;
+
+    switch ( UniformBuffer.EnvMode )
+    {
+        case 0u : { EnvColor = DEFAULT_ENV_COLOR; }
+        case 1u : { EnvColor = UniformBuffer.EnvSkyColor * UniformBuffer.EnvIntensity; }
+        case default : { EnvColor = SampleProceduralSky(rayDir); }
+    }
+
+    return EnvColor;
+}
+
+// 간접광용 환경색 (EnvIndirectMult 적용)
+fn GetEnvironmentColorIndirect(rayDir : vec3<f32>) -> vec3<f32>
+{
+    return GetEnvironmentColor(rayDir) * UniformBuffer.EnvIndirectMult;
+}
+
 //==========================================================================
 // Enums
 //==========================================================================
@@ -1591,6 +1666,8 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
 }
 
 
+
+
 //==========================================================================
 // Main
 //==========================================================================
@@ -1604,7 +1681,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
         let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     // 1. 초기화
@@ -1734,6 +1811,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
     }
+    storageBarrier();
+    workgroupBarrier();
 
     return;
 }

@@ -33,3 +33,82 @@
   font-size: 10px;
   color: rgba(255, 255, 255, 0.5);
 }
+
+/* 구분선 */
+.camera-help-overlay__divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.15);
+  margin: 4px 0;
+}
+
+/* 시점 저장 버튼 */
+.camera-help-overlay__save-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  margin-top: 2px;
+  font-size: 10px;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(59, 130, 246, 0.3);
+  border: 1px solid rgba(59, 130, 246, 0.4);
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.camera-help-overlay__save-btn:hover {
+  color: #fff;
+  background: rgba(59, 130, 246, 0.5);
+  border-color: rgba(59, 130, 246, 0.6);
+}
+
+.camera-help-overlay__save-btn:active {
+  background: rgba(59, 130, 246, 0.6);
+  transform: scale(0.98);
+}
+
+.camera-help-overlay__save-icon {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.camera-help-overlay__save-label {
+  font-weight: 500;
+}
+
+.camera-help-overlay__save-shortcut {
+  font-size: 9px;
+  padding: 1px 4px;
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 2px;
+  margin-left: auto;
+}
+
+/* 저장 완료 상태 */
+.camera-help-overlay__save-btn--saving {
+  color: #fff;
+  background: rgba(34, 197, 94, 0.5);
+  border-color: rgba(34, 197, 94, 0.7);
+  animation: cameraSaveFlash 0.3s ease-out;
+}
+
+.camera-help-overlay__save-btn--saving:hover {
+  background: rgba(34, 197, 94, 0.5);
+  border-color: rgba(34, 197, 94, 0.7);
+}
+
+@keyframes cameraSaveFlash {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.5);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 8px 2px rgba(34, 197, 94, 0.4);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+  }
+}

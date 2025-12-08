@@ -344,6 +344,7 @@ const LOBE_LIGHT    : u32 = 3u;
 
 @group(0) @binding(10) var TexturePool  : texture_2d_array<f32>;
 @group(0) @binding(11) var G_Buffer     : texture_2d<f32>;
+@group(0) @binding(12) var DITexture : texture_storage_2d<rgba16float, read>;
 
 @group(0) @binding(20) var TextureSampler : sampler;
 
@@ -1574,6 +1575,9 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
+
+    storageBarrier();
+    workgroupBarrier();
 
     // 0. 범위 밖 스레드는 계산 X
     {
