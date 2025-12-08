@@ -27,6 +27,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
+let USE_RESTIR : boolean = true;
 
 const EBufferIndex =
 {
@@ -379,17 +380,17 @@ export class Renderer
             Float32View[92] = this.EnvHorizonColor[0];
             Float32View[93] = this.EnvHorizonColor[1];
             Float32View[94] = this.EnvHorizonColor[2];
-            Float32View[95] = this.EnvSunIntensity;
+            Float32View[95] = this.EnvSunIntensity * 0;
 
             Float32View[96] = this.EnvGroundColor[0];
             Float32View[97] = this.EnvGroundColor[1];
             Float32View[98] = this.EnvGroundColor[2];
-            Float32View[99] = this.EnvIntensity;
+            Float32View[99] = this.EnvIntensity * 0;
 
             Float32View[100] = this.EnvSunDirection[0];
             Float32View[101] = this.EnvSunDirection[1];
             Float32View[102] = this.EnvSunDirection[2];
-            Float32View[103] = this.EnvIndirectMult;
+            Float32View[103] = this.EnvIndirectMult * 0;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -705,7 +706,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
@@ -909,6 +910,4 @@ export class Renderer
 
         return textureArray;
     }
-
-    //private CopyBuffer
 };

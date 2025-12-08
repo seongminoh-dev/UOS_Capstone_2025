@@ -5,7 +5,7 @@
  * ID prefix: template_
  */
 
-import type { SceneFrontend, SunSettings } from '../../graphics-core/service/Scene';
+import type { PointLightParams, SceneFrontend, SunSettings } from '../../graphics-core/service/Scene';
 
 /**
  * 기본 태양광 설정
@@ -43,84 +43,110 @@ export const TEMPLATE_SCENE_1: SceneFrontend = {
     fov: 60,
   },
 
-  assets: [
-    // Window Object
+assets: [
+    // 1. 고정 에셋
     {
       id: 'window_instance_0',
       type: 'object',
       meshName: 'WhiteWindow',
-      transform: {
-        position: [0, 2, 0],
-        rotation: [0, 3.14 / 2, 0],
-        scale: [1, 1, 1],
-      },
+      transform: { position: [0, 2, 0], rotation: [0, 1.57, 0], scale: [1, 1, 1] },
     },
-
-    // Point Lights
-    {
-      id: 'bulb',
-      type: 'point-light',
+    
+    // 2. 랜덤 광원 100개 생성 및 펼치기(...)
+    ...Array.from({ length: 100 }, (_, i) => ({
+      id: `random-bulb-${i}`,
+      type: 'point-light' as const, // 타입 에러 방지용
       lightParams: {
-        position: [-2.33, 0, -3.77],
+        position: [
+          Number((Math.random() * 14 - 3).toFixed(2)),
+          Number((Math.random() * 8).toFixed(2)),
+          Number((Math.random() * 10 - 5).toFixed(2))
+        ],
         color: [1, 1, 1],
-        intensity: 1.0,
-      },
-    },
-    {
-      id: 'bulb1',
-      type: 'point-light',
-      lightParams: {
-        position: [-2.33, 7, -3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
-    {
-      id: 'bulb2',
-      type: 'point-light',
-      lightParams: {
-        position: [4.10, 7.5, -3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
-    {
-      id: 'bulb3',
-      type: 'point-light',
-      lightParams: {
-        position: [9.80, 7.5, -3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
-    {
-      id: 'bulb4',
-      type: 'point-light',
-      lightParams: {
-        position: [-2.33, 7, 3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
-    {
-      id: 'bulb5',
-      type: 'point-light',
-      lightParams: {
-        position: [4.10, 7.5, 3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
-    {
-      id: 'bulb6',
-      type: 'point-light',
-      lightParams: {
-        position: [9.80, 7.5, 3.77],
-        color: [1, 1, 1],
-        intensity: 15.0,
-      },
-    },
+        intensity: Number((Math.random() * 1 + 1).toFixed(1)),
+      } as PointLightParams,
+    })),
   ],
+
+  
+  // assets: [
+  //   // Window Object
+  //   {
+  //     id: 'window_instance_0',
+  //     type: 'object',
+  //     meshName: 'WhiteWindow',
+  //     transform: {
+  //       position: [0, 2, 0],
+  //       rotation: [0, 3.14 / 2, 0],
+  //       scale: [1, 1, 1],
+  //     },
+  //   },
+
+  //   // Point Lights
+  //   {
+  //     id: 'bulb',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [-2.33, 0, -3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 1.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb1',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [-2.33, 7, -3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb2',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [4.10, 7.5, -3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb3',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [9.80, 7.5, -3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb4',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [-2.33, 7, 3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb5',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [4.10, 7.5, 3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  //   {
+  //     id: 'bulb6',
+  //     type: 'point-light',
+  //     lightParams: {
+  //       position: [9.80, 7.5, 3.77],
+  //       color: [1, 1, 1],
+  //       intensity: 15.0,
+  //     },
+  //   },
+  // ],
 
   createdAt: '2024-01-01T00:00:00.000Z',
   updatedAt: '2024-01-01T00:00:00.000Z',
