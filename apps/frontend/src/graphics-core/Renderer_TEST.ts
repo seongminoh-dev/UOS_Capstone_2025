@@ -27,7 +27,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = true;
+let USE_RESTIR : boolean = false;
 
 const EBufferIndex =
 {
@@ -331,7 +331,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix, ViewMatrix);
         const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
 
         const ELEMENT_COUNT = 104;
@@ -367,8 +367,8 @@ export class Renderer
 
             Uint32View [80] = this.World.InstancePool.GetResourceArray().length;
             Uint32View [81] = this.World.Lights.length;
-            Float32View[82] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height;
+            Float32View[82] = (Jitter_X * 2) / this.Canvas.width * 0;
+            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height * 0;
 
             Uint32View [87] = this.FrameCount;
 
@@ -419,7 +419,7 @@ export class Renderer
             if (USE_RESTIR)
             {
                 this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             }
 
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
@@ -465,7 +465,7 @@ export class Renderer
 
             CommandEncoder.copyBufferToBuffer
             (
-                this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial], 0,
+                this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal], 0,
                 this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
                 4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
             );
@@ -711,7 +711,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Temporal : EBufferIndex.Reservoir_Write_Init],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
