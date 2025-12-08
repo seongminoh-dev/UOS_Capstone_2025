@@ -232,7 +232,7 @@ const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS : f32 = 0.02;
 
-const DI_COUNT : u32 = 2u;
+const DI_COUNT : u32 = 4u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
@@ -242,9 +242,6 @@ const RED       : vec3<f32> = vec3<f32>(1.0, 0.0, 0.0);
 const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
-
-const MIN_J      : f32 = 1e-4;
-const MAX_J      : f32 = 1e+4;
 
 //==========================================================================
 // Enums
@@ -492,16 +489,16 @@ fn GetRcVertex(X : CompactSurface) -> vec4<f32>
     return OutRcVertex;
 }
 
-fn GetCompactSurface(RcVertex : vec4<f32>) -> CompactSurface
+fn GetCompactSurface(CompactSurfaceRawData : vec4<f32>) -> CompactSurface
 {
     var OutCompactSurface           : CompactSurface    = CompactSurface();
-    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(RcVertex.r);
+    let Valid_InstanceID_MaterialID : u32               = bitcast<u32>(CompactSurfaceRawData.r);
 
     OutCompactSurface.IsValidSurface    = bool( Valid_InstanceID_MaterialID & 0x80000000u );
     OutCompactSurface.InstanceID        = ( Valid_InstanceID_MaterialID & 0x7fff0000u ) >> 16u;
     OutCompactSurface.MaterialID        = ( Valid_InstanceID_MaterialID & 0x0000ffffu );
-    OutCompactSurface.PrimitiveID       = bitcast<u32>(RcVertex.g);
-    OutCompactSurface.Barycentric       = vec2<f32>( RcVertex.b, RcVertex.a );
+    OutCompactSurface.PrimitiveID       = bitcast<u32>(CompactSurfaceRawData.g);
+    OutCompactSurface.Barycentric       = vec2<f32>( CompactSurfaceRawData.b, CompactSurfaceRawData.a );
 
     return OutCompactSurface;
 }
@@ -1589,8 +1586,6 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
 }
 
 
-
-
 //==========================================================================
 // Main
 //==========================================================================
@@ -1604,7 +1599,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
         let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     // 1. 초기화
@@ -1734,8 +1729,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
     }
-    storageBarrier();
-    workgroupBarrier();
 
     return;
 }

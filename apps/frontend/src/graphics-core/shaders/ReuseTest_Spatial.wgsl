@@ -228,11 +228,11 @@ const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
-const MAX_SAMPLES       : u32 = 5u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
+
 
 
 //==========================================================================
@@ -261,9 +261,8 @@ const LOBE_LIGHT    : u32 = 3u;
 @group(0) @binding(3) var<storage, read>    AccelBuffer             : array<u32>;
 @group(0) @binding(4) var<storage, read>    ReservoirBuffer_Read    : array<Reservoir>;
 
-@group(0) @binding(10) var TexturePool          : texture_2d_array<f32>;
-@group(0) @binding(11) var G_Buffer             : texture_2d<f32>;
-@group(0) @binding(12) var MotionVectorTexture  : texture_2d<f32>;
+@group(0) @binding(10) var TexturePool      : texture_2d_array<f32>;
+@group(0) @binding(11) var G_Buffer         : texture_2d<f32>;
 
 @group(0) @binding(20) var TextureSampler   : sampler;
 
@@ -1441,7 +1440,7 @@ fn UpdateReservoir(
 )
 {
     (*pReservoir).C         = min( (*pReservoir).C + Confidence, MAX_CONFIDENCE );
-    (*pReservoir).w_sum    += RIS;
+    (*pReservoir).w_sum     = RIS;
 
     let Pr_Change       : f32   = RIS / ((*pReservoir).w_sum);
     let bChangeSample   : bool  = Random(pRandomSeed) < Pr_Change;
@@ -1456,8 +1455,6 @@ fn UpdateReservoir(
 
 fn PartialJacobian(InPath : RegeneratedPath) -> f32
 {
-    if (InPath.k == 0u) { return 0.0; }
-
     let bIsLight_Xk : bool = ( InPath.Lobe[InPath.k] == LOBE_LIGHT );
 
     let X_Prev : Surface = InPath.Surface[InPath.k - 2];
@@ -1518,7 +1515,6 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
 
         OutPath.Lobe[i]             = W.Lobe;
         let HitInfo : HitResult     = TraceRay( Ray(X_Curr.Position, W.Direction) );
-        if ( !HitInfo.IsValidHit ) { OutPath.k = 0u; return OutPath; }
 
         OutPath.Surface[i + 1]      = GetSurface( HitInfo.SurfaceInfo );
     }
@@ -1526,7 +1522,6 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
     if ( InCompactPath.Lobe_k != LOBE_LIGHT )
     {
         OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
-
         if ( !IsSafeToReconnect(
             OutPath.Surface[InCompactPath.k - 1], OutPath.Lobe[InCompactPath.k - 1],
             OutPath.Surface[InCompactPath.k    ], OutPath.Lobe[InCompactPath.k    ]) 
@@ -1612,73 +1607,10 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
     return f;
 }
 
-fn GetNonCanonicalSample(XY_NonCanonical : vec2<u32>, XY_Canonical : vec2<u32>) -> Reservoir
-{
-    if ( !IsInBoundary( XY_NonCanonical ) ) { return Reservoir(); }
-
-    let X0_Canonical    : vec3<f32> = Get_X0( XY_Canonical );
-    let X0_NonCanonical : vec3<f32> = Get_X0( XY_NonCanonical );
-
-    let C1_Canonical    : CompactSurface = Get_X1( XY_Canonical );
-    let C1_NonCanonical : CompactSurface = Get_X1( XY_NonCanonical );
-
-    let X1_Canonical    : Surface = GetSurface( C1_Canonical );
-    let X1_NonCanonical : Surface = GetSurface( C1_NonCanonical );
-
-    let LinearDepth_Canonical       : f32 = length(X1_Canonical.Position - X0_Canonical);
-    let LinearDepth_NonCanonical    : f32 = length(X1_NonCanonical.Position - X0_NonCanonical);
-
-    let bInstanceSame       : bool = (C1_Canonical.InstanceID == C1_NonCanonical.InstanceID);
-    let bRoughnessSimilar   : bool = abs(X1_Canonical.Roughness - X1_NonCanonical.Roughness) < 0.1;
-    let bDepthSimilar       : bool = abs(LinearDepth_Canonical - LinearDepth_NonCanonical) / (LinearDepth_Canonical + 1e-6) < 0.02;
-    let bNormalSimilar      : bool = dot(X1_Canonical.Normal, X1_NonCanonical.Normal) > 0.98;
-
-    let bSampleReusable     : bool = bInstanceSame && bRoughnessSimilar && bDepthSimilar && bNormalSimilar;
-    if ( !bSampleReusable ) { return Reservoir(); }
-
-    var OutReservoir : Reservoir = LoadReservoir(XY_NonCanonical);
-
-    let bUCWValid : bool = IsValid_f32(OutReservoir.UCW);
-
-    OutReservoir.UCW    = select(0.0, OutReservoir.UCW, bUCWValid);
-    OutReservoir.C      = select(0u, OutReservoir.C, bUCWValid);
-
-    return OutReservoir;
-}
 
 
 
 
-//==========================================================================
-// TEST
-//==========================================================================
-
-
-fn IsInf_f32(val: f32) -> bool 
-{
-    return abs(val) > 3.402823e38;
-}
-
-fn IsNan_f32(A : f32) -> bool
-{
-    return (A != A);
-}
-
-fn IsNan_vec3(A : vec3<f32>) -> bool
-{
-    return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
-}
-
-fn IsValid_f32(A : f32) -> bool
-{
-    return (A == A) && ( abs(A) <= 3.402823e38 );
-}
-
-
-
-//==========================================================================
-// Main
-//==========================================================================
 
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
@@ -1686,47 +1618,48 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if ( !IsInBoundary(ThreadID.xy) ) { return; }
 
-    
     // Initialize
     var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
-    let Radius  : f32 = 30.0;
-    var idx     : u32 = 1u;
+    let Delta   : i32 = 1;
+    var idx     : u32 = 1;
     var C_sum   : u32 = 0u;
 
-    var ReservoirArray      : array<Reservoir, MAX_SAMPLES>;
-    var ShiftedPathArray    : array<RegeneratedPath, MAX_SAMPLES>;
-    var JacobianArray       : array<f32, MAX_SAMPLES>;
-    var P_hatArray          : array<f32, MAX_SAMPLES>;
-    var MISArray            : array<f32, MAX_SAMPLES>;
+    var ReservoirArray      : array<Reservoir, 25u>;
+    var ShiftedPathArray    : array<RegeneratedPath, 25u>;
+    var JacobianArray       : array<f32, 25u>;
+    var MISArray            : array<f32, 25u>;
 
     var AccumReservoir      : Reservoir;
-
+    {
+        AccumReservoir.w_sum = 0.0;
+        AccumReservoir.C     = 0u;
+    }
 
 
     // Canonical Sample
     ReservoirArray[0] = LoadReservoir(ThreadID.xy);
     C_sum += ReservoirArray[0].C;
-    for (var i = 0u; i < MAX_SAMPLES; i++)
+
+    // Non-Canonical Samples
+    for (var dx : i32 = -Delta; dx <= Delta; dx++)
     {
-        let r0 = Random(&rSeed);
-        let r1 = Random(&rSeed);
-        
-        let radius = Radius * sqrt(r0);
-        let angle  = 6.283185 * r1;
-        
-        let offset = vec2<f32>(cos(angle), sin(angle)) * radius;
-        let XY_NonCanonical = vec2<u32>( vec2<f32>(ThreadID.xy) + offset );
+        for (var dy : i32 = -Delta; dy <= Delta; dy++)
+        {
+            let NeighborID : vec2<u32> = vec2<u32>( vec2<i32>(ThreadID.xy) + vec2<i32>(dx, dy) );
 
-        // 2. 경계 체크
-        if (!IsInBoundary(XY_NonCanonical)) { continue; }
-        if (XY_NonCanonical.x == u32(ThreadID.x) && XY_NonCanonical.y == u32(ThreadID.y)) { continue; }
+            if ( dx == 0 && dy == 0 )           { continue; }
+            if ( !IsInBoundary(NeighborID) )    { continue; }
+            
+            let NeighborReservoir : Reservoir = LoadReservoir(NeighborID);
+            if ( NeighborReservoir.Sample.k == 0u ) { continue; }
 
-        ReservoirArray[idx] = GetNonCanonicalSample(XY_NonCanonical, ThreadID.xy);
-        if ( ReservoirArray[idx].C == 0u ) { continue; }
+            ReservoirArray[idx] = NeighborReservoir;
+            C_sum += ReservoirArray[idx].C;
 
-        C_sum += ReservoirArray[idx].C;
-        idx = select(idx + 1u, idx, ReservoirArray[idx].C == 0u);
+            idx++;
+        }
     }
+
 
     // Shift All Samples To Current Domain
     for (var iter : u32 = 0u; iter < idx; iter++)
@@ -1734,94 +1667,55 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         ShiftedPathArray[iter] = RegeneratePath(ThreadID.xy, ReservoirArray[iter].Sample);
     }
 
+
     // Compute Jacobians
     JacobianArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        JacobianArray[iter] = select(PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J, 0.0, ShiftedPathArray[iter].J == 0.0);
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ReservoirArray[iter].Sample.J;
     }
 
-    // Compute P_hat
-    for (var iter : u32 = 0u; iter < idx; iter++)
-    {
-        P_hatArray[iter] = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
-    }
 
     // Compute Pairwise MIS
+    MISArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        let C_canon : f32 = f32(ReservoirArray[0].C);
-        let C_total : f32 = f32(C_sum);
-        let C_other : f32 = C_total - C_canon; 
+        if ( JacobianArray[iter] < 1e-10 ) { continue; }
 
-        MISArray[0] = select(0.0, C_canon / C_total, C_total > 0.0);
+        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+        let P_hat_cy : f32 = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
 
-        for (var iter : u32 = 1u; iter < idx; iter++)
-        {
-            let jacobian : f32 = JacobianArray[iter];
-            var p_i : f32 = 0.0;
-            
-            if (abs(jacobian) > 1e-9) { p_i = ReservoirArray[iter].Sample.P_hat / jacobian; }
-            
-            let p_c : f32 = P_hatArray[iter];
-            let n_i : f32 = C_other * p_i;
-            let n_c : f32 = C_canon * p_c;
-            let sum_i : f32 = n_i + n_c;
+        let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
+        let MIS_DL : f32 = f32(C_sum);
+        let MIS_NR : f32 = f32(ReservoirArray[iter].C) * P_hat_iy;
+        let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy + f32(ReservoirArray[0].C) * P_hat_cy );
 
-            MISArray[iter] = select(0.0, (f32(ReservoirArray[iter].C) / C_total) * (n_i / sum_i), sum_i > 1e-9);
+        let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+        MISArray[iter] = select( 0.0, MIS, MIS_DR > 1e-10 );
 
-            let p_c_at_c    : f32 = P_hatArray[0]; 
-            let p_i_at_c    : f32 = p_c_at_c; 
-            
-            let n_c_self    : f32 = C_canon * p_c_at_c;
-            let n_i_self    : f32 = C_other * p_i_at_c;
-            let sum_c       : f32 = n_c_self + n_i_self;
-
-            if (sum_c > 1e-9)
-            {
-                let weight_gain : f32 = (f32(ReservoirArray[iter].C) / C_total) * (n_c_self / sum_c);
-                MISArray[0] += weight_gain;
-            }
-        }
-
+        let RIS : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hat_cy, ReservoirArray[iter].C);
     }
 
 
-    // Compute RIS and Put into Reservoir
-    for (var iter : u32 = 0u; iter < idx; iter++)
+
+    // Compute RIS
     {
-        let RIS : f32 = MISArray[iter] * ReservoirArray[iter].UCW * P_hatArray[iter] * JacobianArray[iter];
-        if ( !IsValid_f32(RIS) ) {continue;}
-        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hatArray[iter], ReservoirArray[iter].C);
+        let P_hat_cy    : f32 = Luminance( PathContribution( ShiftedPathArray[0] ) * ReservoirArray[0].Sample.Radiance );
+        let RIS         : f32 = MISArray[0] * P_hat_cy * ReservoirArray[0].UCW * JacobianArray[0];
+
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[0].Sample, RIS, P_hat_cy, ReservoirArray[0].C);
     }
 
+    
 
     // Write Reservoir To Buffer
     {
         AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
-
-        if ( GetSurface( Get_X1(ThreadID.xy) ).Transmission == 1.0 ) {}
-        else if (AccumReservoir.P_hat < 1e-7)
-        {
-            AccumReservoir.UCW      = 0.0;
-            AccumReservoir.w_sum    = 0.0;
-            AccumReservoir.C        = 0u;
-        }
-        else 
-        {
-            let max_UCW = 20.0;
-            if (AccumReservoir.UCW > max_UCW)
-            {
-                let scale = max_UCW / AccumReservoir.UCW;
-                
-                AccumReservoir.UCW = max_UCW;
-                AccumReservoir.w_sum *= scale; 
-            }
-        }
-
         StoreReservoir(ThreadID.xy, &AccumReservoir);
     }
 
-
+    
 
     return;
 }

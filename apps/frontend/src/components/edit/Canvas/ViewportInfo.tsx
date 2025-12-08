@@ -23,7 +23,7 @@ export function ViewportInfo({ gizmoMode, selectedObjectName, className = '' }: 
       case 'rotate':
         return '회전 (R)';
       case 'scale':
-        return '크기 (+/-)';
+        return '크기 (S)';
       default:
         return mode;
     }

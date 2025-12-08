@@ -6,7 +6,7 @@
  * - 오른쪽: Control Panel (380px)
  */
 
-import { useRef, useCallback, useState, useMemo } from 'react';
+import { useRef, useCallback, useState, useMemo, useEffect } from 'react';
 import WebGPURenderer from '../WebGPURenderer';
 import { ControlPanel } from './ControlPanel';
 import { CanvasOverlay } from './CanvasOverlay';
@@ -44,13 +44,9 @@ export function LightSimulatorLayout({ scene: initialScene, onBack }: LightSimul
   const [renderStats, setRenderStats] = useState<RenderStats>({ fps: 0, frameTime: 0 });
   const [cameraPosition, setCameraPosition] = useState<CameraPosition | null>(null);
 
-  // 렌더러 로딩 완료 상태 (ControlPanel 차단용)
-  const [isRendererReady, setIsRendererReady] = useState(false);
-
   // Engine 준비 완료 콜백
   const handleEngineReady = useCallback((engine: WebGPUEngine) => {
     engineRef.current = engine;
-    setIsRendererReady(true);
 
     // FPS 업데이트 콜백 등록
     engine.onFrameTimeUpdate = (frameTime: number) => {
@@ -122,16 +118,14 @@ export function LightSimulatorLayout({ scene: initialScene, onBack }: LightSimul
         />
       </div>
 
-      {/* Control Panel - 렌더러 로딩 완료 후에만 표시 (상호작용 버그 방지) */}
-      {isRendererReady && (
-        <div className="light-simulator__panel">
-          <ControlPanel
-            scene={currentScene}
-            onSceneSelect={handleSceneSelect}
-            onSunSettingsChange={handleSunSettingsChange}
-          />
-        </div>
-      )}
+      {/* Control Panel */}
+      <div className="light-simulator__panel">
+        <ControlPanel
+          scene={currentScene}
+          onSceneSelect={handleSceneSelect}
+          onSunSettingsChange={handleSunSettingsChange}
+        />
+      </div>
     </div>
   );
 }

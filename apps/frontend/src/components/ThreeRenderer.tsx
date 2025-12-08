@@ -1,24 +1,7 @@
-import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ThreeSceneManager } from '../three-core/ThreeSceneManager';
 import { ThreeSceneAdapter } from '../adapters/ThreeSceneAdapter';
-import type { Scene, SceneFrontend, SceneAsset, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
-
-/** 로딩 진행 상태 */
-export interface ThreeLoadingProgress {
-  step: number;
-  totalSteps: number;
-  message: string;
-  loadedCount?: number;
-  totalCount?: number;
-  currentAssetName?: string;
-}
-
-/** 에러 정보 */
-export interface ThreeError {
-  code: 'INIT_FAILED' | 'SCENE_LOAD_FAILED' | 'ROOM_LOAD_FAILED' | 'UNKNOWN';
-  message: string;
-  details?: string;
-}
+import type { Scene, SceneFrontend, Transform, PointLightParams, RectLightParams, DirectionalLightParams } from '../graphics-core/service/Scene';
 
 interface ThreeRendererProps {
   className?: string;
@@ -26,54 +9,26 @@ interface ThreeRendererProps {
   onSelectionChange?: (assetId: string | number | null) => void;
   onTransformChange?: (assetId: string | number, transform: Transform) => void;
   onLightParamsChange?: (assetId: string | number, lightParams: PointLightParams | RectLightParams | DirectionalLightParams) => void;
-  onSaveCamera?: (camera: { position: [number, number, number]; target: [number, number, number]; fov: number }) => void;
-  /** 로딩 상태 콜백 */
-  onLoadingChange?: (isLoading: boolean, progress?: ThreeLoadingProgress) => void;
-  /** 에러 상태 콜백 */
-  onError?: (error: ThreeError | null) => void;
-}
-
-/**
- * ThreeRenderer 명령형 API (ref로 접근)
- */
-export interface ThreeRendererHandle {
-  /** Asset 제거 (Object 또는 Light) */
-  removeAsset: (assetId: string | number) => void;
-  /** Asset Transform 업데이트 */
-  updateAssetTransform: (assetId: string | number, transform: Transform) => void;
-  /** Light 파라미터 업데이트 */
-  updateLightParams: (assetId: string | number, lightParams: PointLightParams | RectLightParams) => void;
-  /** Asset 추가 (Object 또는 Light) */
-  addAsset: (asset: SceneAsset) => Promise<void>;
-  /** Gizmo 모드 설정 */
-  setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => void;
-  /** 오브젝트 선택 */
-  selectObject: (assetId: string | number | null) => void;
 }
 
 /**
  * ThreeRenderer - Three.js 렌더링을 위한 React 래퍼 컴포넌트
  * EditPage에서 사용되는 실시간 프리뷰 렌더러
  */
-const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(function ThreeRenderer({
+export default function ThreeRenderer({
   className = '',
   scene = null,
   onSelectionChange,
   onTransformChange,
   onLightParamsChange,
-  onSaveCamera,
-  onLoadingChange,
-  onError,
-}, ref) {
+}: ThreeRendererProps) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const managerRef = useRef<ThreeSceneManager | null>(null);
-  const loadedSceneIdRef = useRef<string | number | null>(null); // 이미 로드된 Scene ID 추적
 
   const [canvasSize, setCanvasSize] = useState({ width: 800, height: 600 });
-  const [internalError, setInternalError] = useState<ThreeError | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [isInitialized, setIsInitialized] = useState<boolean>(false);
-  const [isSceneLoading, setIsSceneLoading] = useState<boolean>(false);
 
   // 반응형 크기 처리 (ResizeObserver)
   useEffect(() => {
@@ -105,13 +60,6 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
     async function initManager() {
       if (!canvasRef.current) return;
 
-      // 로딩 시작 알림
-      onLoadingChange?.(true, {
-        step: 1,
-        totalSteps: 2,
-        message: '렌더러 초기화 중...',
-      });
-
       try {
         const manager = new ThreeSceneManager(
           canvasRef.current,
@@ -130,22 +78,11 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
         // 초기화 완료
         if (isMounted) {
           setIsInitialized(true);
-          // Scene이 없으면 로딩 완료
-          if (!scene) {
-            onLoadingChange?.(false);
-          }
         }
       } catch (err) {
         console.error('Error initializing Three.js manager:', err);
         if (isMounted) {
-          const error: ThreeError = {
-            code: 'INIT_FAILED',
-            message: 'Three.js 렌더러 초기화에 실패했습니다.',
-            details: err instanceof Error ? err.message : 'Unknown error',
-          };
-          setInternalError(error);
-          onError?.(error);
-          onLoadingChange?.(false);
+          setError(err instanceof Error ? err.message : 'Unknown error occurred');
         }
       }
     }
@@ -187,56 +124,18 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
     }
   }, [onSelectionChange, onTransformChange, onLightParamsChange]);
 
-  // 명령형 API 노출 (ref를 통해 접근)
-  useImperativeHandle(ref, () => ({
-    removeAsset: (assetId: string | number) => {
-      if (managerRef.current) {
-        managerRef.current.removeAsset(assetId);
-      }
-    },
-    updateAssetTransform: (assetId: string | number, transform: Transform) => {
-      if (managerRef.current) {
-        managerRef.current.updateAssetTransform(assetId, transform);
-      }
-    },
-    updateLightParams: (assetId: string | number, lightParams: PointLightParams | RectLightParams) => {
-      if (managerRef.current) {
-        managerRef.current.updateLightParams(assetId, lightParams);
-      }
-    },
-    addAsset: async (asset: SceneAsset) => {
-      if (managerRef.current) {
-        if (asset.type === 'object') {
-          await managerRef.current.loadAsset(asset);
-        } else if (asset.type === 'point-light' || asset.type === 'rect-light') {
-          managerRef.current.loadLightAsset(asset);
-        }
-      }
-    },
-    setGizmoMode: (mode: 'translate' | 'rotate' | 'scale') => {
-      if (managerRef.current) {
-        managerRef.current.setGizmoMode(mode);
-      }
-    },
-    selectObject: (assetId: string | number | null) => {
-      if (managerRef.current) {
-        managerRef.current.selectObjectByAssetId(assetId);
-      }
-    },
-  }), []);
-
-  // C키로 카메라 좌표 콘솔 출력, V키로 카메라 저장
+  // C키로 카메라 좌표 콘솔 출력
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Input/Textarea에서는 무시
-      const target = e.target as HTMLElement;
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
-        return;
-      }
-
-      if (!managerRef.current) return;
-
       if (e.key === 'c' || e.key === 'C') {
+        // Input/Textarea에서는 무시
+        const target = e.target as HTMLElement;
+        if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') {
+          return;
+        }
+
+        if (!managerRef.current) return;
+
         const camera = managerRef.current.camera;
         const position = camera.position;
         const target3D = managerRef.current.controls?.target;
@@ -249,103 +148,60 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
         console.log(`FOV: ${camera.fov}`);
         console.log('==================');
       }
-
-      // V키: 현재 카메라 시점 저장
-      if (e.key === 'v' || e.key === 'V') {
-        if (onSaveCamera) {
-          const cameraSettings = managerRef.current.getCameraSettings();
-          onSaveCamera(cameraSettings);
-        }
-      }
     };
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [onSaveCamera]);
+  }, []);
 
   // Scene 데이터 변경 시 모델 로드
-  // IMPORTANT: scene.id가 변경된 경우에만 전체 재로드
-  // 속성(transform 등)만 변경된 경우 updateAssetTransform 등의 API 사용
   useEffect(() => {
-    if (!managerRef.current || !scene || !isInitialized) return;
-
-    // 이미 같은 Scene ID가 로드되어 있으면 스킵
-    // (속성 변경은 updateAssetTransform 등 명령형 API로 처리됨)
-    if (loadedSceneIdRef.current === scene.id) {
-      console.log('[ThreeRenderer] Scene ID unchanged, skipping reload');
-      return;
-    }
+    if (!managerRef.current || !scene) return;
 
     async function loadSceneData() {
-      setIsSceneLoading(true);
-
-      // 로딩 시작 알림
-      onLoadingChange?.(true, {
-        step: 2,
-        totalSteps: 2,
-        message: '공간 불러오는 중...',
-      });
-
       try {
         // ✅ Use ThreeSceneAdapter to convert SceneFrontend → Three.js commands
         const sceneFrontend = scene as SceneFrontend;
         if (!sceneFrontend.room || !sceneFrontend.sunSettings) {
           console.warn('[ThreeRenderer] Scene is not SceneFrontend, skipping load');
-          setIsSceneLoading(false);
-          onLoadingChange?.(false);
           return;
         }
 
-        const loadResult = await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
-
-        // Scene ID 저장
-        loadedSceneIdRef.current = scene.id;
-
-        // Room 로드 실패 시 에러 표시 (심각한 오류)
-        if (!loadResult.roomLoaded) {
-          console.error('[ThreeRenderer] Room failed to load');
-          const error: ThreeError = {
-            code: 'ROOM_LOAD_FAILED',
-            message: '방(Room) 모델 로드에 실패했습니다.',
-            details: '방 모델 파일이 없거나 손상되었을 수 있습니다.',
-          };
-          setInternalError(error);
-          onError?.(error);
-          setIsSceneLoading(false);
-          onLoadingChange?.(false);
-          return;
-        }
-
-        // 개별 asset 로드 실패 경고 (부분 성공)
-        if (loadResult.failedAssets.length > 0) {
-          console.warn(`[ThreeRenderer] ${loadResult.failedAssets.length} asset(s) failed to load`);
-          loadResult.failedAssets.forEach((failed) => {
-            console.warn(`  - ${failed.assetId}: ${failed.error}`);
-          });
-        }
-
-        // 로딩 완료
-        setIsSceneLoading(false);
-        onLoadingChange?.(false);
-      } catch (err) {
-        console.error('[ThreeRenderer] Failed to load scene:', err);
-        const error: ThreeError = {
-          code: 'SCENE_LOAD_FAILED',
-          message: 'Scene 로드 중 오류가 발생했습니다.',
-          details: err instanceof Error ? err.message : 'Unknown error',
-        };
-        setInternalError(error);
-        onError?.(error);
-        setIsSceneLoading(false);
-        onLoadingChange?.(false);
+        await ThreeSceneAdapter.loadSceneToManager(sceneFrontend, managerRef.current!);
+      } catch (error) {
+        console.error('[ThreeRenderer] Failed to load scene:', error);
+        setError('Failed to load scene models');
       }
     }
 
     loadSceneData();
-  }, [scene?.id, isInitialized, onLoadingChange, onError]); // scene.id만 dependency로 사용
+  }, [scene]);
 
-  // 에러가 있으면 에러 정보만 내부에 표시하지 않음 (부모가 처리)
-  // internalError는 onError 콜백으로 전달됨
+  // 에러 화면
+  if (error) {
+    return (
+      <div
+        className={className}
+        style={{
+          width: '100%',
+          height: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: '#1a1a1a',
+          color: '#ff4444',
+          fontFamily: 'monospace',
+          padding: '20px',
+          textAlign: 'center',
+        }}
+      >
+        <div>
+          <h3>Three.js Error</h3>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -363,8 +219,50 @@ const ThreeRenderer = forwardRef<ThreeRendererHandle, ThreeRendererProps>(functi
           height: '100%',
         }}
       />
+
+      {/* 로딩 오버레이 (초기화 중) */}
+      {!isInitialized && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: '100%',
+            height: '100%',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            backgroundColor: 'rgba(42, 42, 42, 0.95)',
+            color: '#00aaff',
+            fontFamily: 'monospace',
+            zIndex: 200,
+          }}
+        >
+          <div style={{ textAlign: 'center' }}>
+            <div
+              style={{
+                width: '50px',
+                height: '50px',
+                border: '4px solid rgba(0, 170, 255, 0.2)',
+                borderTop: '4px solid #00aaff',
+                borderRadius: '50%',
+                margin: '0 auto 20px',
+                animation: 'spin 1s linear infinite',
+              }}
+            />
+            <div style={{ fontSize: '16px', fontWeight: 'bold' }}>Three.js 초기화 중...</div>
+            <div style={{ fontSize: '12px', color: '#888', marginTop: '8px' }}>
+              잠시만 기다려주세요
+            </div>
+          </div>
+          <style>{`
+            @keyframes spin {
+              0% { transform: rotate(0deg); }
+              100% { transform: rotate(360deg); }
+            }
+          `}</style>
+        </div>
+      )}
     </div>
   );
-});
-
-export default ThreeRenderer;
+}

@@ -228,11 +228,11 @@ const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
-const MAX_SAMPLES       : u32 = 2u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
+
 
 
 //==========================================================================
@@ -1448,7 +1448,7 @@ fn UpdateReservoir(
 )
 {
     (*pReservoir).C         = min( (*pReservoir).C + Confidence, MAX_CONFIDENCE );
-    (*pReservoir).w_sum    += RIS;
+    (*pReservoir).w_sum     = RIS;
 
     let Pr_Change       : f32   = RIS / ((*pReservoir).w_sum);
     let bChangeSample   : bool  = Random(pRandomSeed) < Pr_Change;
@@ -1463,8 +1463,6 @@ fn UpdateReservoir(
 
 fn PartialJacobian(InPath : RegeneratedPath) -> f32
 {
-    if (InPath.k == 0u) { return 0.0; }
-
     let bIsLight_Xk : bool = ( InPath.Lobe[InPath.k] == LOBE_LIGHT );
 
     let X_Prev : Surface = InPath.Surface[InPath.k - 2];
@@ -1525,7 +1523,6 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
 
         OutPath.Lobe[i]             = W.Lobe;
         let HitInfo : HitResult     = TraceRay( Ray(X_Curr.Position, W.Direction) );
-        if ( !HitInfo.IsValidHit ) { OutPath.k = 0u; return OutPath; }
 
         OutPath.Surface[i + 1]      = GetSurface( HitInfo.SurfaceInfo );
     }
@@ -1533,7 +1530,6 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
     if ( InCompactPath.Lobe_k != LOBE_LIGHT )
     {
         OutPath.Surface[InCompactPath.k] = GetSurface( GetCompactSurface( InCompactPath.RcVertex ) );
-
         if ( !IsSafeToReconnect(
             OutPath.Surface[InCompactPath.k - 1], OutPath.Lobe[InCompactPath.k - 1],
             OutPath.Surface[InCompactPath.k    ], OutPath.Lobe[InCompactPath.k    ]) 
@@ -1619,119 +1615,7 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
     return f;
 }
 
-fn GetNonCanonicalSample(XY_NonCanonical : vec2<u32>, XY_Canonical : vec2<u32>) -> Reservoir
-{
-    if ( !IsInBoundary( XY_NonCanonical ) ) { return Reservoir(); }
 
-    let X0_Canonical    : vec3<f32> = Get_X0( XY_Canonical );
-    let X0_NonCanonical : vec3<f32> = Get_X0( XY_NonCanonical );
-
-    let C1_Canonical    : CompactSurface = Get_X1( XY_Canonical );
-    let C1_NonCanonical : CompactSurface = Get_X1( XY_NonCanonical );
-
-    let X1_Canonical    : Surface = GetSurface( C1_Canonical );
-    let X1_NonCanonical : Surface = GetSurface( C1_NonCanonical );
-
-    let LinearDepth_Canonical       : f32 = length(X1_Canonical.Position - X0_Canonical);
-    let LinearDepth_NonCanonical    : f32 = length(X1_NonCanonical.Position - X0_NonCanonical);
-
-    let bInstanceSame       : bool = (C1_Canonical.InstanceID == C1_NonCanonical.InstanceID);
-    let bRoughnessSimilar   : bool = abs(X1_Canonical.Roughness - X1_NonCanonical.Roughness) < 0.1;
-    let bDepthSimilar       : bool = abs(LinearDepth_Canonical - LinearDepth_NonCanonical) / (LinearDepth_Canonical + 1e-6) < 0.02;
-    let bNormalSimilar      : bool = dot(X1_Canonical.Normal, X1_NonCanonical.Normal) > 0.98;
-
-    let bSampleReusable     : bool = bInstanceSame && bRoughnessSimilar && bDepthSimilar && bNormalSimilar;
-    if ( !bSampleReusable ) { return Reservoir(); }
-
-    var OutReservoir : Reservoir = LoadReservoir_Prev(XY_NonCanonical);
-
-    let bUCWValid : bool = IsValid_f32(OutReservoir.UCW);
-
-    OutReservoir.UCW    = select(0.0, OutReservoir.UCW, bUCWValid);
-    OutReservoir.C      = select(0u, OutReservoir.C, bUCWValid);
-
-    return OutReservoir;
-}
-
-
-
-
-//==========================================================================
-// TEST
-//==========================================================================
-
-fn GetLinearDepthSquared(PixelID : vec2<u32>) -> f32
-{
-    let bPixelInBoundary_X : bool = (PixelID.x < UniformBuffer.Resolution_Source.x);
-    let bPixelInBoundary_Y : bool = (PixelID.y < UniformBuffer.Resolution_Source.y);
-
-    if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return 1e11; }
-
-    let GBufferData     : vec4<f32> = textureLoad(G_Buffer, PixelID, 0);
-    let PixelSurface    : Surface   = GetSurface( GetCompactSurface( GBufferData ) );
-    let PositionDelta   : vec3<f32> = PixelSurface.Position - UniformBuffer.CameraWorldPosition;
-
-    return dot( PositionDelta, PositionDelta );
-}
-
-fn GetClosestPixelID(PixelID_Center : vec2<u32>) -> vec2<u32>
-{
-    var PixelID_Closest     : vec2<u32> = PixelID_Center;
-    var LinearDepth_Closest : f32       = 1e10;
-
-    for (var dy : i32 = -1; dy <= 1; dy++)
-    {
-        for (var dx : i32 = -1; dx <= 1; dx++)
-        {
-            let PixelID     : vec2<u32> = vec2<u32>( vec2<i32>( PixelID_Center ) + vec2<i32>(dx, dy) );
-            let LinearDepth : f32 = GetLinearDepthSquared( PixelID );
-
-            if ( LinearDepth > LinearDepth_Closest ) { continue; }
-
-            LinearDepth_Closest = LinearDepth;
-            PixelID_Closest     = PixelID;
-        }
-    }
-
-    return PixelID_Closest;
-}
-
-fn GetPrevUV(UV : vec2<f32>) -> vec2<f32>
-{
-    let PixelID_Center  : vec2<u32> = vec2<u32>( UV * vec2<f32>( UniformBuffer.Resolution_Source ) );
-    let PixelID_Closest : vec2<u32> = GetClosestPixelID( PixelID_Center );
-
-    let MotionVectorRaw : vec2<f32> = textureLoad(MotionVectorTexture, PixelID_Closest, 0).xy;
-    let MotionVectorUV  : vec2<f32> = (MotionVectorRaw ) / vec2<f32>(UniformBuffer.Resolution_Source);
-
-    return UV - MotionVectorUV;
-}
-
-fn IsInf_f32(val: f32) -> bool 
-{
-    return abs(val) > 3.402823e38;
-}
-
-fn IsNan_f32(A : f32) -> bool
-{
-    return (A != A);
-}
-
-fn IsNan_vec3(A : vec3<f32>) -> bool
-{
-    return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
-}
-
-fn IsValid_f32(A : f32) -> bool
-{
-    return (A == A) && ( abs(A) <= 3.402823e38 );
-}
-
-
-
-//==========================================================================
-// Main
-//==========================================================================
 
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
@@ -1742,38 +1626,39 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     
     // Initialize
     var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
+    let Delta   : i32 = 1;
     var idx     : u32 = 1u;
     var C_sum   : u32 = 0u;
 
-    var ReservoirArray      : array<Reservoir, MAX_SAMPLES>;
-    var ShiftedPathArray    : array<RegeneratedPath, MAX_SAMPLES>;
-    var JacobianArray       : array<f32, MAX_SAMPLES>;
-    var P_hatArray          : array<f32, MAX_SAMPLES>;
-    var MISArray            : array<f32, MAX_SAMPLES>;
+    var ReservoirArray      : array<Reservoir, 25u>;
+    var ShiftedPathArray    : array<RegeneratedPath, 25u>;
+    var JacobianArray       : array<f32, 25u>;
+    var MISArray            : array<f32, 25u>;
 
     var AccumReservoir      : Reservoir;
-
-
 
     // Canonical Sample
     ReservoirArray[0] = LoadReservoir_Init(ThreadID.xy);
     C_sum += ReservoirArray[0].C;
 
-    // NonCanonical Sample - Previous Frame Sample
+    // Non-Canonical Samples
     {
-        let UV      : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
-        let XY_Prev : vec2<u32> = vec2<u32>(GetPrevUV(UV) * vec2<f32>(UniformBuffer.Resolution_Source));
+        let MotionVector        : vec2<f32> = textureLoad(MotionVectorTexture, ThreadID.xy, 0).xy;
+        let CurrPixel_Center    : vec2<f32> = vec2<f32>(ThreadID.xy) + vec2<f32>(0.5);
+        let PrevPixel_Center    : vec2<u32> = vec2<u32>( CurrPixel_Center - MotionVector );
 
-        ReservoirArray[1] = GetNonCanonicalSample(XY_Prev, ThreadID.xy);
+        if ( IsInBoundary(PrevPixel_Center) )
+        {
+            ReservoirArray[1] = LoadReservoir_Prev(PrevPixel_Center);
+            C_sum += ReservoirArray[1].C;
+            idx = 2u;
+        }
 
-        C_sum += ReservoirArray[1].C;
-        idx = select(idx + 1u, idx, ReservoirArray[1].C == 0u);
+        
     }
+    
 
-
-
-
-
+    if ( C_sum == 0u ) { return; }
 
     // Shift All Samples To Current Domain
     for (var iter : u32 = 0u; iter < idx; iter++)
@@ -1785,94 +1670,46 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     JacobianArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        JacobianArray[iter] = select(PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J, 0.0, ShiftedPathArray[iter].J == 0.0);
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
     }
 
-    // Compute P_hat
-    for (var iter : u32 = 0u; iter < idx; iter++)
+    // Compute Pairwise MIS
+    MISArray[0] = 1.0;
+    for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        P_hatArray[iter] = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
+        if ( JacobianArray[iter] < 1e-20 ) { continue; }
+
+        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+        let P_hat_cy : f32 = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
+
+        let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
+        let MIS_DL : f32 = f32(C_sum);
+        let MIS_NR : f32 = f32(ReservoirArray[iter].C) * P_hat_iy;
+        let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy + f32(ReservoirArray[0].C) * P_hat_cy );
+
+        let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+
+        MISArray[iter] = select( 0.0, MIS, MIS_DR > 1e-20 );
+
+        let RIS         : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hat_cy, ReservoirArray[iter].C);
     }
 
 
 
-
-
-
-    // Compute MIS
-    for (var iter : u32 = 0u; iter < idx; iter++)
+    // Compute RIS
     {
-        let p_curr : f32 = P_hatArray[iter]; 
-        var p_prev : f32 = 0.0;
-        if (iter == 0u) { p_prev = p_curr; } 
-        else { p_prev = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter]; }
+        let P_hat_cy    : f32 = Luminance( PathContribution( ShiftedPathArray[0] ) * ReservoirArray[0].Sample.Radiance );
+        let RIS         : f32 = MISArray[0] * P_hat_cy * ReservoirArray[0].UCW * JacobianArray[0];
 
-        let term_canon : f32 = f32(ReservoirArray[0].C) * p_curr;
-        let term_prev  : f32 = f32(ReservoirArray[1].C) * p_prev;
-        
-        let sum_weights : f32 = term_canon + term_prev;
-        if (sum_weights > 1.0e-6)
-        {
-            if (iter == 0u) {
-                MISArray[iter] = term_canon / sum_weights;
-            } else {
-                MISArray[iter] = term_prev / sum_weights;
-            }
-        }
-        else 
-        {
-            MISArray[iter] = 0.0;
-        }
+        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[0].Sample, RIS, P_hat_cy, ReservoirArray[0].C);
     }
 
-
-
-
-
-
-    // Compute RIS and Put into Reservoir
-    for (var iter : u32 = 0u; iter < idx; iter++)
-    {
-        let RIS : f32 = MISArray[iter] * ReservoirArray[iter].UCW * P_hatArray[iter] * JacobianArray[iter];
-        UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hatArray[iter], ReservoirArray[iter].C);
-    }
-
-
-
-
-
-
-
+    
 
     // Write Reservoir To Buffer
     {
         AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
-
-        if ( GetSurface( Get_X1(ThreadID.xy) ).Transmission == 1.0 ) {}
-        else if (AccumReservoir.P_hat < 1e-7)
-        {
-            AccumReservoir.UCW      = 0.0;
-            AccumReservoir.w_sum    = 0.0;
-            AccumReservoir.C        = 0u;
-        }
-        else 
-        {
-            // 2. 가중치 상한선 적용 (Hard Clamp)
-            // 일반적인 픽셀의 UCW가 1.0 ~ 10.0 정도라면, 
-            // 100.0 ~ 1000.0을 넘는 것은 비정상적인 Firefly일 확률이 높음.
-            let max_UCW = 20.0; // 씬의 밝기에 따라 조절 (보통 평균의 20~50배)
-
-            if (AccumReservoir.UCW > max_UCW)
-            {
-                // UCW를 강제로 줄였으면, 수학적 비율 유지를 위해 w_sum도 줄여야 함
-                // (그래야 다음 프레임에서 이 샘플이 "나는 원래 100억짜리였다"고 거짓말하지 않음)
-                let scale = max_UCW / AccumReservoir.UCW;
-                
-                AccumReservoir.UCW = max_UCW;
-                AccumReservoir.w_sum *= scale; 
-            }
-        }
-
         StoreReservoir(ThreadID.xy, &AccumReservoir);
     }
 
@@ -1880,16 +1717,3 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     return;
 }
-
-    // MISArray[0] = 1.0;
-    // for (var iter : u32 = 1u; iter < idx; iter++)
-    // {
-    //     let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
-
-    //     let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
-    //     let MIS_DL : f32 = f32(C_sum);
-    //     let MIS_NR : f32 = f32(ReservoirArray[iter].C) * P_hat_iy;
-    //     let MIS_DR : f32 = f32(C_sum - ReservoirArray[0].C) * P_hat_iy + f32(ReservoirArray[0].C) * P_hatArray[iter];
-
-    //     MISArray[iter] = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
-    // }

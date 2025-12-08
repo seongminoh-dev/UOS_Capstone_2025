@@ -63,16 +63,6 @@
   gap: 10px;
 }
 
-.light-section__row--intensity {
-  display: flex;
-  align-items: center;
-}
-
-.light-section__input--intensity {
-  width: 100%;
-  max-width: 120px;
-}
-
 /* Color Row - 한 줄 그리드 레이아웃 */
 .light-section__color-row {
   display: grid;

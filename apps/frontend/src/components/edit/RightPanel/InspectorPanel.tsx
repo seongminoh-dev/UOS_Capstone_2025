@@ -156,7 +156,7 @@ export function InspectorPanel({
           삭제 (Delete)
         </Button>
         <div className="inspector-panel__shortcuts">
-          {isObject && <span>단축키: G(이동) R(회전) +/-(크기)</span>}
+          {isObject && <span>단축키: G(이동) R(회전) S(크기)</span>}
           <span>Delete 키로 삭제</span>
         </div>
       </div>

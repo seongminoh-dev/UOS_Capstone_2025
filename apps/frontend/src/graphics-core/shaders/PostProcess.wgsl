@@ -432,24 +432,12 @@ fn IsNan_vec3(A : vec3<f32>) -> bool
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
-    storageBarrier();
-    workgroupBarrier();
     // 0. 범위 밖 스레드는 계산 X
     {
-        //let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
-        //let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
+        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
+        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
 
-        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
-    }
-
-    // TEST : Just Use CurrentColor, No Jittering
-    if (true)
-    {
-        let UV : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
-        let CurrentColor : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
-        var WriteColor = Decode( CurrentColor );
-        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(select(WriteColor, CurrentColor, IsNan_vec3(WriteColor)), 1.0));
-        return;
+        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     let UV              : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
@@ -458,7 +446,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
     let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
-    let Alpha           : f32   = select(0.0, N / (N+1), bHistoryValid);
+    let Alpha           : f32   = select(0.0, N / (N + 1), bHistoryValid);
     
     let CurrentColor    : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV_Unjitter, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
