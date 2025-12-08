@@ -26,7 +26,7 @@ export const TEMPLATE_SCENE_1: SceneFrontend = {
   description: '침대와, 옷장, 책상의 기본 가구와 조명을 포함한 방입니다.',
 
   room: {
-    meshName: 'BedroomEdit',
+    meshName: 'Bedroom',
     locked: true,
     transform: {
       position: [0, 0, 0],

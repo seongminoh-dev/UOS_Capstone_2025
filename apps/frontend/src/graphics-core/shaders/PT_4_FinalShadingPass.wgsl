@@ -1576,9 +1576,6 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
 
-    storageBarrier();
-    workgroupBarrier();
-
     // 0. 범위 밖 스레드는 계산 X
     {
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
@@ -1596,27 +1593,6 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // 1. Load Path
     let Reservoir : Reservoir = LoadReservoir(ThreadID.xy);
-
-    if (false)
-    {
-        let ris : f32 = bitcast<f32>(Reservoir.Sample.Padding_0);
-
-        var color : vec3<f32> = vec3f(ris);
-        if (IsNan_f32(ris)) { color = PURPLE; }
-
-        textureStore(ResultTexture, ThreadID.xy, vec4(color, 1.0));
-        return;
-    }
-
-    if (false)
-    {
-        if ( Reservoir.Sample.k == 0u ) { textureStore(ResultTexture, ThreadID.xy, vec4(RED, 1.0)); return; }
-        let debug = PartialJacobian( RegeneratePath(ThreadID.xy, Reservoir.Sample) ) / Reservoir.Sample.J;
-        if ( Reservoir.Sample.J < 1e-20 ) { textureStore(ResultTexture, ThreadID.xy, vec4(GREEN, 1.0)); return; }
-
-        textureStore(ResultTexture, ThreadID.xy, vec4(vec3f(f32(debug)), 1.0));
-        return;
-    }
 
     // Store Black If Invalid Reservoir
     {

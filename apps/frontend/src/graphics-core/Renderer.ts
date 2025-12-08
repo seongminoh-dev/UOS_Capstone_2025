@@ -8,19 +8,22 @@ import      { Utils }               from "./Utils";
 
 import      { ZENITH_BLUE, HORIZON_BLUE, DEFAULT_SKY_MODE, DEFAULT_ENV_INDIRECT_MULT } from "./lighting";
 
+import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
 
 import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
+
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
 import ShaderCode_REUSE_TEMPORAL    from './shaders/ReuseTest_Temporal.wgsl?raw';
 import ShaderCode_REUSE_SPATIAL     from './shaders/ReuseTest_Spatial.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
+
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = true;
+let USE_RESTIR : boolean = false;
 let USE_PERFORMANCE_TEST : boolean = false;
 
 const EBufferIndex =
@@ -71,14 +74,13 @@ const EComputePassIndex =
 {
     GBufferCreation         : 0,
     MotionVectorCreation    : 1,
-    ReSTIR_DI               : 2,
-    Initialize              : 3,
-    TemporalReuse           : 4,
-    SpatialReuse            : 5,
-    FinalShading            : 6,
-    PostProcess             : 7,
-    MCPT                    : 8,
-    SIZE                    : 9
+    Initialize              : 2,
+    TemporalReuse           : 3,
+    SpatialReuse            : 4,
+    FinalShading            : 5,
+    PostProcess             : 6,
+    MCPT                    : 7,
+    SIZE                    : 8
 } as const;
 
 
@@ -389,17 +391,17 @@ export class Renderer
             Float32View[92] = this.EnvHorizonColor[0];
             Float32View[93] = this.EnvHorizonColor[1];
             Float32View[94] = this.EnvHorizonColor[2];
-            Float32View[95] = this.EnvSunIntensity * 0;
+            Float32View[95] = this.EnvSunIntensity;
 
             Float32View[96] = this.EnvGroundColor[0];
             Float32View[97] = this.EnvGroundColor[1];
             Float32View[98] = this.EnvGroundColor[2];
-            Float32View[99] = this.EnvIntensity * 0;
+            Float32View[99] = this.EnvIntensity;
 
             Float32View[100] = this.EnvSunDirection[0];
             Float32View[101] = this.EnvSunDirection[1];
             Float32View[102] = this.EnvSunDirection[2];
-            Float32View[103] = this.EnvIndirectMult * 0;
+            Float32View[103] = this.EnvIndirectMult;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -419,6 +421,9 @@ export class Renderer
             const elapsedTime = (currentTime - this.StartTime);
             if (elapsedTime >= this.FREEZE_TIME_MS) { this.bStopRendering = true; return; }
         }
+
+
+
 
         const WorkgroupCount_HighResolution : number[] = [Math.ceil(this.Canvas.width/8), Math.ceil(this.Canvas.height/8), 1];
         const WorkgroupCount_LowResolution  : number[] = [Math.ceil(this.Canvas.width/16), Math.ceil(this.Canvas.height/16), 1];
@@ -441,26 +446,10 @@ export class Renderer
             }
 
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
 
             ComputePassEncoder.end();
-        }
-
-        // Copy GPU Resources
-        {
-            CommandEncoder.copyTextureToTexture
-            ( 
-                { texture : this.GPUTextures[ETextureIndex.History_Write] },
-                { texture : this.GPUTextures[ETextureIndex.History_Read] },
-                { width : this.Canvas.width, height : this.Canvas.height }
-            );
-
-            CommandEncoder.copyBufferToBuffer
-            (
-                this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal], 0,
-                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
-                4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
-            );
         }
 
         // RenderPass (Draw ResultTexture)
@@ -485,6 +474,25 @@ export class Renderer
             RenderPass.draw(6);
 
             RenderPass.end();
+        }
+
+        // Copy GPU Resources
+        {
+
+            CommandEncoder.copyTextureToTexture
+            ( 
+                { texture : this.GPUTextures[ETextureIndex.History_Write] },
+                { texture : this.GPUTextures[ETextureIndex.History_Read] },
+                { width : this.Canvas.width, height : this.Canvas.height }
+            );
+
+            CommandEncoder.copyBufferToBuffer
+            (
+                this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal], 0,
+                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
+                4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
+            );
+
         }
 
         // Submit Encoder
