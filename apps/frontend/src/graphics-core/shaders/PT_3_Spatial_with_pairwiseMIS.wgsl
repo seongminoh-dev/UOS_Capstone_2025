@@ -989,9 +989,11 @@ fn GetHashValue(Seed : u32) -> u32
 
 fn Random(pSeed : ptr<function, u32>) -> f32
 {
-    let Hash = GetHashValue(*pSeed); *pSeed++;
-    return f32(Hash) / 4294967295.0;
+    let hash = GetHashValue(*pSeed);
+    *pSeed = *pSeed + 1u;
+    return f32(hash) / 4294967295.0;
 }
+
 
 fn InitializeRandomSeed(ThreadID : vec2<u32>) -> u32
 {
@@ -1630,8 +1632,12 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Path
         OutPath.XL                  = InCompactPath.XL;
     }
 
-    for (var i = 1u; i < InCompactPath.length - 1; i++)
-    {
+    let len = min(InCompactPath.length, 8u);
+    OutPath.length = len;
+    
+    for (var i = 1u; i < len - 1u; i++) {
+    
+
         let X_Prev  : Surface       = OutPath.Surface[i - 1];
         let X_Curr  : Surface       = OutPath.Surface[i    ];
 
