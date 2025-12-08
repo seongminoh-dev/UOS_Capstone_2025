@@ -228,11 +228,11 @@ const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
+const MAX_SAMPLES       : u32 = 2u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
 const PI        : f32       = 3.141592;
-
 
 
 //==========================================================================
@@ -1619,8 +1619,46 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
     return f;
 }
 
+fn GetNonCanonicalSample(XY_NonCanonical : vec2<u32>, XY_Canonical : vec2<u32>) -> Reservoir
+{
+    if ( !IsInBoundary( XY_NonCanonical ) ) { return Reservoir(); }
 
-// TEST ==========
+    let X0_Canonical    : vec3<f32> = Get_X0( XY_Canonical );
+    let X0_NonCanonical : vec3<f32> = Get_X0( XY_NonCanonical );
+
+    let C1_Canonical    : CompactSurface = Get_X1( XY_Canonical );
+    let C1_NonCanonical : CompactSurface = Get_X1( XY_NonCanonical );
+
+    let X1_Canonical    : Surface = GetSurface( C1_Canonical );
+    let X1_NonCanonical : Surface = GetSurface( C1_NonCanonical );
+
+    let LinearDepth_Canonical       : f32 = length(X1_Canonical.Position - X0_Canonical);
+    let LinearDepth_NonCanonical    : f32 = length(X1_NonCanonical.Position - X0_NonCanonical);
+
+    let bInstanceSame       : bool = (C1_Canonical.InstanceID == C1_NonCanonical.InstanceID);
+    let bRoughnessSimilar   : bool = abs(X1_Canonical.Roughness - X1_NonCanonical.Roughness) < 0.1;
+    let bDepthSimilar       : bool = abs(LinearDepth_Canonical - LinearDepth_NonCanonical) / (LinearDepth_Canonical + 1e-6) < 0.02;
+    let bNormalSimilar      : bool = dot(X1_Canonical.Normal, X1_NonCanonical.Normal) > 0.98;
+
+    let bSampleReusable     : bool = bInstanceSame && bRoughnessSimilar && bDepthSimilar && bNormalSimilar;
+    if ( !bSampleReusable ) { return Reservoir(); }
+
+    var OutReservoir : Reservoir = LoadReservoir_Prev(XY_NonCanonical);
+
+    let bUCWValid : bool = IsValid_f32(OutReservoir.UCW);
+
+    OutReservoir.UCW    = select(0.0, OutReservoir.UCW, bUCWValid);
+    OutReservoir.C      = select(0u, OutReservoir.C, bUCWValid);
+
+    return OutReservoir;
+}
+
+
+
+
+//==========================================================================
+// TEST
+//==========================================================================
 
 fn GetLinearDepthSquared(PixelID : vec2<u32>) -> f32
 {
@@ -1689,7 +1727,11 @@ fn IsValid_f32(A : f32) -> bool
     return (A == A) && ( abs(A) <= 3.402823e38 );
 }
 
-// ==========
+
+
+//==========================================================================
+// Main
+//==========================================================================
 
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
@@ -1700,20 +1742,16 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     
     // Initialize
     var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
-    let Delta   : i32 = 1;
     var idx     : u32 = 1u;
     var C_sum   : u32 = 0u;
 
-    var ReservoirArray      : array<Reservoir, 2u>;
-    var ShiftedPathArray    : array<RegeneratedPath, 2u>;
-    var JacobianArray       : array<f32, 2u>;
-    var P_hatArray          : array<f32, 2u>;
-    var MISArray            : array<f32, 2u>;
+    var ReservoirArray      : array<Reservoir, MAX_SAMPLES>;
+    var ShiftedPathArray    : array<RegeneratedPath, MAX_SAMPLES>;
+    var JacobianArray       : array<f32, MAX_SAMPLES>;
+    var P_hatArray          : array<f32, MAX_SAMPLES>;
+    var MISArray            : array<f32, MAX_SAMPLES>;
 
     var AccumReservoir      : Reservoir;
-
-
-    var Debug : f32 = 0.0;
 
 
 
@@ -1721,59 +1759,21 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     ReservoirArray[0] = LoadReservoir_Init(ThreadID.xy);
     C_sum += ReservoirArray[0].C;
 
-    // Non-Canonical Samples
+    // NonCanonical Sample - Previous Frame Sample
     {
-        let UV              : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
-        let UV_Unjitter     : vec2<f32> = UV - UniformBuffer.Jitter;
-        let UV_Prev         : vec2<f32> = GetPrevUV(UV_Unjitter);
-        let XY_Prev         : vec2<u32> = vec2<u32>(UV_Prev * vec2<f32>(UniformBuffer.Resolution_Source));
+        let UV      : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
+        let XY_Prev : vec2<u32> = vec2<u32>(GetPrevUV(UV) * vec2<f32>(UniformBuffer.Resolution_Source));
 
-        var bPrevSampleValid : bool = IsInBoundary(XY_Prev);
+        ReservoirArray[1] = GetNonCanonicalSample(XY_Prev, ThreadID.xy);
 
-        if (bPrevSampleValid)
-        {
-            let X0_Curr : vec3<f32> = Get_X0(ThreadID.xy);
-            let X0_Prev : vec3<f32> = Get_X0(XY_Prev);
-
-            let C1_Curr : CompactSurface = Get_X1(ThreadID.xy);
-            let C1_Prev : CompactSurface = Get_X1(XY_Prev);
-
-            let X1_Curr : Surface = GetSurface( C1_Curr );
-            let X1_Prev : Surface = GetSurface( C1_Prev );
-
-            let LinearDepth_Curr : f32 = length(X1_Curr.Position - X0_Curr);
-            let LinearDepth_Prev : f32 = length(X1_Prev.Position - X0_Prev);
-
-            let bInstanceSame       : bool = (C1_Curr.InstanceID == C1_Prev.InstanceID);
-            let bRoughnessSimilar   : bool = abs(X1_Curr.Roughness - X1_Prev.Roughness) < 0.1;
-            let bDepthSimilar       : bool = abs(LinearDepth_Curr - LinearDepth_Prev) / (LinearDepth_Prev + 1e-6) < 0.02;
-            let bNormalSimilar      : bool = dot(X1_Curr.Normal, X1_Prev.Normal) > 0.98;
-
-            bPrevSampleValid = bInstanceSame && bRoughnessSimilar && bDepthSimilar && bNormalSimilar;
-        }
-
-        if ( bPrevSampleValid )
-        {
-            ReservoirArray[1] = LoadReservoir_Prev(XY_Prev);
-
-            let bIsCorrupted : bool = !IsValid_f32(ReservoirArray[1].UCW);
-
-            if (bIsCorrupted) 
-            {
-                // 오염된 샘플은 C를 0으로 만들어 합류 방지
-                ReservoirArray[1].C = 0u; 
-                ReservoirArray[1].UCW = 0.0;
-                bPrevSampleValid = false;
-            }
-        }
-
-        if ( bPrevSampleValid )
-        {
-            C_sum += ReservoirArray[1].C;
-            idx = select(2u, 1u, ReservoirArray[1].C == 0u);
-        }
-
+        C_sum += ReservoirArray[1].C;
+        idx = select(idx + 1u, idx, ReservoirArray[1].C == 0u);
     }
+
+
+
+
+
 
     // Shift All Samples To Current Domain
     for (var iter : u32 = 0u; iter < idx; iter++)
@@ -1793,6 +1793,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     {
         P_hatArray[iter] = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
     }
+
+
+
+
+
 
     // Compute MIS
     for (var iter : u32 = 0u; iter < idx; iter++)
@@ -1820,16 +1825,23 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         }
     }
 
+
+
+
+
+
     // Compute RIS and Put into Reservoir
     for (var iter : u32 = 0u; iter < idx; iter++)
     {
         let RIS : f32 = MISArray[iter] * ReservoirArray[iter].UCW * P_hatArray[iter] * JacobianArray[iter];
-        
-        if (!IsValid_f32(RIS)) {continue;}
-        //if (P_hatArray[iter] < 1e-10) { continue; }
-
         UpdateReservoir(&rSeed, &AccumReservoir, ReservoirArray[iter].Sample, RIS, P_hatArray[iter], ReservoirArray[iter].C);
     }
+
+
+
+
+
+
 
 
     // Write Reservoir To Buffer

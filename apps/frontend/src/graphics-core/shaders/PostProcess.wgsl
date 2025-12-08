@@ -441,7 +441,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // TEST : Just Use CurrentColor, No Jittering
-    if (true)
+    if (false)
     {
         let UV : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
         let CurrentColor : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
@@ -456,7 +456,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
     let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
-    let Alpha           : f32   = select(0.0, 0.8, bHistoryValid);
+    let Alpha           : f32   = select(0.0, N / (N+1), bHistoryValid);
     
     let CurrentColor    : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV_Unjitter, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );

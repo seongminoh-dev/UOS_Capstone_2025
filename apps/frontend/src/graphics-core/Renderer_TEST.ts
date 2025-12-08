@@ -27,7 +27,7 @@ import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = false;
+let USE_RESTIR : boolean = true;
 
 const EBufferIndex =
 {
@@ -419,7 +419,7 @@ export class Renderer
             if (USE_RESTIR)
             {
                 this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                //this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             }
 
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
@@ -711,7 +711,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Temporal : EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
