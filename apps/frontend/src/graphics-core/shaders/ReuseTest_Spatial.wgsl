@@ -1800,7 +1800,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
 
         if ( GetSurface( Get_X1(ThreadID.xy) ).Transmission == 1.0 ) {}
-        else if (AccumReservoir.P_hat < 1e-15)
+        else if (AccumReservoir.P_hat < 1e-7)
         {
             AccumReservoir.UCW      = 0.0;
             AccumReservoir.w_sum    = 0.0;
@@ -1808,7 +1808,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         }
         else 
         {
-            let max_UCW = 100.0;
+            let max_UCW = 20.0;
             if (AccumReservoir.UCW > max_UCW)
             {
                 let scale = max_UCW / AccumReservoir.UCW;

@@ -441,7 +441,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
     // TEST : Just Use CurrentColor, No Jittering
-    if (false)
+    if (true)
     {
         let UV : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
         let CurrentColor : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );

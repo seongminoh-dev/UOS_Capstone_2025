@@ -1849,7 +1849,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         AccumReservoir.UCW = AccumReservoir.w_sum / AccumReservoir.P_hat;
 
         if ( GetSurface( Get_X1(ThreadID.xy) ).Transmission == 1.0 ) {}
-        else if (AccumReservoir.P_hat < 1e-15)
+        else if (AccumReservoir.P_hat < 1e-7)
         {
             AccumReservoir.UCW      = 0.0;
             AccumReservoir.w_sum    = 0.0;
@@ -1860,7 +1860,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             // 2. 가중치 상한선 적용 (Hard Clamp)
             // 일반적인 픽셀의 UCW가 1.0 ~ 10.0 정도라면, 
             // 100.0 ~ 1000.0을 넘는 것은 비정상적인 Firefly일 확률이 높음.
-            let max_UCW = 100.0; // 씬의 밝기에 따라 조절 (보통 평균의 20~50배)
+            let max_UCW = 20.0; // 씬의 밝기에 따라 조절 (보통 평균의 20~50배)
 
             if (AccumReservoir.UCW > max_UCW)
             {
