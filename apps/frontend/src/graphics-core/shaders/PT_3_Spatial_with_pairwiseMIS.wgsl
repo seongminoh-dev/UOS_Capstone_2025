@@ -778,7 +778,7 @@ fn TBNMatrix(N : vec3<f32>) -> mat3x3<f32>
 fn StoreReservoir(ThreadID : vec2<u32>, pReservoir : ptr<function, Reservoir>)
 {
     let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
-    ReservoirBuffer[idx] = (*pReservoir);
+    ReservoirBuffer_Write[idx] = (*pReservoir);
 
     return;
 }
@@ -984,29 +984,6 @@ fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
 
 
 
-//==========================================================================
-// Random
-//==========================================================================
-
-fn GetHashValue(Seed : u32) -> u32
-{
-    let state = Seed * 747796405u + 2891336453u;
-    let word = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
-    return (word >> 22u) ^ word;
-}
-
-fn Random(pSeed : ptr<function, u32>) -> f32
-{
-    let Hash = GetHashValue(*pSeed); *pSeed++;
-    return f32(Hash) / 4294967295.0;
-}
-
-fn InitializeRandomSeed(ThreadID : vec2<u32>) -> u32
-{
-    return GetHashValue(ThreadID.x * 1973u + ThreadID.y * 9277u + UniformBuffer.FrameIndex * 26699u);
-}
-
-
 
 //==========================================================================
 // PBR (Evaluations)
@@ -1146,62 +1123,7 @@ fn SampleGGX(pRandomSeed : ptr<function, u32>, Roughness: f32) -> vec3<f32>
     return normalize(vec3<f32>(H_X, H_Y, H_Z));
 }
 
-fn SampleNEE(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> LightSample
-{
-    // LightsCDFBuffer 에서 하나의 Light 결정
-    var OutNEESample : LightSample = LightSample();
-    {
-        let P : f32 = Random(pRandomSeed);
-        var L : u32 = 0u;
-        var R : u32 = UniformBuffer.LightSourceCount - 1u;
-        var M : u32 = (L + R) >> 1;
 
-        while (L < R)
-        {
-            if (P < GetLightsCDF(M)) { R = M; }
-            else { L = M + 1; }
-
-            M = (L + R) >> 1;
-        }
-
-        OutNEESample.LightID = i32(M);
-    }
-
-    let LightSource : Light = GetLight(u32(OutNEESample.LightID));
-    OutNEESample.Type       = LightSource.LightType;
-    OutNEESample.Emittance  = LightSource.Intensity * LightSource.Color;
-
-    switch ( LightSource.LightType )
-    {
-        case LIGHT_DIRECTION :
-        {
-            OutNEESample.Position   = X.Position - LightSource.Direction * INF;
-            OutNEESample.Direction  = LightSource.Direction;
-        }
-
-        case LIGHT_POINT :
-        {
-            OutNEESample.Position   = LightSource.Position;
-            OutNEESample.Direction  = normalize(X.Position - LightSource.Position);
-        }
-
-        case LIGHT_RECT :
-        {
-            let Random_U    : f32       = (Random(pRandomSeed) * 2.0) - 1.0;
-            let Random_V    : f32       = (Random(pRandomSeed) * 2.0) - 1.0;
-            let Offset      : vec3<f32> = (Random_U * LightSource.U) + (Random_V * LightSource.V);
-
-            OutNEESample.Position   = LightSource.Position + Offset;
-            OutNEESample.Direction  = normalize( X.Position - OutNEESample.Position );
-        }
-
-        default : {}
-    }
-
-    OutNEESample.PDF = PDF_LIGHT(X, V, OutNEESample);
-
-    return OutNEESample;
-}
 
 fn SampleBRDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
 {
@@ -1398,17 +1320,7 @@ fn PDF_BSDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
 // PathContribution / PathPDF
 //==========================================================================
 
-fn DirectionToLight(X : Surface, XL : LightSample) -> vec3<f32>
-{
-    switch (XL.Type)
-    {
-        case LIGHT_DIRECTION: { return -XL.Direction; }
-        case LIGHT_POINT:     { return normalize(XL.Position - X.Position); }
-        case LIGHT_RECT:      { return normalize(XL.Position - X.Position); }
-        case LIGHT_ENV:       { return -XL.Direction; }
-        default:              { return vec3f(0.0); }
-    }
-}
+
 
 fn L_emit(XL : LightSample, X : Surface) -> vec3<f32>
 {
@@ -1417,33 +1329,6 @@ fn L_emit(XL : LightSample, X : Surface) -> vec3<f32>
     let Attenuation     : f32       = select(1.0, 1.0 / max(dot(r, r), EPS), bIsPointLight);
 
     return XL.Emittance * Attenuation;
-}
-
-fn Visibility(Start : vec3<f32>, End : vec3<f32>) -> f32
-{
-    var Transmittance   : f32 = 1.0;
-    var Distance        : f32       = length(End - Start);
-    let Direction       : vec3<f32> = (End - Start) / Distance;
-
-    var CurrentRay      : Ray       = Ray(Start, Direction);
-    var RemainDistance  : f32       = Distance;
-
-    for (var iter = 0u; iter < 5u; iter++)
-    {
-        let ClosestHit : HitResult = TraceRay(CurrentRay);
-        if (!ClosestHit.IsValidHit || ClosestHit.HitDistance > RemainDistance) { return Transmittance; }
-
-        let HitMaterial : Material = GetMaterial(ClosestHit.SurfaceInfo.MaterialID);
-        if (HitMaterial.Transmission == 0.0) { return 0.0; }
-
-        Transmittance   *= HitMaterial.Transmission;
-        RemainDistance  -= ClosestHit.HitDistance;
-
-        let HitSurface : Surface = GetSurface( ClosestHit.SurfaceInfo );
-        CurrentRay = Ray(HitSurface.Position, CurrentRay.Direction);
-    }
-
-    return 0.0;
 }
 
 //==========================================================================
@@ -1519,18 +1404,7 @@ fn PathContribution(InPath : RegeneratedPath) -> vec3<f32>
 // GBuffer / Reprojection / Path 재구성
 //==========================================================================
 
-fn Get_X0(ThreadID : vec2<u32>) -> vec3<f32>
-{
-    let PixelUV     : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
-    let PixelNDC    : vec3<f32> = vec3<f32>(2.0 * PixelUV - 1.0, 0.0);
-    return TransformVec3WithMat4x4(PixelNDC, UniformBuffer.ViewProjectionMatrix_Inverse);
-}
 
-fn Get_X1(ThreadID : vec2<u32>) -> CompactSurface
-{
-    let GBufferData : vec4<f32> = textureLoad(G_Buffer, ThreadID, 0);
-    return GetCompactSurface(GBufferData);
-}
 
 fn GetTriangleFromPrimitive(primitiveID : u32, instanceID : u32) -> Triangle
 {
@@ -1541,145 +1415,15 @@ fn GetTriangleFromPrimitive(primitiveID : u32, instanceID : u32) -> Triangle
 }
 
 //==========================================================================
-// BSDF Sampling (for RegeneratePath)
-//==========================================================================
-
-fn SampleCosineHemisphere(pRandomSeed : ptr<function, u32>) -> vec3<f32>
-{
-    let Random_1 : f32 = Random(pRandomSeed);
-    let Random_2 : f32 = Random(pRandomSeed);
-
-    let R       : f32 = sqrt(Random_1);
-    let Phi     : f32 = 2.0 * PI * Random_2;
-
-    let X   : f32 = R * cos(Phi);
-    let Y   : f32 = R * sin(Phi);
-    let Z   : f32 = sqrt(1.0 - Random_1);
-
-    return vec3<f32>(X, Y, Z);
-}
-
-fn SampleGGX(pRandomSeed : ptr<function, u32>, Roughness: f32) -> vec3<f32>
-{
-    let Random_1 : f32 = Random(pRandomSeed);
-    let Random_2 : f32 = Random(pRandomSeed);
-
-    let Alpha   : f32 = Roughness * Roughness;
-    let Phi     : f32 = 2.0 * PI * Random_1;
-
-    let CosTheta : f32 = sqrt((1.0 - Random_2) / (1.0 + (Alpha * Alpha - 1.0) * Random_2));
-    let SinTheta : f32 = sqrt(1.0 - CosTheta * CosTheta);
-
-    let H_X : f32 = SinTheta * cos(Phi);
-    let H_Y : f32 = SinTheta * sin(Phi);
-    let H_Z : f32 = CosTheta;
-
-    return normalize(vec3<f32>(H_X, H_Y, H_Z));
-}
-
-fn SampleBRDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let Albedo          : vec3<f32> = X.Albedo.rgb;
-    let Metalness       : f32       = X.Metalness;
-    let Roughness       : f32       = X.Roughness;
- 
-    // 정반사 확률
-    let F0          : vec3<f32> = mix(vec3f(0.04), Albedo, Metalness);
-    let P_specular  : f32       = mix(Luminance(F0), 1.0, Metalness);
-
-    let N   : vec3<f32>     = X.Normal;
-    let TBN : mat3x3<f32>   = TBNMatrix(N);
-    var L   : vec3<f32>;
-
-    let bTreatAsSpecular : bool = Random(pRandomSeed) < P_specular;
-    if (bTreatAsSpecular)
-    {
-        let H = TBN * SampleGGX(pRandomSeed, Roughness);
-        L = reflect(-V, H);
-    }
-    else
-    {
-        L = TBN * SampleCosineHemisphere(pRandomSeed);
-    }
-
-    var OutBSDFSample : BSDFSample = BSDFSample();
-    OutBSDFSample.Direction = L;
-    OutBSDFSample.Lobe      = select(LOBE_LAMBERT, LOBE_GGX, bTreatAsSpecular);
-
-    return OutBSDFSample;
-}
-
-fn SampleBTDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let same : bool = (dot(V, X.Normal) > 0.0);
-    let n_in    : f32 = select(1.0, X.IOR, same);
-    let n_out   : f32 = select(X.IOR, 1.0, same);
-    let N           : vec3<f32> = select(-X.Normal, X.Normal, same);
-    let eta         : f32 = n_in / n_out;
-
-    var P_reflection : f32;
-    var tir : bool;
-    {
-        let r   : f32 = (1.0 - eta) / (1.0 + eta);
-        let cosTheta : f32 = abs(dot(V, N));
-        let r2  : f32 = r * r;
-        let R2  : f32 = eta * eta;
-
-        P_reflection = Frensel(cosTheta, vec3f(r2)).x;
-
-        tir = (cosTheta * cosTheta < (R2 - 1.0)/R2);
-        if (tir) {
-            P_reflection = 1.0;
-        }
-    }
-
-    let TBN : mat3x3<f32>   = TBNMatrix(N);
-    let H   : vec3<f32>     = TBN * SampleGGX(pRandomSeed, X.Roughness);
-
-    var L : vec3<f32>;
-
-    if (tir) {
-        L = reflect(-V, H);
-    } else {
-        let bTreatAsReflection : bool = (Random(pRandomSeed) < P_reflection);
-
-        if (bTreatAsReflection) {
-            L = reflect(-V, H);
-        } else {
-            let T = refract(-V, H, eta);
-            let lenT = length(T);
-            if (lenT > 1e-6) {
-                L = T / lenT;
-            } else {
-                L = reflect(-V, H);
-            }
-        }
-    }
-
-    var OutBSDFSample : BSDFSample;
-    OutBSDFSample.Direction = L;
-    OutBSDFSample.Lobe      = LOBE_GGX;
-
-    return OutBSDFSample;
-}
-
-
-fn SampleBSDF(pRandomSeed : ptr<function, u32>, X : Surface, V : vec3<f32>) -> BSDFSample
-{
-    let bTreatAsTransparent : bool = Random(pRandomSeed) < X.Transmission;
-
-    if (bTreatAsTransparent) { return SampleBTDF(pRandomSeed, X, V); }
-    return SampleBRDF(pRandomSeed, X, V);
-}
-
-
-//==========================================================================
 // CompactPath + 현재 프레임 G-buffer 를 이용해서 Path 재구성
 //==========================================================================
 
 fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> RegeneratedPath
 {
     var OutPath : RegeneratedPath;
+
+    let k_in : u32 = min(InCompactPath.k, 7u);
+    OutPath.k = k_in;
 
     // 기본 정보 세팅 (x0, x1, XL, k, L, J, Radiance 등)
     OutPath.Surface[0].Position = Get_X0(ThreadID);
@@ -1810,13 +1554,6 @@ fn UpdateReservoir(
     return;
 }
 
-fn StoreReservoir(ThreadID : vec2<u32>, pReservoir : ptr<function, Reservoir>)
-{
-    let idx : u32 = ThreadID.y * UniformBuffer.Resolution_Source.x + ThreadID.x;
-    ReservoirBuffer_Write[idx] = (*pReservoir);
-
-    return;
-}
 
 const KERNEL_RADIUS : i32 = 2; 
 const KERNEL_DIAM : i32 = 2 * KERNEL_RADIUS + 1;

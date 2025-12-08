@@ -1264,6 +1264,9 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
 {
     var OutPath : RegeneratedPath;
 
+    let k_in : u32 = min(InCompactPath.k, 7u);
+    OutPath.k = k_in;
+
     // 기본 정보 세팅 (x0, x1, XL, k, L, J, Radiance 등)
     OutPath.Surface[0].Position = Get_X0(ThreadID);
     OutPath.Surface[1]          = GetSurface( Get_X1(ThreadID) );
