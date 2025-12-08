@@ -14,8 +14,8 @@ import ShaderCode_GBufferCreation   from './shaders/PT_01_GBufferPass.wgsl?raw';
 import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?raw';
 
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
-import ShaderCode_REUSE_TEMPORAL    from './shaders/PT_2_Reuse_Temporal.wgsl?raw';
-import ShaderCode_REUSE_SPATIAL     from './shaders/PT_3_Reuse_Spatial.wgsl?raw';
+import ShaderCode_Reuse_Temporal    from './shaders/PT_2_Reuse_Temporal.wgsl?raw';
+import ShaderCode_Reuse_Spatial     from './shaders/PT_3_Reuse_Spatial.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PT_5_PostProcess.wgsl?raw';
 
@@ -675,7 +675,7 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_REUSE_TEMPORAL, 
+                ShaderCode_Reuse_Temporal, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
@@ -702,7 +702,7 @@ export class Renderer
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                ShaderCode_REUSE_SPATIAL, 
+                ShaderCode_Reuse_Spatial, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
