@@ -1326,6 +1326,11 @@ fn PartialJacobian(InPath : RegeneratedPath) -> f32
 {
     let k = InPath.k;
 
+    // Surface 배열 길이가 8이므로 k+1 <= 7 이어야 함
+    if (k < 2u || k + 1u >= 8u) {
+        return 0.0;
+    }
+
     // --- 주변 버텍스들 가져오기 ---
     let Xkm2 : Surface = InPath.Surface[k - 2u];
     let Xkm1 : Surface = InPath.Surface[k - 1u];
