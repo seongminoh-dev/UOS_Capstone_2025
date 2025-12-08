@@ -378,13 +378,51 @@ fn ClampHistoryColor(PixelUV_Center : vec2<f32>, HistoryColor : vec3<f32>) -> ve
     let StdDev      : vec3<f32> = sqrt( max( Variance, vec3f(0.0) ) );
 
     let GammaBase   : f32 = 1.0;
-    let GammaFactor : f32 = 1.0 + ( 0.5 * f32( UniformBuffer.FrameCount ) );
+    let GammaFactor : f32 = 1.25;// + ( 0.5 * f32( UniformBuffer.FrameCount ) );
     let Gamma       : f32 = GammaBase * GammaFactor;
     
-    let MinColor    : vec3<f32> = max( Mean - (StdDev * Gamma + vec3f(1e-2)), vec3f(0.0) );
+    let MinColor    : vec3<f32> = Mean - (StdDev * Gamma + vec3f(1e-2));
     let MaxColor    : vec3<f32> = Mean + (StdDev * Gamma + vec3f(1e-2));
 
-    return clamp(HistoryColor, MinColor, MaxColor);
+    return clamp(HistoryColor, max( MinColor, vec3f(0.0) ), MaxColor);
+}
+
+fn SampleTextureCatmullRom(tex: texture_2d<f32>, uv: vec2<f32>, texSize: vec2<f32>) -> vec3<f32> {
+    // We're sampling unjittered UV in source resolution
+    let samplePos = uv * texSize;
+    let texPos1 = floor(samplePos - 0.5) + 0.5;
+    let f = samplePos - texPos1;
+
+    let w0 = f * (-0.5 + f * (1.0 - 0.5 * f));
+    let w1 = 1.0 + f * f * (-2.5 + 1.5 * f);
+    let w2 = f * (0.5 + f * (2.0 - 1.5 * f));
+    let w3 = f * f * (-0.5 + 0.5 * f);
+
+    let w12 = w1 + w2;
+    let offset12 = w2 / (w1 + w2);
+
+    let texPos0 = texPos1 - 1.0;
+    let texPos3 = texPos1 + 2.0;
+    let texPos12 = texPos1 + offset12;
+
+    let result = 
+        textureSampleLevel(tex, LinearSampler, vec2<f32>(texPos12.x, texPos0.y) / texSize, 0.0).rgb * w12.x * w0.y +
+        textureSampleLevel(tex, LinearSampler, vec2<f32>(texPos0.x, texPos12.y) / texSize, 0.0).rgb * w0.x * w12.y +
+        textureSampleLevel(tex, LinearSampler, vec2<f32>(texPos12.x, texPos12.y) / texSize, 0.0).rgb * w12.x * w12.y +
+        textureSampleLevel(tex, LinearSampler, vec2<f32>(texPos3.x, texPos12.y) / texSize, 0.0).rgb * w3.x * w12.y +
+        textureSampleLevel(tex, LinearSampler, vec2<f32>(texPos12.x, texPos3.y) / texSize, 0.0).rgb * w12.x * w3.y;
+
+    return result * (1.0 / ((w0.x + w12.x + w3.x) * (w0.y + w12.y + w3.y)));
+}
+
+fn IsNan_f32(A : f32) -> bool
+{
+    return (A != A);
+}
+
+fn IsNan_vec3(A : vec3<f32>) -> bool
+{
+    return IsNan_f32(A.r) || IsNan_f32(A.g) || IsNan_f32(A.b);
 }
 
 //==========================================================================
@@ -404,26 +442,30 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
+    // TEST : Just Use CurrentColor, No Jittering
+    if (true)
+    {
+        let UV : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
+        let CurrentColor : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
+        var WriteColor = Decode( CurrentColor );
+        textureStore(ResultTexture, ThreadID.xy, vec4<f32>(select(WriteColor, CurrentColor, IsNan_vec3(WriteColor)), 1.0));
+        return;
+    }
+
     let UV              : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Target);
     let UV_Unjitter     : vec2<f32> = UV - UniformBuffer.Jitter;
     let UV_Prev         : vec2<f32> = GetPrevUV(UV);
 
     let bHistoryValid   : bool  = ( (0.0 < UV_Prev.x && UV_Prev.x < 1.0) && (0.0 < UV_Prev.y && UV_Prev.y < 1.0) );
     let N               : f32   = f32( min( UniformBuffer.FrameCount, 512u ) );
-    let Alpha           : f32   = select(0.0, ( N ) / ( 1 + N ), bHistoryValid);
-
-    let CurrentColor    : vec3<f32> = Encode( textureSampleLevel(RadianceTexture, LinearSampler, UV_Unjitter, 0.0).rgb );
+    let Alpha           : f32   = select(0.0, N / (N+1), bHistoryValid);
+    
+    let CurrentColor    : vec3<f32> = Encode( SampleTextureCatmullRom(RadianceTexture, UV_Unjitter, vec2<f32>(UniformBuffer.Resolution_Target)).rgb );
     let HistoryColor    : vec3<f32> = Encode( textureSampleLevel(HistoryTexture, LinearSampler, UV_Prev, 0.0).rgb );
-    let WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
-
-    //let mv = textureLoad(MotionVectorTexture, vec2<i32>(i32(ThreadID.x),i32(ThreadID.y)), 0).xy;
-    //textureStore(ResultTexture, ThreadID.xy, vec4<f32>(mv, 0.0, 1.0));
-
-    workgroupBarrier();
-    textureBarrier();
+    var WriteColor      : vec3<f32> = Decode( mix(CurrentColor, HistoryColor, Alpha) );
+    //WriteColor = Decode( CurrentColor );
     
-    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(WriteColor, 1.0));
-    
+    textureStore(ResultTexture, ThreadID.xy, vec4<f32>(select(WriteColor, CurrentColor, IsNan_vec3(WriteColor)), 1.0));
 
     return;
 }

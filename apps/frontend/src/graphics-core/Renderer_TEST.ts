@@ -1,17 +1,12 @@
-import      { mat4 }            from "wgpu-matrix";
-import type { Mat4 }            from "wgpu-matrix";
-import      { Camera }          from "./Camera";
-import      { ComputePass }     from "./ComputePass";
-import      { World }           from "./World";
-import type { OnProgressCallback } from "./service/types/InitProgress";
+import      { mat4 }                from "wgpu-matrix";
+import type { Mat4 }                from "wgpu-matrix";
+import      { Camera }              from "./Camera";
+import      { ComputePass }         from "./ComputePass";
+import      { World }               from "./World";
+import type { OnProgressCallback }  from "./service/types/InitProgress";
+import      { Utils }               from "./Utils";
 
-// Lighting 상수 (중앙화된 값 사용)
-import {
-    ZENITH_BLUE,
-    HORIZON_BLUE,
-    DEFAULT_SKY_MODE,
-    DEFAULT_ENV_INDIRECT_MULT,
-} from "./lighting";
+import      { ZENITH_BLUE, HORIZON_BLUE, DEFAULT_SKY_MODE, DEFAULT_ENV_INDIRECT_MULT } from "./lighting";
 
 import ShaderCode_DEBUG             from './shaders/PT_00_DebugPass.wgsl?raw';
 import ShaderCode_MCPT              from './shaders/MCPT.wgsl?raw';
@@ -22,32 +17,32 @@ import ShaderCode_GetMotionVector   from './shaders/PT_02_GetMotionVector.wgsl?r
 import ShaderCode_ReSTIR_DI   from './shaders/PT_03_ReSTIR_DI.wgsl?raw';
 
 import ShaderCode_Initialize        from './shaders/PT_1_InitPass.wgsl?raw';
-
 import ShaderCode_Temporal          from './shaders/PT_2_TemporalReuse.wgsl?raw';
-import ShaderCode_Spatial          from './shaders/PT_3_SpatialReuse.wgsl?raw';
-
-import ShaderCode_Temporal_PairMIS          from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
-import ShaderCode_Spatial_PairMIS          from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
-
-
-
+import ShaderCode_Spatial           from './shaders/PT_3_SpatialReuse.wgsl?raw';
+import ShaderCode_Temporal_PairMIS  from './shaders/PT_2_Temporal_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_Spatial_PairMIS   from './shaders/PT_3_Spatial_with_pairwiseMIS.wgsl?raw';
+import ShaderCode_REUSE_TEMPORAL    from './shaders/ReuseTest_Temporal.wgsl?raw';
+import ShaderCode_REUSE_SPATIAL     from './shaders/ReuseTest_Spatial.wgsl?raw';
 import ShaderCode_FinalShading      from './shaders/PT_4_FinalShadingPass.wgsl?raw';
 import ShaderCode_PostProcess       from './shaders/PostProcess.wgsl?raw';
 
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
-import { Utils } from "./Utils";
 
+let USE_RESTIR : boolean = true;
+let USE_PERFORMANCE_TEST : boolean = false;
 
 const EBufferIndex =
 {
-    Uniform         : 0,
-    Scene           : 1,
-    Geometry        : 2,
-    Accel           : 3,
-    Reservoir       : 4,
-    PrevReservoir   : 5,
-    SIZE            : 6
+    Uniform                     : 0,
+    Scene                       : 1,
+    Geometry                    : 2,
+    Accel                       : 3,
+    Reservoir_Write_Init        : 4,
+    Reservoir_Write_Temporal    : 5,
+    Reservoir_Write_Spatial     : 6,
+    Reservoir_PrevFrame         : 7,
+    SIZE                        : 8
 } as const;
 
 const ETextureIndex =
@@ -135,8 +130,12 @@ export class Renderer
     private EnvMode             : number; // 0 = 없음(회색), 1 = 일반 하늘, 2 = 고품질 하늘
     private EnvIndirectMult     : number; // 환경 간접광 강도 (0.0~1.0)
 
-    // ★ 추가: N 프레임마다 캡처 (0이면 비활성화)
-    public CaptureInterval = 0;
+
+    // Test Purpose
+    private StartTime : number = 0;
+    private bStopRendering : boolean = false;
+    private readonly FREEZE_TIME_MS : number = 400;
+
 
     constructor
     (
@@ -326,6 +325,13 @@ export class Renderer
         // Step 7: Warm-up complete
         reportProgress('warmup', 7, '렌더러 준비 완료');
 
+
+        // TEST : Start!
+        {
+            this.StartTime = performance.now();
+            this.bStopRendering = false;
+        }
+
         return;
     }
 
@@ -344,7 +350,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix, ViewMatrix);
         const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
 
         const ELEMENT_COUNT = 104;
@@ -380,8 +386,8 @@ export class Renderer
 
             Uint32View [80] = this.World.InstancePool.GetResourceArray().length;
             Uint32View [81] = this.World.Lights.length;
-            Float32View[82] = (Jitter_X * 2) / this.Canvas.width;
-            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height;
+            Float32View[82] = (Jitter_X * 2) / this.Canvas.width * 0;
+            Float32View[83] = (Jitter_Y * 2) / this.Canvas.height * 0;
 
             Uint32View [87] = this.FrameCount;
 
@@ -393,17 +399,17 @@ export class Renderer
             Float32View[92] = this.EnvHorizonColor[0];
             Float32View[93] = this.EnvHorizonColor[1];
             Float32View[94] = this.EnvHorizonColor[2];
-            Float32View[95] = this.EnvSunIntensity;
+            Float32View[95] = this.EnvSunIntensity * 0;
 
             Float32View[96] = this.EnvGroundColor[0];
             Float32View[97] = this.EnvGroundColor[1];
             Float32View[98] = this.EnvGroundColor[2];
-            Float32View[99] = this.EnvIntensity;
+            Float32View[99] = this.EnvIntensity * 0;
 
             Float32View[100] = this.EnvSunDirection[0];
             Float32View[101] = this.EnvSunDirection[1];
             Float32View[102] = this.EnvSunDirection[2];
-            Float32View[103] = this.EnvIndirectMult;
+            Float32View[103] = this.EnvIndirectMult * 0;
         }
 
         this.Device.queue.writeBuffer(this.GPUBuffers[EBufferIndex.Uniform], 0, UniformData);
@@ -415,6 +421,18 @@ export class Renderer
 
     public Render() : void
     {
+
+        if (USE_PERFORMANCE_TEST)
+        {
+            if (this.bStopRendering) { return; }
+            const currentTime = performance.now();
+            const elapsedTime = (currentTime - this.StartTime);
+            if (elapsedTime >= this.FREEZE_TIME_MS) { this.bStopRendering = true; return; }
+        }
+
+
+
+
         const WorkgroupCount_HighResolution : number[] = [Math.ceil(this.Canvas.width/8), Math.ceil(this.Canvas.height/8), 1];
         const WorkgroupCount_LowResolution  : number[] = [Math.ceil(this.Canvas.width/16), Math.ceil(this.Canvas.height/16), 1];
 
@@ -426,15 +444,15 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            
-            //this.ComputePasses[EComputePassIndex.ReSTIR_DI].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-               
-            
-            //this.ComputePasses[EComputePassIndex.MCPT].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            
+                        
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-            this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+
+            if (USE_RESTIR)
+            {
+                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
@@ -485,18 +503,17 @@ export class Renderer
         }
 
 
+            CommandEncoder.copyBufferToBuffer
+            (
+                this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal], 0,
+                this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame], 0,
+                4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)
+            );
+
+        }
 
         // Submit Encoder
         this.Device.queue.submit( [ CommandEncoder.finish() ] );
-
-        // ★ 추가: CaptureInterval 간격으로 캔버스 PNG 저장
-        if (this.FrameCount == 2)
-        {
-            //const a = document.createElement('a');
-            //a.href = this.Canvas.toDataURL('image/png');
-            //a.download = `frame_${this.FrameCount}.png`;
-            //a.click();
-        }
 
         return;
     }
@@ -563,12 +580,14 @@ export class Renderer
 
         this.Offsets = Offsets;
 
-        this.GPUBuffers[EBufferIndex.Uniform]       = this.Device.createBuffer( { size : 1024, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
-        this.GPUBuffers[EBufferIndex.Scene]         = this.CreateGPUStorageBuffer(SceneBufferData);
-        this.GPUBuffers[EBufferIndex.Geometry]      = this.CreateGPUStorageBuffer(GeometryBufferData);
-        this.GPUBuffers[EBufferIndex.Accel]         = this.CreateGPUStorageBuffer(AccelBufferData);
-        this.GPUBuffers[EBufferIndex.Reservoir]     = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
-        this.GPUBuffers[EBufferIndex.PrevReservoir] = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 32 * this.Canvas.width * this.Canvas.height));
+        this.GPUBuffers[EBufferIndex.Uniform]                   = this.Device.createBuffer( { size : 1024, usage : GPUBufferUsage.UNIFORM | GPUBufferUsage.COPY_DST } );
+        this.GPUBuffers[EBufferIndex.Scene]                     = this.CreateGPUStorageBuffer(SceneBufferData);
+        this.GPUBuffers[EBufferIndex.Geometry]                  = this.CreateGPUStorageBuffer(GeometryBufferData);
+        this.GPUBuffers[EBufferIndex.Accel]                     = this.CreateGPUStorageBuffer(AccelBufferData);
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Init]      = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal]  = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial]   = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
+        this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame]       = this.CreateGPUStorageBuffer(new ArrayBuffer(4 * 36 * (this.Canvas.width / 2) * (this.Canvas.height / 2)));
 
         this.GPUTextures[ETextureIndex.TexturePool]     = this.CreateTextureArray2048(ImageBitmaps);
         this.GPUTextures[ETextureIndex.G_Buffer]        = this.CreateGPUTexture(this.Canvas.width / 2, this.Canvas.height / 2, "rgba32float");
@@ -692,7 +711,7 @@ export class Renderer
                     this.GPUSamplers[ESamplerIndex.Default],
                 ],
                 [   // Write GPUBuffer
-                    this.GPUBuffers[EBufferIndex.Reservoir],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
                 ],
                 [   // Write GPUTextureView
                 ]
@@ -703,57 +722,52 @@ export class Renderer
             ComputePass.Create // Temporal Reuse
             (
                 this.Device, 
-                ShaderCode_Temporal_PairMIS, 
+                ShaderCode_REUSE_TEMPORAL, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.PrevReservoir],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[EBufferIndex.Reservoir_PrevFrame],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-
                     this.GPUTextures[ETextureIndex.MotionVector].createView(),
-
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Default],
                 ],
                 [   // Write GPUBuffer
-                    
-                    this.GPUBuffers[EBufferIndex.Reservoir],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
                 ],
                 [   // Write GPUTextureView
-                    
                 ]
             ),
 
             ComputePass.Create // Spatial Reuse
             (
                 this.Device, 
-                ShaderCode_Spatial_PairMIS, 
+                ShaderCode_REUSE_SPATIAL, 
                 [   // Read GPUBuffer
                     this.GPUBuffers[EBufferIndex.Uniform],
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
                     this.GPUTextures[ETextureIndex.G_Buffer].createView(),
-
                 ],
                 [   // Read GPUSampler
                     this.GPUSamplers[ESamplerIndex.Default],
                 ],
                 [   // Write GPUBuffer
-                    
-                    this.GPUBuffers[EBufferIndex.Reservoir],
+                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Spatial],
                 ],
                 [   // Write GPUTextureView
-                    
                 ]
             ),
 
@@ -766,7 +780,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir],
+                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
@@ -831,7 +845,6 @@ export class Renderer
                     this.GPUTextures[ETextureIndex.Radiance].createView(),
                 ]
             ),
-
         ];
 
         this.ComputePasses = await Promise.all(ComputePassesToCreate);
