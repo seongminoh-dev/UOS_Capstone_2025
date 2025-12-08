@@ -1539,7 +1539,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         for (var dx : i32 = -KERNEL_RADIUS; dx <= KERNEL_RADIUS; dx = dx + 1) {
 
             if (dx == 0 && dy == 0) {
-                continue;
+                //continue;
             }
 
             let nx_i : i32 = i32(curPixel.x) + dx;
@@ -1547,7 +1547,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             if (nx_i < 0 || ny_i < 0 ||
                 nx_i >= i32(UniformBuffer.Resolution_Source.x) ||
                 ny_i >= i32(UniformBuffer.Resolution_Source.y)) {
-                continue;
+                //continue;
             }
 
             let nx : u32 = u32(nx_i);
@@ -1557,30 +1557,30 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             // neighbour reservoir
             let neiRes : Reservoir = ReservoirBuffer[nIdx];
             if (neiRes.C == 0u || neiRes.Sample.length < 2u) {
-                continue;
+                //continue;
             }
 
             // neighbour path 생성
             var neiPath : Path = RegeneratePath(vec2<u32>(nx, ny), neiRes.Sample);
             if (neiPath.length < 2u) {
-                continue;
+                //continue;
             }
 
             // hybrid shift
             var shiftCompact : CompactPath = DoHybridShift(baseRes.Sample, neiRes.Sample);
             if(!(shiftCompact.length > 0)){
-                continue;
+                //continue;
             }
 
             var offsetPath : Path = RegeneratePath(curPixel, shiftCompact);
             if (!(offsetPath.length >= 2u && shiftCompact.k < offsetPath.length)) {
-                continue;
+                //continue;
             }
 
             // Jacobian J
             var J_val : f32 = calculate_J(offsetPath, shiftCompact.k);
             if (!(J_val > 0.0) || !isFinite(J_val)) {
-                continue;
+                //ontinue;
             }
             shiftCompact.J = J_val;
 
@@ -1588,25 +1588,25 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             if(!(IsSafeToReconnect(neiPath.Surface[base_k - 1], neiPath.Lobe[base_k - 1],
                                     basePath.Surface[base_k], basePath.Lobe[base_k])))
             {
-                continue;
+                //continue;
             }
 
             // detJ
             let det_J : f32= baseRes.Sample.J / J_val;
             if (!isFinite(det_J) || det_J > 100.0 || det_J < 0.01) {
-                continue;
+                //continue;
             }
 
             // contribution / pdf / weight
             let contribOff : vec3<f32> = PathContribution(offsetPath);
             let P_hat_Off : f32 = Luminance(contribOff);
             if (!(P_hat_Off > 0.0) || !isFinite(P_hat_Off)) {
-                continue;
+                //continue;
             }
 
             let p_prev_raw : f32 = PathPDF(offsetPath);
             if (!(p_prev_raw > 0.0) || !isFinite(p_prev_raw)) {
-                continue;
+                //continue;
             }
             let p_off : f32 = max(p_prev_raw, EPS);
 
@@ -1614,12 +1614,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
             w_off = clamp(w_off, 0.0, MAX_RIS);
 
             if (!isFinite(w_off) || w_off <= 0.0) {
-                continue;
+                //continue;
             }
 
             let W_sum : f32 = w_base + w_off;
             if (!(W_sum > 0.0) || !isFinite(W_sum)) {
-                continue;
+                //continue;
             }
 
             let p_choose_off : f32 = w_off / (W_total+w_off);
@@ -1645,9 +1645,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     if (!(W_total > 0.0) || !isFinite(W_total) ||
         !(chosen_P_hat > 0.0) || !isFinite(chosen_P_hat)) {
+            outRes.Padding  = vec2<f32>(1.0,0.0);
             ReservoirBuffer[curIdx] = baseRes;
             return;
     } else {
+        outRes.Padding  = vec2<f32>(1.0,0.0);
         ReservoirBuffer[curIdx] = outRes;
     }   
      

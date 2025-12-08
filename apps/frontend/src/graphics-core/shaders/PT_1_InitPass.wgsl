@@ -243,6 +243,9 @@ const GREEN     : vec3<f32> = vec3<f32>(0.0, 1.0, 0.0);
 const BLUE      : vec3<f32> = vec3<f32>(0.0, 0.0, 1.0);
 const PURPLE    : vec3<f32> = vec3<f32>(1.0, 0.0, 1.0);
 
+const MIN_J      : f32 = 1e-4;
+const MAX_J      : f32 = 1e+4;
+
 //==========================================================================
 // Enums
 //==========================================================================
@@ -1586,6 +1589,8 @@ fn CompressPath(InPath : Path, CSurface : array<CompactSurface, 8u>) -> CompactP
 }
 
 
+
+
 //==========================================================================
 // Main
 //==========================================================================
@@ -1599,7 +1604,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Source.x);
         let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Source.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     // 1. 초기화
@@ -1729,6 +1734,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
         StoreReservoir(ThreadID.xy, &ResultReservoir);
     }
+    storageBarrier();
+    workgroupBarrier();
 
     return;
 }
