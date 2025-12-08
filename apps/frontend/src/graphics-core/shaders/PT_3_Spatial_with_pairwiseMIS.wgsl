@@ -1445,7 +1445,7 @@ fn RegeneratePath(ThreadID : vec2<u32>, InCompactPath : CompactPath) -> Regenera
     OutPath.Lobe[InCompactPath.k-1u] = InCompactPath.Lobe_km1;
 
     // --- x2 ... x_{k-1} 까지 추적 ---
-    for (var i : u32 = 1u; i < InCompactPath.k - 1u; i = i + 1u)
+    for (var i : u32 = 1u; i < InCompactPath.k; i = i + 1u)
     {
         let X_Prev  : Surface   = OutPath.Surface[i - 1u];
         let X_Curr  : Surface   = OutPath.Surface[i    ];
@@ -1540,8 +1540,11 @@ fn UpdateReservoir(
     Confidence  : u32
 )
 {
+    var w_sum_old : f32 = (*pReservoir).w_sum;
     (*pReservoir).C         = min( (*pReservoir).C + Confidence, MAX_CONFIDENCE );
-    (*pReservoir).w_sum     = RIS;
+    let w_sum_new     = w_sum_old + RIS;
+
+    (*pReservoir).w_sum = w_sum_new;
 
     let Pr_Change       : f32   = RIS / ((*pReservoir).w_sum);
     let bChangeSample   : bool  = Random(pRandomSeed) < Pr_Change;
@@ -1550,10 +1553,10 @@ fn UpdateReservoir(
 
     (*pReservoir).Sample    = Sample;
     (*pReservoir).P_hat     = P_hat;
+    
 
     return;
 }
-
 
 const KERNEL_RADIUS : i32 = 2; 
 const KERNEL_DIAM : i32 = 2 * KERNEL_RADIUS + 1;
@@ -1579,7 +1582,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     var JacobianArray       : array<f32, 25u>;
     var MISArray            : array<f32, 25u>;
 
-    var AccumReservoir      : Reservoir;
+    var AccumReservoir      : Reservoir = Reservoir();
+    AccumReservoir.C = 0u;
+    AccumReservoir.w_sum = 0.0;
+    AccumReservoir.P_hat = 0.0;
+    AccumReservoir.UCW = 0.0;
 
     // Canonical Sample (현재 픽셀)
     ReservoirArray[0] = LoadReservoir(ThreadID.xy);
@@ -1617,10 +1624,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     JacobianArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter = iter + 1u)
     {
-        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
+        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ReservoirArray[iter].Sample.J;
     }
 
     var DEBUG : f32 = 0.0;
+
+    let P_hat_cy : f32 = ReservoirArray[0].P_hat;
 
     // Pairwise MIS
     MISArray[0] = 1.0;
@@ -1629,11 +1638,8 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         if (JacobianArray[iter] < 1e-20) { continue; }
 
         // p_i(y) ≈ p_i(x) * (J_y / J_x) = Sample.P_hat / J * J_y/J_x  (여기서 J_x는 Sample.J)
-        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+        let P_hat_iy : f32 = Luminance(ShiftedPathArray[iter].Radiance) / JacobianArray[iter];
 
-        // 여기서 PathContribution 다시 계산하지 않고,
-        // RegeneratePath에서 미리 계산해 둔 Radiance를 그대로 사용
-        let P_hat_cy : f32 = Luminance( ShiftedPathArray[iter].Radiance );
 
         let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
         let MIS_DL : f32 = f32(C_sum);
@@ -1641,24 +1647,29 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
         let MIS_DR : f32 = ( f32(C_sum - ReservoirArray[0].C) * P_hat_iy
                            + f32(ReservoirArray[0].C) * P_hat_cy );
 
-        let MIS : f32 = ( MIS_NL / MIS_DL ) * ( MIS_NR / MIS_DR );
+        let MIS : f32 = (P_hat_iy / (f32(idx-1)*P_hat_iy+P_hat_cy));
 
         MISArray[iter] = select(0.0, MIS, MIS_DR > 1e-20);
 
-        let RIS : f32 = MISArray[iter] * P_hat_cy * ReservoirArray[iter].UCW * JacobianArray[iter];
+        let RIS : f32 = MISArray[iter] * P_hat_iy * ReservoirArray[iter].UCW * JacobianArray[iter];
 
         UpdateReservoir(&rSeed, &AccumReservoir,
                         ReservoirArray[iter].Sample,
                         RIS,
-                        P_hat_cy,
+                        P_hat_iy,
                         ReservoirArray[iter].C);
     }
 
     // Canonical Sample에 대한 RIS
     {
         // 마찬가지로 canonical path 도 Radiance가 RegeneratePath에서 이미 계산되어 있음
-        let P_hat_cy : f32 = Luminance( ShiftedPathArray[0].Radiance );
-        let RIS      : f32 = MISArray[0] * P_hat_cy * ReservoirArray[0].UCW * JacobianArray[0];
+        var MIS_C : f32 = 0.0;
+        for (var iter : u32 = 1u; iter < idx; iter = iter + 1u){
+            let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+            MIS_C = MIS_C + ((P_hat_cy) / (P_hat_cy+f32(idx)*P_hat_iy));
+        }
+         
+        let RIS      : f32 = (MIS_C/f32(idx-1)) * P_hat_cy * ReservoirArray[0].UCW ;
 
         UpdateReservoir(&rSeed, &AccumReservoir,
                         ReservoirArray[0].Sample,

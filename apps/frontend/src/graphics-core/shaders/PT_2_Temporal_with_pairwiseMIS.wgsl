@@ -842,8 +842,8 @@ fn BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> vec3<f32>
     let Roughness   : f32       = X.Roughness;
 
     let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in    : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
-    let n_out   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_in   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_out  : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
     let H_norm  : f32 = length(n_in * L + n_out * V);
 
     let N : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
@@ -906,8 +906,8 @@ fn PDF_BTDF(X : Surface, V : vec3<f32>, L : vec3<f32>) -> f32
     let Roughness   : f32      = X.Roughness;
 
     let bViewNormalSameHemisphere : bool = (dot(V, X.Normal) > 0.0);
-    let n_in    : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
-    let n_out   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_in   : f32 = select(X.IOR, 1.0, bViewNormalSameHemisphere);
+    let n_out  : f32 = select(1.0, X.IOR, bViewNormalSameHemisphere);
     let IORRatio : f32 = n_in / n_out;
     let N : vec3<f32> = select(-X.Normal, X.Normal, bViewNormalSameHemisphere);
 
@@ -1387,8 +1387,11 @@ fn UpdateReservoir(
     Confidence  : u32
 )
 {
+    var w_sum_old : f32 = (*pReservoir).w_sum;
     (*pReservoir).C         = min( (*pReservoir).C + Confidence, MAX_CONFIDENCE );
-    (*pReservoir).w_sum     = RIS;
+    let w_sum_new     = w_sum_old + RIS;
+
+    (*pReservoir).w_sum = w_sum_new;
 
     let Pr_Change       : f32   = RIS / ((*pReservoir).w_sum);
     let bChangeSample   : bool  = Random(pRandomSeed) < Pr_Change;
@@ -1397,6 +1400,7 @@ fn UpdateReservoir(
 
     (*pReservoir).Sample    = Sample;
     (*pReservoir).P_hat     = P_hat;
+    
 
     return;
 }
@@ -1441,7 +1445,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     var JacobianArray       : array<f32, 25u>;
     var MISArray            : array<f32, 25u>;
 
-    var AccumReservoir      : Reservoir;
+    var AccumReservoir      : Reservoir = Reservoir();
+    AccumReservoir.C = 0u;
+    AccumReservoir.w_sum = 0.0;
+    AccumReservoir.P_hat = 0.0;
+    AccumReservoir.UCW = 0.0;
 
     // Canonical Sample
     ReservoirArray[0] = LoadReservoir_Init(ThreadID.xy);
@@ -1476,7 +1484,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     JacobianArray[0] = 1.0;
     for (var iter : u32 = 1u; iter < idx; iter++)
     {
-        JacobianArray[iter] = PartialJacobian( ShiftedPathArray[iter] ) / ShiftedPathArray[iter].J;
+        JacobianArray[iter] =  ShiftedPathArray[iter].J;
     }
 
     // Compute Pairwise MIS
@@ -1485,7 +1493,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     {
         if ( JacobianArray[iter] < 1e-20 ) { continue; }
 
-        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat / JacobianArray[iter];
+        let P_hat_iy : f32 = ReservoirArray[iter].Sample.P_hat;
         let P_hat_cy : f32 = Luminance( PathContribution( ShiftedPathArray[iter] ) * ReservoirArray[iter].Sample.Radiance );
 
         let MIS_NL : f32 = f32(C_sum - ReservoirArray[0].C);
