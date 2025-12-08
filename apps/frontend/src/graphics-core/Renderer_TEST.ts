@@ -28,6 +28,7 @@ import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
 let USE_RESTIR : boolean = false;
+let USE_PERFORMANCE_TEST : boolean = false;
 
 const EBufferIndex =
 {
@@ -417,6 +418,7 @@ export class Renderer
     public Render() : void
     {
 
+        if (USE_PERFORMANCE_TEST)
         {
             if (this.bStopRendering) { return; }
             const currentTime = performance.now();
