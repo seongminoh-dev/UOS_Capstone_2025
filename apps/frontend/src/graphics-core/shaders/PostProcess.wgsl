@@ -432,12 +432,14 @@ fn IsNan_vec3(A : vec3<f32>) -> bool
 @compute @workgroup_size(8,8,1)
 fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 {
+    storageBarrier();
+    workgroupBarrier();
     // 0. 범위 밖 스레드는 계산 X
     {
-        let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
-        let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
+        //let bPixelInBoundary_X : bool = (ThreadID.x < UniformBuffer.Resolution_Target.x);
+        //let bPixelInBoundary_Y : bool = (ThreadID.y < UniformBuffer.Resolution_Target.y);
 
-        if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
+        //if (!bPixelInBoundary_X || !bPixelInBoundary_Y) { return; }
     }
 
     // TEST : Just Use CurrentColor, No Jittering
