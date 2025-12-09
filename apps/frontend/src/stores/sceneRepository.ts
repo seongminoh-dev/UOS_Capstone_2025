@@ -175,10 +175,18 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
         updatedAt: now,
       };
       const created = await sceneApi.createScene(newScene, username);
+
+      // 백엔드 응답에 timestamp가 없으면 현재 시간으로 설정
+      const createdWithTimestamp: SceneFrontend = {
+        ...created,
+        createdAt: created.createdAt || now,
+        updatedAt: created.updatedAt || now,
+      };
+
       set((state) => ({
-        scenes: [...state.scenes, created],
+        scenes: [...state.scenes, createdWithTimestamp],
       }));
-      return created;
+      return createdWithTimestamp;
     } else {
       // 비회원: LocalScene 생성
       const newId = generateLocalId();
@@ -215,18 +223,27 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
       if (isLoggedIn) {
         // 회원: 새 ServerScene 생성
         const username = authStore.user!.username;
+        const now = new Date().toISOString();
         const newScene: SceneFrontend = {
           ...scene,
           id: 0, // 서버가 할당
           username,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+          createdAt: now,
+          updatedAt: now,
         };
         const created = await sceneApi.createScene(newScene, username);
+
+        // 백엔드 응답에 updatedAt이 없으면 현재 시간으로 설정
+        const createdWithTimestamp: SceneFrontend = {
+          ...created,
+          createdAt: created.createdAt || now,
+          updatedAt: created.updatedAt || now,
+        };
+
         set((state) => ({
-          scenes: [...state.scenes, created],
+          scenes: [...state.scenes, createdWithTimestamp],
         }));
-        return created;
+        return createdWithTimestamp;
       } else {
         // 비회원: 새 LocalScene 생성
         const newId = generateLocalId();
@@ -249,11 +266,19 @@ export const useSceneRepository = create<SceneRepository>((set, get) => ({
     // ServerScene 업데이트
     if (isServerScene(scene.id)) {
       const username = authStore.user!.username;
+      const now = new Date().toISOString();
       const updated = await sceneApi.updateScene(scene.id as number, scene, username);
+
+      // 백엔드 응답에 updatedAt이 없으면 현재 시간으로 설정
+      const updatedWithTimestamp: SceneFrontend = {
+        ...updated,
+        updatedAt: updated.updatedAt || now,
+      };
+
       set((state) => ({
-        scenes: state.scenes.map((s) => (s.id === updated.id ? updated : s)),
+        scenes: state.scenes.map((s) => (s.id === updatedWithTimestamp.id ? updatedWithTimestamp : s)),
       }));
-      return updated;
+      return updatedWithTimestamp;
     }
 
     // LocalScene 업데이트
