@@ -1761,8 +1761,11 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
 
     // NonCanonical Sample - Previous Frame Sample
     {
-        let UV      : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
-        let XY_Prev : vec2<u32> = vec2<u32>(GetPrevUV(UV) * vec2<f32>(UniformBuffer.Resolution_Source));
+        // let UV      : vec2<f32> = (vec2<f32>(ThreadID.xy) + 0.5) / vec2<f32>(UniformBuffer.Resolution_Source);
+        // let XY_Prev : vec2<u32> = vec2<u32>(GetPrevUV(UV) * vec2<f32>(UniformBuffer.Resolution_Source));
+
+        let MV : vec2<f32> = textureLoad(MotionVectorTexture, ThreadID.xy, 0).xy;
+        let XY_Prev : vec2<u32> = vec2<u32>( vec2<f32>(ThreadID.xy) - MV );
 
         ReservoirArray[1] = GetNonCanonicalSample(XY_Prev, ThreadID.xy);
 
@@ -1771,6 +1774,12 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     }
 
 
+    if ( idx == 1u )
+    {
+        ReservoirArray[0].C = 1u;
+        StoreReservoir(ThreadID.xy, &ReservoirArray[0]);
+        return;
+    }
 
 
 

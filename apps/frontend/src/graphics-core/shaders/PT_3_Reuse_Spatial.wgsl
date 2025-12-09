@@ -228,7 +228,7 @@ const RECONNECTION_ROUGHNESS    : f32 = 0.000001;
 
 const MIN_ROUGHNESS     : f32 = 0.02;
 const MAX_CONFIDENCE    : u32 = 20u;
-const MAX_SAMPLES       : u32 = 5u;
+const MAX_SAMPLES       : u32 = 3u;
 
 const INF       : f32       = 1e11;
 const EPS       : f32       = 1e-4;
@@ -1689,7 +1689,7 @@ fn cs_main(@builtin(global_invocation_id) ThreadID : vec3<u32>)
     
     // Initialize
     var rSeed   : u32 = InitializeRandomSeed(ThreadID.xy);
-    let Radius  : f32 = 30.0;
+    let Radius  : f32 = 10.0;
     var idx     : u32 = 1u;
     var C_sum   : u32 = 0u;
 

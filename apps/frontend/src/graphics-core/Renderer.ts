@@ -22,7 +22,14 @@ import ShaderCode_PostProcess       from './shaders/PT_5_PostProcess.wgsl?raw';
 import ShaderCode_Vertex            from './shaders/VertexShader.wgsl?raw';
 import ShaderCode_Fragment          from './shaders/FragmentShader.wgsl?raw';
 
-let USE_RESTIR : boolean = false;
+
+const TEST_NO_REUSE             = 0;
+const TEST_TEMPORAL_REUSE       = 1;
+const TEST_SPATIAL_REUSE        = 2;
+const TEST_SPATIOTEMPORAL_REUSE = 3;
+
+let TEST_MODE : number = TEST_SPATIAL_REUSE;
+
 let USE_PERFORMANCE_TEST : boolean = false;
 
 const EBufferIndex =
@@ -341,7 +348,7 @@ export class Renderer
         const ViewProjection_Inverse    = mat4.invert(ViewProjection);
         const ViewProjection_Prev       = this.Prev_VPMat ?? ViewProjection;
 
-        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix, ViewMatrix);
+        const ViewProjection_Jittered           = mat4.multiply(ProjectionMatrix_Jittered, ViewMatrix);
         const ViewProjection_Jittered_Inverse   = mat4.invert(ViewProjection_Jittered);
 
         const ELEMENT_COUNT = 104;
@@ -435,17 +442,23 @@ export class Renderer
 
             this.ComputePasses[EComputePassIndex.GBufferCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             this.ComputePasses[EComputePassIndex.MotionVectorCreation].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-                        
             this.ComputePasses[EComputePassIndex.Initialize].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
 
-            if (USE_RESTIR)
+            if (TEST_MODE === TEST_TEMPORAL_REUSE)
+            {
+                this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+            else if (TEST_MODE === TEST_SPATIAL_REUSE)
+            {
+                this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
+            }
+            else if ( TEST_MODE === TEST_SPATIOTEMPORAL_REUSE )
             {
                 this.ComputePasses[EComputePassIndex.TemporalReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
                 this.ComputePasses[EComputePassIndex.SpatialReuse].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
             }
-
+                
             this.ComputePasses[EComputePassIndex.FinalShading].Dispatch(ComputePassEncoder, WorkgroupCount_LowResolution);
-
             this.ComputePasses[EComputePassIndex.PostProcess].Dispatch(ComputePassEncoder, WorkgroupCount_HighResolution);
 
             ComputePassEncoder.end();
@@ -708,7 +721,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[EBufferIndex.Reservoir_Write_Temporal],
+                    this.GPUBuffers[ (TEST_MODE === TEST_SPATIAL_REUSE) ? EBufferIndex.Reservoir_Write_Init : EBufferIndex.Reservoir_Write_Temporal ],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
@@ -733,7 +746,7 @@ export class Renderer
                     this.GPUBuffers[EBufferIndex.Scene],
                     this.GPUBuffers[EBufferIndex.Geometry],
                     this.GPUBuffers[EBufferIndex.Accel],
-                    this.GPUBuffers[ USE_RESTIR ? EBufferIndex.Reservoir_Write_Spatial : EBufferIndex.Reservoir_Write_Init],
+                    this.GPUBuffers[ (TEST_MODE === TEST_NO_REUSE) ? EBufferIndex.Reservoir_Write_Init : ( (TEST_MODE === TEST_TEMPORAL_REUSE) ? EBufferIndex.Reservoir_Write_Temporal : EBufferIndex.Reservoir_Write_Spatial ) ],
                 ],
                 [   // Read GPUTextureView
                     this.GPUTextures[ETextureIndex.TexturePool].createView({dimension: '2d-array', baseArrayLayer: 0, arrayLayerCount: this.GPUTextures[ETextureIndex.TexturePool].depthOrArrayLayers}),
