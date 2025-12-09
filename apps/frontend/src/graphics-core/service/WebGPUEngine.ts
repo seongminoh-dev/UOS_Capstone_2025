@@ -261,7 +261,12 @@ export class WebGPUEngine {
         this.canvas.height = height;
 
         // 3. Renderer 재초기화 (새 카메라 생성됨)
+        const wasRunning = this.isRunning;
+        this.stop(); // 렌더 루프 중지 (GPU 리소스 경쟁 방지)
         await this.renderer.Initialize(this.world);
+        if (wasRunning) {
+            this.start(); // 이전에 실행 중이었으면 재시작
+        }
 
         // 4. 새 카메라에 저장된 상태 복원
         const newCamera = this.renderer.GetCamera();

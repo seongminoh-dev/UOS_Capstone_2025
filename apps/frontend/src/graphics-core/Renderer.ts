@@ -305,6 +305,9 @@ export class Renderer
         reportProgress('loadAssets', 5, '모델·텍스처 로딩 중...');
 
         // Prevent VRAM Leak
+        // GPU 커맨드 큐의 모든 작업이 완료될 때까지 대기 후 리소스 파괴
+        // (파괴된 버퍼가 아직 처리 중인 커맨드에서 사용되는 것을 방지)
+        await this.Device.queue.onSubmittedWorkDone();
         this.DestroyGPUResources();
 
         // Initialize Scene Datas

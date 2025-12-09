@@ -297,6 +297,9 @@ export default function WebGPURenderer({
         // 5. Renderer 재초기화 (with progress callback)
         const renderer = engine.getRenderer();
         if (renderer) {
+          // 렌더 루프 중지 (Initialize 중 GPU 리소스 경쟁 방지)
+          engine.stop();
+
           await renderer.Initialize(world, (progress) => {
             setInitProgress(progress);
           });
